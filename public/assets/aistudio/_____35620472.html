@@ -1,0 +1,445 @@
+
+
+<!DOCTYPE html >
+<html dir="rtl" lang="fa-ir">
+<head><title>
+	کالینان
+</title><link href="BotDetectCaptcha.ashx?get=layout-stylesheet&amp;amp;t=1793898000" rel="stylesheet" type="text/css" /><link rel="shortcut icon" type="image/x-icon" data-n-head="true" href="../images/Logo/CullinanLogo.png" sizes="12x12" /><meta charset="utf-8" /><meta http-equiv="Content-Type" name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="keywords" content="سامانه تغذیه کالینان، ژتون، رزرو، رزرو غذا" /><meta name="description" content="سامانه تغذیه کالینان" /><meta name="company" content="شرکت پدیده عصر فناوری کویر سبز یزد - 1394-1402" /><meta name="robots" content="all" /><link href="Styles/CSS/FoodSoft.css" rel="stylesheet" type="text/css" /><link href="Styles/CSS/jquery-ui.min.css" rel="stylesheet" type="text/css" />
+
+    <style>
+        audio::-webkit-media-controls-mute-button,
+        audio::-webkit-media-controls-timeline-container,
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display,
+        audio::-webkit-media-controls-timeline,
+        audio::-webkit-media-controls-volume-slider-container,
+        audio::-webkit-media-controls-volume-slider,
+        audio::-webkit-media-controls-seek-back-button,
+        audio::-webkit-media-controls-seek-forward-button,
+        audio::-webkit-media-controls-fullscreen-button,
+        audio::-webkit-media-controls-rewind-button,
+        audio::-webkit-media-controls-return-to-realtime-button,
+        audio::-webkit-media-controls-toggle-closed-captions-button {
+            display: none !important;
+        }
+
+        #progressOut {
+            width: 300px;
+            height: 20px;
+            border: 1px solid #ccc;
+            position: relative;
+            margin-top: 30px;
+            overflow: hidden;
+        }
+
+        #progressIn {
+            position: relative;
+            height: 100%;
+            bottom: 0px;
+            width: 0px;
+            background: #FC6428;
+        }
+
+        #time {
+            position: absolute;
+            padding: 5px 8px;
+            font-size: 10px;
+            background: #12BFD3;
+            right: 0px;
+            bottom: 0px;
+        }
+    </style>
+</head>
+<body style="overflow-y: scroll; overflow-x: auto;">
+
+    <form method="post" action="./Login.aspx" id="form1" autocomplete="off">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="Cik2DuiQ3RBqBDIdLAnEVu5vu4nmQFUh47t2az9nGw+XyEZk8D7xdi12ACQtf+RT81XNdXEwRIGZsMx6UGcPJ7Hl7TwjALYzPpisVPNG7Vz+1FDh2D9LzylQ8MYKXeLz6hU2lbWmZmYPeFk77mY/ijkp8ogaSlxb7GLdVUa2ujPuVhjSkbV4QojZ+wa3KBgfcxSkePvyEH5O0jJ8KhxXG3/6ZORMwepjr9JpPW500ftQXxuIdENl/hYAJfQhJ3vBORrMp/HqsjA2mjVnWiIS0Z/Mixih4w3S2+RG5Cdv7ln7qbsWDGQNjISjoe9Y85HmcCyN8dBb865bGEQG76JOgv51gAGuLFGViTnVXp6wYE+vLm7+tphHZxQdh7Y0evQuAcEcva2N9ALNLsGPYTWpIA43pUJc1DosODBV9f2i9fPOCh9dim80FKFK4fwaIaXorPOKKUN7B8lho+WbHxydBcJFWavbvrcVuAVvPD/bU9xVxhBNjGqFglPbuQFQS9fuwTXLwkkaApGZfHygURwrh+heEjIIkWrFJ0P5qKErjtLz7FKM7ZGfHIRhonh3lfCSWyZ2Qt/UvCYQXqxS2ll/dDY14GtIO36edKhrR075OKtnVbNL47WnlyYtH09MaLhPwzjro+PSgE1VBdI4nRLlc29J56r58z0JLeiLfH5vuf+uxI7G7yXZQUlK9hPx7yFGZfIqZpM/tBjZLYlD0s20R1fgbsGixB8h4bjgXXpztn0TnUecTGz/M0K/M7/m5GYC+WJpiY7yxefTbKJLhB2HdOtK924qq242svXcAQ+mF/I5MNeKbh0iAbJow3FUGXBUcdSDJOZWyIEBdEMyxh4OkIAv/LiBbzL2ac9LbcIzPVcvyDaoMUr0IXm9zwxTcFaxp5vReU1FO0QfSjeZR6CCZx44atk2NBdrp6kewTHaIvHEIPhGed6JaIZr1mZ/2pt/xhLbpTyVWrLpIzon3rZxEGAKmwj2Df+em7Zq85DmP0/maPBHwce+iDSg8LpXoH8e7DxmQZLRWomExoML/cqoFtrCEJ23jGRaMZ7A+APVjVE=" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['form1'];
+if (!theForm) {
+    theForm = document.form1;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C2EE9ABB" />
+	<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+</div>
+        <div class="hdrDiv">
+            <div class="topDiv">
+                <div class="logo">
+                    <img src="Images/Style/index.png" id="imgLogo" width="204" height="54" style="border-left: 0px;" />
+                </div>
+
+                <div class="logoUni">
+                    <img src="Images/LogoUni/Logo-Uni.png" id="imgLogoUni" width="75" height="70" />
+                </div>
+                <div class="logoUni" style="margin: 15px 0px 0px 5px; text-align: center;">
+                    <label id="lblUniNamePersian" style="font-size: small; color: gray;">دانشگاه علوم پزشکی بیرجند</label>
+                    <br />
+                    <label id="lblUniNameEnglish" style="font-size: smaller; color: gray;">Birjand University of Medical Sciences</label>
+                </div>
+            </div>
+        </div>
+        <div class="ribbon">
+            <div class="ribbonLeft"></div>
+            <div class="ribbonRight"></div>
+            <div class="middleBox">
+                <div class="rightBox">
+                    <div class="plateLogo" align="center">
+                    </div>
+                    <div class="loginDiv" style="margin-top: -25px;" align="center">
+                        <input name="txtUsernamePlain" type="text" id="txtUsernamePlain" autocompletetype="Disabled" autocomplete="off" readonly="" onfocus="this.removeAttribute(&#39;readonly&#39;);" x-autocompletetype="disable" placeholder="نام کاربری" class="t3" />
+                        <br />
+                        <input name="txtPasswordPlain" type="text" id="txtPasswordPlain" autocomplete="off" placeholder="گذرواژه" autocompletetype="Disabled" class="t3" style="font-family: text-security-disc;" x-autocompletetype="disable" onfocus="this.removeAttribute(&#39;readonly&#39;);" readonly="" />
+                        <input name="txtUsername" type="text" id="txtUsername" autocomplete="off" placeholder="نام کاربری" autocompletetype="Disabled" class="t3" x-autocompletetype="disable" onfocus="this.removeAttribute(&#39;readonly&#39;);" hidden="hidden" readonly="" />
+                        <br />
+                        <input name="txtPassword" type="text" id="txtPassword" autocomplete="off" placeholder="گذرواژه" autocompletetype="Disabled" class="t3" style="font-family: text-security-disc;" x-autocompletetype="disable" onfocus="this.removeAttribute(&#39;readonly&#39;);" hidden="hidden" readonly="" />
+
+                        <div style="width: 40%;">
+
+                            
+                            <div id="divCaptcha">
+                                <img src="UserControls/Captcha.ashx" id="Img1" name="captcha" style="max-width: 100%; max-height: 100%; min-width: 100%; min-height: 100%" onclick="window.location.reload();" />
+                            </div>
+
+                            <input name="txtCaptcha" type="text" id="txtCaptcha" placeholder="کد امنیتی" maxlength="4" style="width: 78%;" oninput="this.value = this.value.replace(/[^0-9.]/g, &#39;&#39;).replace(/(\..*?)\..*/g, &#39;$1&#39;);" />
+                            
+                                
+                        </div>
+
+                        <div style="width: 41%;">
+                            
+                        </div>
+
+                        <input name="btnEncript" type="button" id="btnEncript" value="ورود " style="clear: both; margin-bottom: 10px; float: none;" />
+                        <input name="btnLogin" type="submit" id="btnLogin" value="ورود سمت سرور " style="clear: both; margin-bottom: 10px; display: none;" />
+                        <div >
+                            <input onclick="__doPostBack('btnOAuth2','')" name="btnOAuth2" type="button" id="btnOAuth2" value="ورود از پنجره خدمات هوشمند دانشگاهی" style="clear: both; margin-bottom: 10px; float: none;" />
+
+
+                            
+                        </div>
+
+                        <br />
+                        <a style="clear: both; cursor: pointer;" onclick="PasswordRecovery();return false;" class="t3"><span> </span></a>
+                        <br />
+                        
+                        <br />
+                        <span id="lblUserNameError" style="display: none; color: red;">لطفا نام کاربری را وارد نمایید</span>
+                        <br />
+                        <span id="lblCaptchaError" style="display: none; color: red;">لطفا کد امنیتی را وارد نمایید</span>
+                        <br />
+                        <span id="lblWait" style="display: none; color: Highlight;">در حال بازیابی رمز عبور ...</span>
+
+                    </div>
+                </div>
+                <div class="leftBox">
+                    <div class="newsBox">
+                        <input type="button" value="اطلاعیه ها" />
+                        <br />
+                        <ul style="margin: 0px; height: 9em; overflow: auto;">
+                            <li onclick="dialogShow(item41);"><a>1404/06/29-بازیابی گذرواژه</a></li><div id=item41 class="news" title="متن خبر"><div class="news_Title">بازیابی گذرواژه</div><div class="news_Body">دانشجوی گرامی ، در صورتی که رمز عبور خود را فراموش کرده اید کافیست شماره دانشجویی خود را به همراه عبارت " فراموشی گذرواژه" به صورت <font color="#ff0033">پیامک</font> یا از طریق <font color="#ff0033">تلگرام </font>_ <font color="#ff0033">ایتا</font> به شماره همراه <font color="#000099">09153629545</font> ارسال نمایید.</div></div><li onclick="dialogShow(item40);"><a>1404/06/19-ما را در تلگرام و ایتا دنبال کنید  cullinanbirjand@</a></li><div id=item40 class="news" title="متن خبر"><div class="news_Title">ما را در تلگرام و ایتا دنبال کنید  cullinanbirjand@</div><div class="news_Body"></div></div><li onclick="dialogShow(item38);"><a>1404/06/18-نحوه اعمال جریمه های غذا های خورده نشده</a></li><div id=item38 class="news" title="متن خبر"><div class="news_Title">نحوه اعمال جریمه های غذا های خورده نشده</div><div class="news_Body"><span style="color: rgb(51, 51, 51); font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);">به اطلاع می رساند با تصویب کمیته تغذیه دانشگاه و در اجرای آیین نامه تغذیه دانشجویی&nbsp;</span><span style="font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);"><font color="#ff3300">از اول مهر ماه 1405&nbsp;</font></span><span style="color: rgb(51, 51, 51); font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);">جریمه غذای خورده نشده ، تا حداکثر چهار وعده غذا در ماه&nbsp;</span><span style="font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);"><font color="#ff3300">بدون جریمه</font></span><span style="color: rgb(51, 51, 51); font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);">&nbsp;و برای بیش از این تعداد در </span><span style="font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);"><font color="#ff3300">هر یک از وعده های ناهار و شام مبلغ 1250000 ریال برای پرس کامل و 600000 برای غذاهای نیم پرس&nbsp;</font></span><span style="color: rgb(51, 51, 51); font-family: SANS, BYekan, YekanNumbers, &quot;Trebuchet MS&quot;, Tahoma, Verdana, Arial, sans-serif; background-color: rgb(238, 238, 238);">&nbsp;تعیین و در پایان هر ماه اعمال خواهد شد.</span></div></div><li onclick="dialogShow(item16);"><a>1397/06/19-پاسخگویی سامانه تغذیه کالینان 09153629545   زراعتکار</a></li><div id=item16 class="news" title="متن خبر"><div class="news_Title">پاسخگویی سامانه تغذیه کالینان 09153629545   زراعتکار</div><div class="news_Body"><h3><font face="Tahoma">دانشجوی گرامی ، هرگونه سئوال و یا مشکل خود را در مورد سامانه تغذیه با ذکر شماره دانشجویی خود <font color="#ff3300">ترجیحاً به صورت پیامکی&nbsp;</font>&nbsp;ارسال نمایید. در اسرع وقت بررسی لازم انجام و نتیجه به اطلاع شما خواهد رسید و در صورت نیاز تماس گرفته خواهد شد.<br></font><font face="Tahoma">با توجه به تعداد بالای درخواستها ، امکان پاسخگویی تلفنی مقدور نمی باشد.<br></font><font face="Tahoma">از همراهی شما متشکریم</font></h3></div></div><li onclick="dialogShow(item1);"><a>1396/11/04-راهنمای ورود به سیستم اتوماسیون تغذیه</a></li><div id=item1 class="news" title="متن خبر"><div class="news_Title">راهنمای ورود به سیستم اتوماسیون تغذیه</div><div class="news_Body"><b>برای ورود به سامانه تغذیه پس از تکمیل ثبت نام و اخذ کارت دانشجویی و درج هولوگرام میتوانید از طریق آدرس اینترنتی <a href="http://jeton.bums.ac.ir" title="" target=""><font color="#cc33cc">https://jeton.bums.ac.ir</font></a> وارد سامانه تغذیه کالینان شوید. نام کاربری در این سامانه ، شماره دانشجویی و کلمه عبور به صورت پیش فرض کد ملی شما می باشد. دقت کنید در هنگام وارد کردن نام کاربری و کلمه عبور کیبورد سیستم شما <font color="#ff0000">حتماً&nbsp;</font>باید در <font color="#ff0000">حالت لاتین </font>باشد. در صورت هر گونه مشکل و یا نیاز به اطلاعات بیشتر تماس بگیرید. <font color="#3366FF">09153629545 زراعتکار</font></b><div><font color="#ff0000" size="4"><b>&nbsp;--- فایل های راهنمای سیستم ---&nbsp;</b></font></div><div><img src="https://i.imgur.com/z3DVtmJ.png" width="21">&nbsp;<font style="font-size: small;"><a href="http://www.bums.ac.ir/dorsapax/FileManager/UserFiles/Sub_0/PDFAPP36028.pdf" title="" target="" style="font-size: small;"><font color="#333399">راهنمای اتوماسیون تغذیه کالینان</font><font color="#339933"> </font><font color="#339999">(اپلیکیشن)</font></a></font></div><div><img src="https://i.imgur.com/z3DVtmJ.png" width="21">&nbsp;<font style="font-size: small;"><a href="http://www.bums.ac.ir/dorsapax/FileManager/UserFiles/Sub_0/PDFWEB36029.pdf" title="" target="" style="font-size: small;"><font color="#333399">راهنمای اتوماسیون تغذیه کالینان</font><font color="#6600cc"> </font><font color="#339999">(وب سایت)</font></a></font></div><div><img src="https://i.imgur.com/z3DVtmJ.png" width="21">&nbsp;<font size="2"><a href="http://www.bums.ac.ir/dorsapax/FileManager/UserFiles/Sub_0/nahv36031.pdf" title="" target="" style=""><font color="#660066">قوانین و مقررات</font></a><font color="#660099">&nbsp;&nbsp;</font></font></div></div></div>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <textarea name="CanSaveloginPasstxt" id="CanSaveloginPasstxt" style="display: none;">True</textarea>
+            <textarea name="loginSecurtxt" id="loginSecurtxt" style="display: none;">True</textarea>
+            <textarea name="publicKeytxt" id="publicKeytxt" style="display: none;">-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pAPzCnTcX4A3p9w+10PNY5ekRthWl/3mXANELfvo6mAzNlHhHLCKfjcXMuYT0XeaPyirNZjSdjWKyasou0Bb3JqVYsJBxCMzAOLv2fCMuOvYRwGWMqfmfrD25oUzFL2BQO8YTSCz766jm8h7RNeLQsmxObAIevSeSNNSF7A3q2dX6l0hj+TgSV5oewEVKTSu1MRKggXkTq02m33vdeqNhXwzQX1bmj783kUsSq6HP3ko6CzMyMAmszJNuQZ/o0/OxpIUMWRsp4Y2fcRrWtGzVbzjFw9R7RqLYUk4YX0Hl5BZXPj/lOjpVK9Mljc5yZc0nYhV78tk54W9i0fUERhWQIDAQAB
+-----END PUBLIC KEY-----</textarea>
+
+        </div>
+        <div class="copyRight">
+
+
+
+            <div class="crRight">
+                تمامی حقوق مادی و معنوی این نرم افزار متعلق به <a href="http://padide-af.com/" target="_blank">شرکت پدیده عصر فناوری</a> می باشد.
+				
+				<br/>
+				<a href="/jeton-help/index.html">راهنما، تماس باما ، قوانین و مقررات،درباره ما،نحوه ثبت سفارش آنلاین</a>
+            </div>
+
+
+            <div class="crLeft">
+				<a referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=309448&amp;Code=2X3UGL0SUVw1hXUAqHM3"><img referrerpolicy="origin" src="https://Trustseal.eNamad.ir/logo.aspx?id=309448&amp;Code=2X3UGL0SUVw1hXUAqHM3" alt="" style="cursor:pointer" id="2X3UGL0SUVw1hXUAqHM3"></a>
+               </br>
+                Powered by <a href="http://padide-af.com/" target="_blank" class="t3"><span>7Diamonds
+                </span></a>
+                <br />
+                <span id="Label1">Last Update: 25/11/1402</span>
+                <br />
+                <span id="lblVersion">Version : 8.9.78.1</span>
+                <br />
+                
+            </div>
+
+        </div>
+        <div class="footerBox">
+        </div>
+
+        <div id="dialog-PasswordRecovery" title="بازیابی گذرواژه" style="display: none;">
+            <label id="lblMessage">در صورت صحت اطلاعات رمز جدید برای شما پیامک می گردد </label>
+            <div style="clear: both; direction: rtl; line-height: 38px">
+
+                <input name="txtMobile_RePass" type="text" id="txtMobile_RePass" placeholder="تلفن همراه" class="t3" /><br>
+                <input name="btnPasswordRecovery" type="submit" id="btnPasswordRecovery" value="تأیید" style="display: none; width: auto;" />
+            </div>
+        </div>
+
+    </form>
+</body>
+
+
+
+<script src="Scripts/jquery.min.js" type="text/javascript"></script>
+<script src="Scripts/jquery-migrate-11.min.js" type="text/javascript"></script>
+<script src="Scripts/jquery-ui.min.js" type="text/javascript"></script>
+<script src="Scripts/jsencrypt.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+    jQuery.browser = {};
+    (function () {
+        jQuery.browser.msie = false;
+        jQuery.browser.version = 0;
+        if (navigator.userAgent.match(/MSIE ([0-9]+)\./)) {
+            jQuery.browser.msie = true;
+            jQuery.browser.version = RegExp.$1;
+        }
+    })();
+</script>
+
+
+<script type="text/javascript">
+    jQuery(document).ready(function () {
+        $(".news").dialog({
+            autoOpen: false,
+            show: {
+                effect: "blind",
+                duration: 800
+            },
+            hide: {
+                effect: "explode",
+                duration: 500
+            },
+            height: 400,
+            width: 500,
+            resizable: false,
+            modal: true
+        });
+
+        $("#captcha").click(function () {
+            $("#captcha").attr("src", "UserControls/Captcha.ashx?" + Math.floor((Math.random() * 100) + 1));
+        });
+    });
+    function dialogShow(param) {
+        $(param).dialog("open");
+    };
+
+    function PasswordRecovery() {
+        $(function () {
+            var input = document.getElementById("txtCaptcha");
+            var inputUserName = document.getElementById("txtUsernamePlain");
+            //if (inputUserName)
+            //    inputUserName = document.getElementById("txtUsernamePlainSave");
+
+            if (input.value == "") {
+
+                $('#lblCaptchaError').show();
+                $('#lblUserNameError').hide();
+
+
+                return;
+            }
+            else {
+                $('#lblCaptchaError').hide();
+            }
+
+            if (inputUserName.value == "") {
+
+                $('#lblUserNameError').show();
+                $('#lblCaptchaError').hide();
+                return;
+            }
+            else {
+                $('#lblUserNameError').hide();
+            }
+
+            $('#lblCaptchaError').hide();
+            $('#lblWait').show();
+
+
+            EncriptData("PasswordRecovery");
+
+            //$("#dialog-PasswordRecovery").dialog({
+            //    resizable: true,
+            //    height: 220,
+            //    width: 200,
+            //    modal: true,
+            //    appendTo: '#form1',
+            //    buttons: {
+            //        // انصراف: function () {
+            //        //     $(this).dialog("close");
+            //        // },
+            //        "بازیابی گذرواژه": function () {
+
+            //            EncriptData("PasswordRecovery");
+            //            //$(this).dialog("close");
+            //        }
+            //    }
+            //});
+        });
+    };
+
+
+
+    function playaudio() {
+        try {
+            var player = document.getElementById('audio');
+            player.play();
+            //$('#play').click(function () {
+            //    player.play()
+            //})
+        }
+        catch (err) {
+            console.log(err.message);
+        }
+    };
+
+    function pauseaudio() {
+        var player = document.getElementById('audio');
+        //pause when pause clicked
+        $('#pause').click(function () {
+            player.pause()
+        })
+    };
+
+    $(document).ready(function () {
+        $("input").attr("autocomplete", "off");
+
+        var alist = document.getElementsByTagName('a');
+        for (i = 0; i < alist.length; i++)
+            if (alist[i].href == "https://captcha.org/captcha.html?asp.net") {
+                document.getElementsByTagName('a')[i].href = '//padide-af.ir';
+                document.getElementsByTagName('a')[i].title = 'شرکت پدیده عصر فناوری ';
+                document.getElementsByTagName('a')[i].innerText = 'شرکت پدیده عصر فناوری ';
+                document.getElementById("CaptchaCodeTextBox").setAttribute("maxlength", 8);
+            }
+
+
+        if (document.querySelector("#CanSaveloginPasstxt").value.toLowerCase() == "true")
+            document.getElementById('txtPasswordPlain').type = 'password';
+    });
+
+    function EncriptData(clickType) {
+        console.log("Start JSEncript:");
+        var loginSecur = document.querySelector("#loginSecurtxt").value;
+        console.log("loginSecur: ");
+        console.log(loginSecur);
+        if (loginSecur.toLowerCase() == "true") {
+            const encrypt = new JSEncrypt();
+            var pubkey = document.querySelector("#publicKeytxt").value;
+            console.log("pubkey: ");
+            console.log(pubkey);
+            encrypt.setPublicKey(pubkey);
+            var plainText = document.querySelector("#txtUsernamePlain").value;
+            //if (!plainText)
+            //    plainText = document.getElementById("txtUsernamePlainSave");
+            //console.log("txtUsernamePlain: ");
+            //console.log(plainText);
+            const result1 = encrypt.encrypt(plainText);
+            document.querySelector("#txtUsernamePlain").value = "";
+            //document.querySelector("#txtUsernamePlainSave").value = "";
+            //console.log("encryptedText: ");
+            //console.log(result1);
+            document.querySelector("#txtUsername").value = result1;
+
+            var plainText = document.querySelector("#txtPasswordPlain").value;
+            //if (!plainText)
+            //    plainText = document.getElementById("txtPasswordPlainSave");
+            //console.log("txtPasswordPlain: ");
+            //console.log(plainText);
+            const result2 = encrypt.encrypt(plainText);
+            document.querySelector("#txtPasswordPlain").value = "";
+            //document.querySelector("#txtPasswordPlainSave").value = "";
+            //console.log("encryptedText: ");
+            //console.log(result2);
+            document.querySelector("#txtPassword").value = result2;
+        }
+        else {
+            document.querySelector("#txtUsername").value = document.querySelector("#txtUsernamePlain").value;
+            document.querySelector("#txtPassword").value = document.querySelector("#txtPasswordPlain").value;
+        }
+
+        if (clickType == "login")
+            $("#btnLogin").click();
+        if (clickType == "PasswordRecovery")
+            $("#btnPasswordRecovery").click();
+        if (clickType == "Otp") {
+            $("#btnOTP").click();
+        }
+    }
+
+</script>
+
+<script type="text/javascript">
+    document.querySelector("#btnEncript").addEventListener("click", () => EncriptData("login"), false);
+
+    var input = document.getElementById("txtCaptcha");
+    if (input)
+        input.addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                document.getElementById("btnEncript").click();
+            }
+        });
+
+    var input = document.getElementById("txtUsernamePlain");
+    if (input)
+        input.addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                document.getElementById("btnEncript").click();
+            }
+        });
+
+    var input = document.getElementById("txtPasswordPlain");
+    if (input)
+        if (input)
+            input.addEventListener("keypress", function (event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    document.getElementById("btnEncript").click();
+                }
+            });
+
+    var input = document.getElementById("CaptchaCodeTextBox");
+    if (input)
+        input.addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                document.getElementById("btnEncript").click();
+            }
+        });
+
+</script>
+
+</html>
