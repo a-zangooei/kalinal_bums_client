@@ -1,8 +1,26 @@
-<?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/cullinan_logo_1793904147192"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Dish Cloche Dome -->
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M54,34 C43,34 34,42 33,52 L75,52 C74,42 65,34 54,34 Z"/>
+    <!-- Dome Top Handle -->
+    <path
+        android:fillColor="#FFE082"
+        android:pathData="M51,28 C51,26.5 52.5,25 54,25 C55.5,25 57,26.5 57,28 L57,34 L51,34 Z"/>
+    <!-- Tray / Platter Base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M29,54 L79,54 C80.5,54 81.5,55 81.5,56.5 C81.5,58 80.5,59 79,59 L29,59 C27.5,59 26.5,58 26.5,56.5 C26.5,55 27.5,54 29,54 Z"/>
+    <!-- Fork -->
+    <path
+        android:fillColor="#FFCA28"
+        android:pathData="M43,64 L45,64 L45,82 L43,82 Z M39,64 L41,64 L41,72 L39,72 Z M47,64 L49,64 L49,72 L47,72 Z"/>
+    <!-- Spoon -->
+    <path
+        android:fillColor="#FFCA28"
+        android:pathData="M64,64 C66.5,64 68.5,66.5 68.5,70 C68.5,73.5 66.5,76 64,76 L64,82 L62,82 L62,64 Z"/>
+</vector>

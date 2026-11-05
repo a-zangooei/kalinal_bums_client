@@ -14,8 +14,10 @@ import kotlinx.coroutines.launch
 
 class AuthViewModel(
     application: Application,
-    private val authRepository: AuthRepository = AuthRepository()
+    private val authRepository: AuthRepository
 ) : AndroidViewModel(application) {
+
+    constructor(application: Application) : this(application, AuthRepository())
 
     private val userPrefs = UserPreferences(application)
 
