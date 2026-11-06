@@ -1,7 +1,6 @@
 package com.example.data.repository
 
 import com.example.data.crypto.RsaEncryptor
-import com.example.data.local.DemoDataSource
 import com.example.data.model.LoginPageState
 import com.example.data.model.UserSession
 import com.example.data.network.CullinanHttpClient
@@ -13,20 +12,7 @@ import org.jsoup.Jsoup
 
 class AuthRepository {
 
-    suspend fun fetchLoginPage(isDemo: Boolean): Result<LoginPageState> = withContext(Dispatchers.IO) {
-        if (isDemo) {
-            val captcha = DemoDataSource.generateDemoCaptcha()
-            return@withContext Result.success(
-                LoginPageState(
-                    viewState = "DEMO_VIEW_STATE",
-                    viewStateGenerator = "C2EE9ABB",
-                    publicKeyPem = DemoDataSource.DEMO_PUBLIC_KEY,
-                    captchaBytes = captcha,
-                    isLoading = false
-                )
-            )
-        }
-
+    suspend fun fetchLoginPage(): Result<LoginPageState> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(CullinanHttpClient.LOGIN_URL)
@@ -35,7 +21,7 @@ class AuthRepository {
 
             val response = CullinanHttpClient.client.newCall(request).execute()
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("خطا در بارگذاری صفحه ورود (${response.code})"))
+                return@withContext Result.failure(Exception("خطا در برقراری ارتباط با سرور دانشگاه (${response.code})"))
             }
 
             val html = response.body?.string() ?: ""
@@ -45,7 +31,7 @@ class AuthRepository {
             val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "C2EE9ABB" }
             val publicKeyPem = doc.select("#publicKeytxt, textarea[name=publicKeytxt]").text().trim()
 
-            // Fetch Captcha with current session
+            // Fetch live captcha with current session
             val captchaBytes = fetchCaptchaBytesInternal()
 
             Result.success(
@@ -62,16 +48,13 @@ class AuthRepository {
         }
     }
 
-    suspend fun refreshCaptcha(isDemo: Boolean): Result<ByteArray> = withContext(Dispatchers.IO) {
-        if (isDemo) {
-            return@withContext Result.success(DemoDataSource.generateDemoCaptcha())
-        }
+    suspend fun refreshCaptcha(): Result<ByteArray> = withContext(Dispatchers.IO) {
         try {
             val bytes = fetchCaptchaBytesInternal()
             if (bytes != null) {
                 Result.success(bytes)
             } else {
-                Result.failure(Exception("دریافت تصویر کد امنیتی ناموفق بود"))
+                Result.failure(Exception("دریافت تصویر کد امنیتی از سرور ناموفق بود"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -82,32 +65,14 @@ class AuthRepository {
         usernamePlain: String,
         passwordPlain: String,
         captchaInput: String,
-        pageState: LoginPageState,
-        isDemo: Boolean
+        pageState: LoginPageState
     ): Result<UserSession> = withContext(Dispatchers.IO) {
-        if (isDemo) {
-            if (captchaInput.trim() != DemoDataSource.currentDemoCaptchaCode && captchaInput.trim() != "1234") {
-                return@withContext Result.failure(Exception("کد امنیتی وارد شده اشتباه است"))
-            }
-            return@withContext Result.success(
-                UserSession(
-                    isLoggedIn = true,
-                    username = usernamePlain,
-                    studentName = "علیرضا زنگویی",
-                    studentNumber = usernamePlain.ifEmpty { "4031122001510050" },
-                    nationalId = passwordPlain.ifEmpty { "0640954992" },
-                    creditFormatted = "1,410,000- ریال",
-                    isDemoMode = true
-                )
-            )
-        }
-
         try {
             if (pageState.publicKeyPem.isBlank()) {
                 return@withContext Result.failure(Exception("کلید عمومی رمزنگاری از سرور دریافت نشده است"))
             }
 
-            // RSA encrypt username and password
+            // RSA encrypt username and password using public key from server
             val encryptedUsername = RsaEncryptor.encryptWithPem(usernamePlain.trim(), pageState.publicKeyPem)
             val encryptedPassword = RsaEncryptor.encryptWithPem(passwordPlain.trim(), pageState.publicKeyPem)
 
@@ -141,7 +106,7 @@ class AuthRepository {
 
             // Detection of successful login:
             // 1. Redirected to /Master/Default.aspx or /Reservation/Reservation.aspx
-            // 2. Or absence of txtUsernamePlain and presencia of student panel
+            // 2. Or absence of txtUsernamePlain and presence of student panel
             val isSuccess = finalUrl.contains("/Master/Default.aspx", ignoreCase = true) ||
                     finalUrl.contains("/Reservation/", ignoreCase = true) ||
                     (!bodyString.contains("txtUsernamePlain") && (bodyString.contains("خروج") || bodyString.contains("اطلاعات کاربری") || bodyString.contains("رزرو غذا")))
@@ -152,19 +117,18 @@ class AuthRepository {
                         isLoggedIn = true,
                         username = usernamePlain,
                         studentNumber = usernamePlain,
-                        nationalId = passwordPlain,
-                        isDemoMode = false
+                        nationalId = passwordPlain
                     )
                 )
             } else {
-                // Extract error message from page
+                // Extract error message from server response
                 val doc = Jsoup.parse(bodyString)
                 val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
                 val errorMsg = when {
                     alertError.isNotBlank() -> alertError
                     bodyString.contains("کد امنیتی") -> "کد امنیتی وارد شده اشتباه یا منقضی شده است"
                     bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا گذرواژه اشتباه است"
-                    else -> "ورود ناموفق بود. لطفاً اطلاعات و کد امنیتی را بررسی نمایید"
+                    else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
                 }
                 Result.failure(Exception(errorMsg))
             }

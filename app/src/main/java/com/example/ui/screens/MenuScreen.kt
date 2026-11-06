@@ -92,7 +92,7 @@ fun MenuScreen(
     var showProfileDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(userSession) {
-        viewModel.loadInitialMenu(userSession.isDemoMode)
+        viewModel.loadInitialMenu()
     }
 
     PersianRtlLayout {
@@ -186,7 +186,6 @@ fun MenuScreen(
                                 studentName = weeklyMenu?.studentName?.ifEmpty { userSession.studentName } ?: userSession.studentName,
                                 studentNumber = weeklyMenu?.studentNumber?.ifEmpty { userSession.studentNumber } ?: userSession.studentNumber,
                                 creditText = weeklyMenu?.creditText?.ifEmpty { userSession.creditFormatted } ?: userSession.creditFormatted,
-                                isDemoMode = userSession.isDemoMode,
                                 onRefresh = { viewModel.refresh() }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
@@ -479,7 +478,7 @@ fun MenuScreen(
                         ProfileDetailRow("نام و نام خانوادگی", weeklyMenu?.studentName?.ifEmpty { userSession.studentName } ?: "علیرضا زنگویی")
                         ProfileDetailRow("شماره دانشجویی", weeklyMenu?.studentNumber?.ifEmpty { userSession.studentNumber } ?: userSession.studentNumber)
                         ProfileDetailRow("وضعیت مانده اعتبار", weeklyMenu?.creditText?.ifEmpty { userSession.creditFormatted } ?: userSession.creditFormatted)
-                        ProfileDetailRow("سامانه متصل", if (userSession.isDemoMode) "حالت آزمایشی آفلاین" else "سرور زنده کالینان")
+                        ProfileDetailRow("سامانه متصل", "سامانه کالینان (jeton.bums.ac.ir)")
                     }
                 },
                 confirmButton = {

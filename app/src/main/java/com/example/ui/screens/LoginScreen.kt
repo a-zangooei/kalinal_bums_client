@@ -93,7 +93,6 @@ fun LoginScreen(
     val password by viewModel.password.collectAsState()
     val captchaInput by viewModel.captchaInput.collectAsState()
     val rememberMe by viewModel.rememberMe.collectAsState()
-    val isDemoMode by viewModel.isDemoMode.collectAsState()
     val pageState by viewModel.pageState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isCaptchaRefreshing by viewModel.isCaptchaRefreshing.collectAsState()
@@ -162,55 +161,40 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Demo / Offline Mode Switch Card
+                // Direct Server Connection Badge
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("demo_mode_toggle_card"),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isDemoMode) Color(0xFFE0F2F1) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        containerColor = TealPrimary.copy(alpha = 0.08f)
                     )
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isDemoMode) Icons.Default.WifiOff else Icons.Default.CloudQueue,
-                                contentDescription = "وضعیت اتصال",
-                                tint = if (isDemoMode) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (isDemoMode) "حالت آزمایشی آفلاین (داده‌های نمونه)" else "اتصال مستقیم به سرور دانشگاه",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDemoMode) TealPrimary else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isDemoMode) "امکان بررسی بدون نیاز به اینترانت دانشگاه" else "https://jeton.bums.ac.ir",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = isDemoMode,
-                            onCheckedChange = { viewModel.setDemoMode(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = TealPrimary,
-                                checkedTrackColor = Color(0xFF80CBC4)
-                            ),
-                            modifier = Modifier.testTag("demo_switch")
+                        Icon(
+                            imageVector = Icons.Default.CloudQueue,
+                            contentDescription = "اتصال سرور",
+                            tint = TealPrimary,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "اتصال مستقیم به سامانه کالینان دانشگاه",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealPrimary
+                            )
+                            Text(
+                                text = "https://jeton.bums.ac.ir",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
 

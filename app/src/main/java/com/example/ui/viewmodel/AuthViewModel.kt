@@ -33,9 +33,6 @@ class AuthViewModel(
     private val _rememberMe = MutableStateFlow(userPrefs.rememberMe)
     val rememberMe: StateFlow<Boolean> = _rememberMe.asStateFlow()
 
-    private val _isDemoMode = MutableStateFlow(userPrefs.isDemoMode)
-    val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
-
     private val _pageState = MutableStateFlow(LoginPageState())
     val pageState: StateFlow<LoginPageState> = _pageState.asStateFlow()
 
@@ -78,22 +75,15 @@ class AuthViewModel(
         }
     }
 
-    fun setDemoMode(enabled: Boolean) {
-        _isDemoMode.value = enabled
-        userPrefs.isDemoMode = enabled
-        _errorMessage.value = null
-        loadLoginPage()
-    }
-
     fun loadLoginPage() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = authRepository.fetchLoginPage(_isDemoMode.value)
+            val result = authRepository.fetchLoginPage()
             result.onSuccess { state ->
                 _pageState.value = state
             }.onFailure { error ->
-                _errorMessage.value = error.message ?: "خطا در ارتباط با سامانه دانشگاه"
+                _errorMessage.value = error.message ?: "خطا در ارتباط با سرور سامانه کالینان"
             }
             _isLoading.value = false
         }
@@ -102,7 +92,7 @@ class AuthViewModel(
     fun refreshCaptcha() {
         viewModelScope.launch {
             _isCaptchaRefreshing.value = true
-            val result = authRepository.refreshCaptcha(_isDemoMode.value)
+            val result = authRepository.refreshCaptcha()
             result.onSuccess { bytes ->
                 _pageState.value = _pageState.value.copy(captchaBytes = bytes)
                 _captchaInput.value = ""
@@ -139,8 +129,7 @@ class AuthViewModel(
                 usernamePlain = user,
                 passwordPlain = pass,
                 captchaInput = captcha,
-                pageState = _pageState.value,
-                isDemo = _isDemoMode.value
+                pageState = _pageState.value
             )
 
             result.onSuccess { session ->

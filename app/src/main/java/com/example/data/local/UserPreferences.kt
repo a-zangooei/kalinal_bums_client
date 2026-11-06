@@ -20,10 +20,6 @@ class UserPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_REMEMBER_ME, false)
         set(value) = prefs.edit().putBoolean(KEY_REMEMBER_ME, value).apply()
 
-    var isDemoMode: Boolean
-        get() = prefs.getBoolean(KEY_DEMO_MODE, false)
-        set(value) = prefs.edit().putBoolean(KEY_DEMO_MODE, value).apply()
-
     fun clearCredentials() {
         prefs.edit()
             .remove(KEY_USERNAME)
@@ -36,6 +32,5 @@ class UserPreferences(context: Context) {
         private const val KEY_USERNAME = "saved_username"
         private const val KEY_PASSWORD = "saved_password"
         private const val KEY_REMEMBER_ME = "remember_me"
-        private const val KEY_DEMO_MODE = "is_demo_mode"
     }
 }

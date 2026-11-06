@@ -1,6 +1,5 @@
 package com.example.data.repository
 
-import com.example.data.local.DemoDataSource
 import com.example.data.model.WeekNavigationDirection
 import com.example.data.model.WeeklyMenu
 import com.example.data.network.CullinanHttpClient
@@ -13,11 +12,7 @@ import okhttp3.Request
 
 class MenuRepository {
 
-    suspend fun fetchInitialMenu(isDemo: Boolean): Result<WeeklyMenu> = withContext(Dispatchers.IO) {
-        if (isDemo) {
-            return@withContext Result.success(DemoDataSource.getDemoWeeklyMenu(0))
-        }
-
+    suspend fun fetchInitialMenu(): Result<WeeklyMenu> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(CullinanHttpClient.RESERVATION_URL)
@@ -41,18 +36,12 @@ class MenuRepository {
     suspend fun navigateWeek(
         direction: WeekNavigationDirection,
         currentMenu: WeeklyMenu,
-        isDemo: Boolean,
         currentOffset: Int
     ): Result<Pair<WeeklyMenu, Int>> = withContext(Dispatchers.IO) {
         val newOffset = when (direction) {
             WeekNavigationDirection.PREVIOUS -> currentOffset - 1
             WeekNavigationDirection.NEXT -> currentOffset + 1
             WeekNavigationDirection.CURRENT -> 0
-        }
-
-        if (isDemo) {
-            val menu = DemoDataSource.getDemoWeeklyMenu(newOffset)
-            return@withContext Result.success(Pair(menu, newOffset))
         }
 
         try {

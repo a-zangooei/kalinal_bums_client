@@ -33,19 +33,17 @@ class MenuViewModel(
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     private var currentWeekOffset = 0
-    private var isDemoMode = false
 
-    fun loadInitialMenu(isDemo: Boolean) {
-        this.isDemoMode = isDemo
+    fun loadInitialMenu() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = menuRepository.fetchInitialMenu(isDemo)
+            val result = menuRepository.fetchInitialMenu()
             result.onSuccess { menu ->
                 _weeklyMenu.value = menu
                 currentWeekOffset = 0
             }.onFailure { error ->
-                _errorMessage.value = error.message ?: "خطا در دریافت جدول برنامه غذایی"
+                _errorMessage.value = error.message ?: "خطا در دریافت جدول برنامه غذایی از سرور دانشگاه"
             }
             _isLoading.value = false
         }
@@ -60,7 +58,6 @@ class MenuViewModel(
             val result = menuRepository.navigateWeek(
                 direction = direction,
                 currentMenu = current,
-                isDemo = isDemoMode,
                 currentOffset = currentWeekOffset
             )
 
@@ -84,7 +81,7 @@ class MenuViewModel(
     }
 
     fun refresh() {
-        loadInitialMenu(isDemoMode)
+        loadInitialMenu()
     }
 
     fun clearError() {

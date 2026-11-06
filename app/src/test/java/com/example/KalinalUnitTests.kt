@@ -1,7 +1,6 @@
 package com.example
 
 import com.example.data.crypto.RsaEncryptor
-import com.example.data.local.DemoDataSource
 import com.example.data.parser.DeltaParser
 import com.example.data.parser.ReservationHtmlParser
 import org.junit.Assert.assertEquals
@@ -11,10 +10,16 @@ import org.junit.Test
 
 class KalinalUnitTests {
 
+    companion object {
+        private const val TEST_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pAPzCnTcX4A3p9w+10PNY5ekRthWl/3mXANELfvo6mAzNlHhHLCKfjcXMuYT0XeaPyirNZjSdjWKyasou0Bb3JqVYsJBxCMzAOLv2fCMuOvYRwGWMqfmfrD25oUzFL2BQO8YTSCz766jm8h7RNeLQsmxObAIevSeSNNSF7A3q2dX6l0hj+TgSV5oewEVKTSu1MRKggXkTq02m33vdeqNhXwzQX1bmj783kUsSq6HP3ko6CzMyMAmszJNuQZ/o0/OxpIUMWRsp4Y2fcRrWtGzVbzjFw9R7RqLYUk4YX0Hl5BZXPj/lOjpVK9Mljc5yZc0nYhV78tk54W9i0fUERhWQIDAQAB
+-----END PUBLIC KEY-----"""
+    }
+
     @Test
-    fun testRsaEncryptionWithDemoKey() {
+    fun testRsaEncryptionWithKey() {
         val plain = "4031122001510050"
-        val encrypted = RsaEncryptor.encryptWithPem(plain, DemoDataSource.DEMO_PUBLIC_KEY)
+        val encrypted = RsaEncryptor.encryptWithPem(plain, TEST_PUBLIC_KEY)
         assertNotNull(encrypted)
         assertTrue("Encrypted output must be non-empty Base64", encrypted.isNotEmpty())
     }

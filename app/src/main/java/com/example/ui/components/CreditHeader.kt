@@ -43,7 +43,6 @@ fun CreditHeader(
     studentName: String,
     studentNumber: String,
     creditText: String,
-    isDemoMode: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -139,30 +138,6 @@ fun CreditHeader(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
-                    }
-
-                    if (isDemoMode) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.18f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.WifiOff,
-                                contentDescription = "حالت آفلاین",
-                                tint = Color.White,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "حالت دمو (آفلاین)",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
                     }
                 }
             }
