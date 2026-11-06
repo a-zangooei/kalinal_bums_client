@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan for resilient, fail-closed SHA-256 certificate fingerprint extraction and audit across all APK variants and the Android App Bundle in .github/workflows/manual-build.yml.",
-  "updatedAt": "2026-11-06T09:56:13.115060777Z",
+  "summary": "Implementation plan for adding Lunch Food Reservation ('رزرو') and Cancellation ('لغو رزرو') to Kalinal Android Client based on HAR analysis, ASP.NET WebForms delta parsing, ViewState chaining, confirmation dialogs, and comprehensive unit tests.",
+  "updatedAt": "2026-11-06T11:52:45.510302088Z",
   "requestFeedback": true,
   "userFacing": true
 }

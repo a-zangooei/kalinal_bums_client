@@ -18,10 +18,24 @@ enum class ReservationStatus(
     CONSUMED("تحویل داده شده", true, true)
 }
 
+data class FoodOption(
+    val id: String,
+    val name: String,
+    val priceRials: Long,
+    val isHalfPortion: Boolean = false
+)
+
+data class SelfOption(
+    val id: String,
+    val name: String,
+    val isDefault: Boolean = false
+)
+
 data class MealItem(
     val id: String,
     val mealType: MealType,
     val dayIndex: Int, // 0: شنبه, ..., 6: جمعه
+    val tableRowIndex: String = "ctl02", // ctl02 to ctl08
     val foodName: String,
     val diningHall: String,
     val priceRials: Long,
@@ -29,13 +43,18 @@ data class MealItem(
     val calories: Int,
     val status: ReservationStatus,
     val count: Int,
-    val availableFoods: List<String> = emptyList()
+    val isEditable: Boolean = false,
+    val selectedFoodId: String = "-1",
+    val selectedSelfId: String = "-1",
+    val availableFoods: List<String> = emptyList(),
+    val availableFoodOptions: List<FoodOption> = emptyList(),
+    val availableSelfOptions: List<SelfOption> = emptyList()
 )
 
 data class DayMenu(
     val dayIndex: Int, // 0 to 6
     val dayName: String, // شنبه، یکشنبه، ...
-    val dateJalali: String, // e.g. 1405/08/16
+    val dateJalali: String = "", // e.g. 1405/08/16
     val isToday: Boolean = false,
     val meals: Map<MealType, List<MealItem>> = emptyMap()
 )
@@ -57,3 +76,10 @@ enum class WeekNavigationDirection {
     CURRENT,
     NEXT
 }
+
+data class ReservationResult(
+    val isSuccess: Boolean,
+    val message: String,
+    val updatedMenu: WeeklyMenu? = null,
+    val toastType: String = ""
+)

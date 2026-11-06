@@ -29,8 +29,17 @@ class MenuViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isMutating = MutableStateFlow(false)
+    val isMutating: StateFlow<Boolean> = _isMutating.asStateFlow()
+
+    private val _processingDayIndex = MutableStateFlow<Int?>(null)
+    val processingDayIndex: StateFlow<Int?> = _processingDayIndex.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private val _userFeedback = MutableStateFlow<Pair<String, Boolean>?>(null) // message to isSuccess
+    val userFeedback: StateFlow<Pair<String, Boolean>?> = _userFeedback.asStateFlow()
 
     private var currentWeekOffset = 0
 
@@ -51,6 +60,8 @@ class MenuViewModel(
 
     fun navigateWeek(direction: WeekNavigationDirection) {
         val current = _weeklyMenu.value ?: return
+        if (_isMutating.value) return
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -72,6 +83,74 @@ class MenuViewModel(
         }
     }
 
+    fun reserveLunch(dayIndex: Int, foodId: String, selfId: String) {
+        val current = _weeklyMenu.value ?: return
+        if (_isMutating.value) return
+
+        viewModelScope.launch {
+            _isMutating.value = true
+            _processingDayIndex.value = dayIndex
+            _errorMessage.value = null
+
+            val result = menuRepository.reserveLunch(
+                currentMenu = current,
+                targetDayIndex = dayIndex,
+                targetFoodId = foodId,
+                targetSelfId = selfId
+            )
+
+            result.onSuccess { res ->
+                if (res.updatedMenu != null) {
+                    _weeklyMenu.value = res.updatedMenu
+                }
+                _userFeedback.value = Pair(res.message, res.isSuccess)
+                if (!res.isSuccess) {
+                    _errorMessage.value = res.message
+                }
+            }.onFailure { error ->
+                val msg = error.message ?: "خطا در ارسال درخواست رزرو"
+                _errorMessage.value = msg
+                _userFeedback.value = Pair(msg, false)
+            }
+
+            _processingDayIndex.value = null
+            _isMutating.value = false
+        }
+    }
+
+    fun cancelLunch(dayIndex: Int) {
+        val current = _weeklyMenu.value ?: return
+        if (_isMutating.value) return
+
+        viewModelScope.launch {
+            _isMutating.value = true
+            _processingDayIndex.value = dayIndex
+            _errorMessage.value = null
+
+            val result = menuRepository.cancelLunch(
+                currentMenu = current,
+                targetDayIndex = dayIndex
+            )
+
+            result.onSuccess { res ->
+                if (res.updatedMenu != null) {
+                    _weeklyMenu.value = res.updatedMenu
+                }
+                _userFeedback.value = Pair(res.message, res.isSuccess)
+                if (!res.isSuccess) {
+                    _errorMessage.value = res.message
+                }
+            }.onFailure { error ->
+                val msg = error.message ?: "خطا در ارسال درخواست لغو رزرو"
+                _errorMessage.value = msg
+                _userFeedback.value = Pair(msg, false)
+            }
+
+            _processingDayIndex.value = null
+            _isMutating.value = false
+        }
+    }
+
     fun selectDay(index: Int) {
         _selectedDayIndex.value = index.coerceIn(0, 6)
     }
@@ -86,5 +165,9 @@ class MenuViewModel(
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    fun clearFeedback() {
+        _userFeedback.value = null
     }
 }

@@ -13,10 +13,17 @@ data class DeltaResponse(
     val formAction: String? = null,
     val redirectUrl: String? = null,
     val startupScripts: List<String> = emptyList(),
-    val rawTokens: List<DeltaToken> = emptyList()
+    val rawTokens: List<DeltaToken> = emptyList(),
+    val toastType: String? = null,
+    val toastMessage: String? = null,
+    val toastTitle: String? = null
 )
 
 object DeltaParser {
+
+    private val TOAST_REGEX = Regex(
+        """toastify\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]*)['"])?"""
+    )
 
     fun parse(deltaText: String): DeltaResponse {
         val updatePanels = mutableMapOf<String, String>()
@@ -100,13 +107,33 @@ object DeltaParser {
             }
         }
 
+        // Extract toastify notification
+        var extractedToastType: String? = null
+        var extractedToastMessage: String? = null
+        var extractedToastTitle: String? = null
+
+        // Check startupScripts first, or fallback to searching deltaText
+        val scriptsToCheck = startupScripts.ifEmpty { listOf(deltaText) }
+        for (script in scriptsToCheck) {
+            val match = TOAST_REGEX.find(script)
+            if (match != null) {
+                extractedToastType = match.groupValues[1].trim()
+                extractedToastMessage = match.groupValues[2].trim()
+                extractedToastTitle = match.groupValues.getOrNull(3)?.trim()
+                break
+            }
+        }
+
         return DeltaResponse(
             updatePanels = updatePanels,
             hiddenFields = hiddenFields,
             formAction = formAction,
             redirectUrl = redirectUrl,
             startupScripts = startupScripts,
-            rawTokens = rawTokens
+            rawTokens = rawTokens,
+            toastType = extractedToastType,
+            toastMessage = extractedToastMessage,
+            toastTitle = extractedToastTitle
         )
     }
 }

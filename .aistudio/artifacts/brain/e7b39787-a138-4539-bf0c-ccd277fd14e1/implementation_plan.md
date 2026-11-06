@@ -1,180 +1,116 @@
-# Resilient Cryptographic Release Signature Audit Plan
+# برنامه اجرایی پیاده‌سازی رزرو و لغو رزرو غذا در کلاینت کالینال (سامانه سلف دانشگاه)
 
-A targeted, fail-closed solution to resolve the certificate fingerprint extraction failure in `.github/workflows/manual-build.yml`, standardizing SHA-256 extraction across `apksigner` and `keytool`.
-
----
-
-## User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The following user-confirmed decisions govern this implementation:
-
-- **Confirmed Decision 1 (AAB Extraction Mechanism)**: Use `keytool` with `-printcert -jarfile` combined with a direct `META-INF/*.RSA` pipeline fallback and lowercase hex normalization to extract the AAB certificate fingerprint reliably.
-- **Confirmed Decision 2 (Diagnostic Log Verbosity)**: Print sanitized stdout and stderr output on any signature failure to facilitate clear troubleshooting without leaking secrets, keystore paths, or passwords.
-- **Confirmed Decision 3 (Strict Fail-Closed Enforcement)**: The build must exit with code 1 if:
-  - An APK or AAB fails signature extraction.
-  - An extracted fingerprint is not exactly 64 hexadecimal characters.
-  - Any split APK or the AAB has a fingerprint that differs from the master Universal APK fingerprint.
-  - No conditions will allow an empty or unverified fingerprint to print a success message.
+این سند مراحل دقیق پیاده‌سازی قابلیت **رزرو غذا (Reservation)** و **لغو رزرو (Cancellation)** ناهار را بر اساس تحلیل درخواست‌ها و پاسخ‌های واقعی فایل HAR سامانه `jeton.bums.ac.ir` تشریح می‌کند.
 
 ---
 
-## 1. Root Cause Analysis
+## ۱. تحلیل رفتار سامانه بر اساس مستندات و داده‌های HAR
 
-### Previous Implementation
-In `.github/workflows/manual-build.yml`:
-```bash
-MASTER_FINGERPRINT=$($APKSIGNER verify --print-certs "$UNIVERSAL_APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
-```
+### ۱.۱. وضعیت‌های ردیف جدول و فرمت داده‌ها
+- **تعداد روزها و ردیف‌ها**: هفته شامل ۷ روز (شنبه تا جمعه) است. در صفحه ۳ جدول وجود دارد:
+  - `grdReservationBreakfast` (کنترل‌های `ctl02` تا `ctl08`)
+  - `grdReservationLunch` (کنترل‌های `ctl02` تا `ctl08`)
+  - `grdReservationDinner` (کنترل‌های `ctl02` تا `ctl08`)
+- **وضعیت ردیف**:
+  - ردیف‌های گذشته یا قفل‌شده دارای کلاس `aspNetDisabled` بوده و چک‌باکس آنها صفت `disabled="disabled"` دارد. این ردیف‌ها غیرقابل‌ویرایش هستند.
+  - ردیف‌های فعال دارای چک‌باکس با قابلیت تغییر وضعیت هستند.
+- **انتخاب غذا و سلف (`drpFood`, `drpSelf`, `drpFoodCount`)**:
+  - هر ردیف دارای یک تگ `<select>` برای غذا شامل شناسه‌ها، نام‌ها و قیمت هر غذا است.
+  - هر ردیف دارای `<select>` برای سلف غذاخوری است (با مقدار پیش‌فرض انتخاب‌شده).
+  - در حالت بدون رزرو: `drpSelf=-1`، `drpFood=-1` و `drpFoodCount=0`.
 
-### Why it Failed
-1. **Stdout vs. Stderr Redirection**: `apksigner` in certain Android build-tools revisions or runner environments emits certificate details or diagnostic warnings to stderr instead of stdout. Piping without `2>&1` caused the subshell to capture an empty string.
-2. **Brittle String Pattern Matching**: Grepping strictly for `"Signer #1 certificate SHA-256 digest:"` fails if build-tools formats the output slightly differently (e.g., `"Certificate SHA-256 digest:"`, `"Signer #1 (v1/v2/v3):"`, or localized/reformatted prefixes).
-3. **Format Standardization**: Without stripping colons, spaces, and validating against `^[0-9a-f]{64}$`, empty strings or mismatched formatting bypassed regex checks.
-4. **Permissive AAB Check**: The previous check `if [ -n "$AAB_FINGERPRINT" ] ...` allowed an empty AAB fingerprint to be silently skipped.
+### ۱.۲. ساختار درخواست‌های POST (ASP.NET WebForms + UpdatePanel)
+تمام درخواست‌ها به نشانی `/Reservation/Reservation.aspx` با فرمت `application/x-www-form-urlencoded; charset=UTF-8` ارسال می‌شوند:
+1. **زنجیره ViewState**:
+   - درخواست جدید باید حتماً از مقدار `__VIEWSTATE` و `__VIEWSTATEGENERATOR` برگشتی از آخرین پاسخ معتبر استفاده کند.
+   - ارسال تمامی ۲۱ ردیف (صبحانه، ناهار، شام) در پارامترهای فرم الزامی است (حفظ مقادیر موجود برای سایر ردیف‌ها).
+2. **درخواست رزرو ناهار**:
+   - برای ردیف هدف:
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$chkReserve=on`
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpSelf=<شناسه_سلف>`
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpFood=<شناسه_غذا>`
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpFoodCount=1`
+   - دکمه ارسال: `ctl00$cphMain$btnSaveLunch=ذخیره ناهار`
+   - مدیر اسکریپت: `ctl00$ScriptManager=ctl00$UpdatePanel1|ctl00$cphMain$btnSaveLunch`
+3. **درخواست لغو رزرو ناهار**:
+   - برای ردیف هدف، چک‌باکس حذف می‌شود (کلید `chkReserve` ارسال **نمی‌شود**):
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpSelf=<شناسه_سلف>`
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpFood=<شناسه_غذا>`
+     - `ctl00$cphMain$grdReservationLunch$ctlXX$drpFoodCount=1`
+   - دکمه و ScriptManager همان `ctl00$cphMain$btnSaveLunch=ذخیره ناهار` ارسال می‌شود.
 
----
-
-## 2. Resilient Extraction Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        APK SIGNATURE AUDIT                             │
-│                                                                        │
-│  RAW_OUT=$($APKSIGNER verify --print-certs "$APK" 2>&1)                │
-│                                                                        │
-│  1. Check exit code == 0 (else fail with sanitized diagnostic log)     │
-│  2. Extract SHA-256 line -> Strip colons, whitespace -> Lowercase      │
-│  3. Fallback: Regex match 64 hex characters or 32 colon-hex pairs       │
-│  4. Assert string matches: ^[0-9a-f]{64}$ (else fail build)           │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Master Fingerprint
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     SPLIT APKS & AAB AUDIT (FAIL-CLOSED)               │
-│                                                                        │
-│  • ARM64, ARMv7, x86_64 splits must match Master Fingerprint           │
-│  • AAB extracted via keytool -printcert -jarfile 2>&1                   │
-│  • AAB fingerprint must match Master Fingerprint                       │
-│  • Any mismatch or empty value -> Exit code 1                          │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 3. Implementation Details
-
-### Step 1: Encapsulate Robust Extraction Functions in `manual-build.yml`
-
-```bash
-extract_apk_fingerprint() {
-  local target_apk="$1"
-  local raw_output
-  raw_output=$("$APKSIGNER" verify --print-certs "$target_apk" 2>&1)
-  local status=$?
-
-  if [ $status -ne 0 ]; then
-    echo "::error::apksigner verification failed for $target_apk (exit code $status)"
-    echo "--- apksigner diagnostic output ---"
-    echo "$raw_output"
-    echo "-----------------------------------"
-    return 1
-  fi
-
-  # Primary extraction: search for SHA-256 digest line
-  local fp
-  fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -i "digest" | sed -E 's/.*SHA-256.*digest:?[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
-
-  # Fallback extraction: look for 64 contiguous hex chars on a line with SHA-256
-  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
-    fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
-  fi
-
-  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
-    echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from $target_apk"
-    echo "--- apksigner diagnostic output ---"
-    echo "$raw_output"
-    echo "-----------------------------------"
-    return 1
-  fi
-
-  echo "$fp"
-  return 0
-}
-```
-
-### Step 2: Encapsulate Robust AAB Fingerprint Extraction
-
-```bash
-extract_aab_fingerprint() {
-  local aab_file="$1"
-  local raw_output
-  raw_output=$(keytool -printcert -jarfile "$aab_file" 2>&1)
-  local status=$?
-
-  # If -jarfile doesn't find cert, fall back to extracting META-INF cert stream
-  if [ $status -ne 0 ] || ! echo "$raw_output" | grep -qi "SHA256"; then
-    raw_output=$(unzip -p "$aab_file" 'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' 2>/dev/null | keytool -printcert 2>&1)
-    status=$?
-  fi
-
-  if [ $status -ne 0 ]; then
-    echo "::error::keytool verification failed for AAB: $aab_file (exit code $status)"
-    echo "--- keytool diagnostic output ---"
-    echo "$raw_output"
-    echo "---------------------------------"
-    return 1
-  fi
-
-  local fp
-  fp=$(echo "$raw_output" | grep -i "SHA256:" | sed -E 's/.*SHA256:[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
-
-  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
-    fp=$(echo "$raw_output" | grep -i "SHA256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
-  fi
-
-  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
-    echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from AAB: $aab_file"
-    echo "--- keytool diagnostic output ---"
-    echo "$raw_output"
-    echo "---------------------------------"
-    return 1
-  fi
-
-  echo "$fp"
-  return 0
-}
-```
-
-### Step 3: Enforce Strict Equality Across All Outputs
-
-```bash
-MASTER_FINGERPRINT=$(extract_apk_fingerprint "$UNIVERSAL_APK") || exit 1
-echo "Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
-
-# Audit each extracted split APK
-for APK in $(find extracted_arm64 extracted_armv7 extracted_x86_64 -name "*.apk"); do
-  CURRENT_FP=$(extract_apk_fingerprint "$APK") || exit 1
-  if [ "$CURRENT_FP" != "$MASTER_FINGERPRINT" ]; then
-    echo "::error::Certificate fingerprint mismatch in $APK! Expected: $MASTER_FINGERPRINT, Got: $CURRENT_FP"
-    exit 1
-  fi
-  echo "Verified signature match for $APK"
-done
-
-# Audit AAB
-AAB_FP=$(extract_aab_fingerprint "dist/Kalinal-AppBundle-AllDevices.aab") || exit 1
-if [ "$AAB_FP" != "$MASTER_FINGERPRINT" ]; then
-  echo "::error::AAB Certificate fingerprint mismatch! Expected: $MASTER_FINGERPRINT, Got: $AAB_FP"
-  exit 1
-fi
-echo "Verified AAB certificate fingerprint matches master release key ($AAB_FP)."
-```
+### ۱.۳. ساختار پاسخ‌های سرور (ASP.NET AJAX Delta)
+پاسخ در قالب قطعات تفکیک‌شده با اندازه برمی‌گردد: `length|type|id|content|`
+- **قطعه `updatePanel|UpdatePanel1`**: حاوی قطعه جدید جدول HTML، اعتبار به‌روز شده (`lblUserCreditPrice`) و روزهای هفته.
+- **قطعه `hiddenField|__VIEWSTATE`**: مقدار جدید `__VIEWSTATE` برای درخواست بعدی.
+- **قطعه `scriptStartupBlock|ScriptContentNoTags`**: حاوی اجرای اسکریپت نوتیفیکیشن toast:
+  - فرمت: `toastify('success', ' رزرو غذا برای 1 روز با موفقیت انجام شد؛ ', 'پیغام سیستم', ...)`
+  - در صورت خطا: `toastify('error', 'موجودی کافی نیست...', ...)`
+- **معیار موفقیت قطعی**:
+  - استخراج اولین پارامتر تابع `toastify` برابر با `'success'`
+  - به‌روزرسانی مقدار اعتبار و تغییر وضعیت ردیف به رزرو شده / لغو شده در HTML برگشتی
 
 ---
 
-## 4. Verification Plan
+## ۲. گام‌های اجرایی و فایل‌های قابل تغییر
 
-1. Verify that `extract_apk_fingerprint` correctly parses simulated and real `apksigner` outputs in local bash tests.
-2. Run `compile_applet` to confirm overall project integrity.
-3. Review the Git diff in `.github/workflows/manual-build.yml`.
+### ۲.۱. گسترش لایه مدل‌ها (`app/src/main/java/com/example/kalinal/data/model/MealModels.kt`)
+- افزودن کلاس `FoodOption(val id: String, val name: String, val priceRials: Long, val isHalfPortion: Boolean = false)`
+- افزودن کلاس `SelfOption(val id: String, val name: String, val isDefault: Boolean)`
+- افزودن فیلدهای زیر به `MealItem`:
+  - `isEditable: Boolean` (آیا دکمه رزرو/لغو مجاز است؟)
+  - `tableRowIndex: String` (مانند `ctl06`)
+  - `availableFoods: List<FoodOption>`
+  - `availableSelfs: List<SelfOption>`
+  - `selectedSelfId: String?`
+  - `selectedFoodId: String?`
+- افزودن مدل نتیجه تراکنش:
+  - `data class ReservationResult(val isSuccess: Boolean, val message: String, val newCreditRials: Long?)`
+
+### ۲.۲. به‌روزرسانی پارسر HTML و پارسر دلتا (`ReservationHtmlParser.kt` & `DeltaParser.kt`)
+- پارس کردن گزینه‌های درون `<select id="...drpFood">` (استخراج شناسه، متن غذا و قیمت ریالی).
+- پارس کردن گزینه‌های درون `<select id="...drpSelf">` و شناسایی سلف پیش‌فرض انتخاب‌شده.
+- تشخیص فعال/غیرفعال بودن چک‌باکس `chkReserve`.
+- استخراج پیام toastify از بخش `scriptStartupBlock` دلتا شامل نوع (`success`/`error`) و متن پیام فارسی.
+- استخراج اعتبار جدید کاربر از `ctl00_lblUserCreditPrice`.
+
+### ۲.۳. سازنده بدنه درخواست فرم و مدیریت وضعیت (`MenuRepository.kt`)
+- **مدیریت سریال و نخ امن (Single Source of Truth & Mutex)**:
+  - استفاده از `Mutex` برای اطمینان از عدم اجرای همزمان دو درخواست شبکه.
+  - نگهداری آخرین مقدار `__VIEWSTATE` و `__VIEWSTATEGENERATOR` در ریپازیتوری.
+- پیاده‌سازی متد `buildReservationPayload`:
+  - بازسازی دقیق فرم ارسالی شامل تمام ۲۱ ردیف سه جدول مطابق داده‌های HAR.
+  - درج مقادیر مربوط به روز هدف برای رزرو (همراه با `chkReserve=on`) یا لغو (بدون `chkReserve`).
+- متدهای `reserveLunch(...)` و `cancelLunch(...)`:
+  - اجرای فراخوانی به صورت POST با هدرهای استاندارد AJAX (`X-MicrosoftAjax: Delta=true`, `Cache-Control: no-cache`).
+  - به‌روزرسانی کامل لیست غذاها و ViewState از قطعه برگشتی `UpdatePanel1`.
+
+### ۲.۴. لایه ViewModel (`MenuViewModel.kt`)
+- افزودن متدهای `reserveLunch(dayIndex: Int, foodId: String, selfId: String)` و `cancelLunch(dayIndex: Int)`.
+- مدیریت وضعیت لودینگ مجزا برای جلوگیری از مسدود شدن کل صفحه (`processingMealKey: String?`).
+- انتشار رخدادهای رابط کاربری (Toast / SnackBar) با پیام سرور به همراه صدای بازخورد سیستم.
+
+### ۲.۵. طراحی UI انتخاب غذا و دیالوگ تأیید (`MenuScreen.kt` & `MealCard.kt`)
+- در کارت غذای ناهار:
+  - اگر ردیف قابل ویرایش نباشد: نمایش وضعیت ثابت (رزرو شده / رزرو نشده / منقضی شده) بدون دکمه اقدام.
+  - اگر قابل رزرو باشد: دکمه برجسته «رزرو ناهار».
+  - اگر رزرو شده و قابل ویرایش باشد: دکمه «لغو رزرو» و دکمه «تغییر غذا/سلف».
+- **Bottom Sheet انتخاب غذا و سلف**:
+  - نمایش رادیوباتن‌های غذا به همراه قیمت و نوع پرس.
+  - نمایش سلف پیش‌فرض به همراه منوی آبشاری یا چیپ‌های تغییر سلف.
+  - نمایش مقایسه اعتبار فعلی و مبلغ کسر/برگشت شونده.
+- **دیالوگ تأیید نهایی**:
+  - جلوگیری از کلیک تصادفی و تأیید نهایی کاربر قبل از ارسال درخواست به سرور.
+
+### ۲.۶. آزمون‌های جامع واحد (`KalinalUnitTests.kt` & `ReservationDeltaTest.kt`)
+- ایجاد تست‌های مستقل با استفاده از داده‌های واقعی استخراج‌شده از HAR:
+  1. آزمون پارس پاسخ دلتای «رفتن به هفته بعد» و استخراج صحیح `__VIEWSTATE` جدید.
+  2. آزمون پارس پاسخ دلتای «رزرو ناهار چهارشنبه» و تأیید استخراج پیغام موفقیت `toastify` و کسر اعتبار از ۵۹۰,۰۰۰ به ۴۱۰,۰۰۰ ریال.
+  3. آزمون پارس پاسخ دلتای «لغو رزرو ناهار چهارشنبه» و تأیید افزایش اعتبار به ۵۹۰,۰۰۰ ریال.
+  4. آزمون تطابق ساختار بدنه درخواست ساخته‌شده با داده‌های واقعی فرم درخواست در HAR.
+
+---
+
+## ۳. موارد نیازمند تست بر روی دستگاه و سرور زنده
+- تغییرات اعتبار در سایر هفته‌ها و بررسی رفتار سلف هنگام رزرو مجدد در یک روز.
+- تعمیم این الگو به صبحانه (`btnSaveBreakfast`) و شام (`btnSaveDinner`) در فازهای بعدی پس از اطمینان از عملکرد پایدار ناهار در محیط واقعی.

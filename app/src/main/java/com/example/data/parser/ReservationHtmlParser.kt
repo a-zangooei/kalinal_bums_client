@@ -1,9 +1,11 @@
 package com.example.data.parser
 
 import com.example.data.model.DayMenu
+import com.example.data.model.FoodOption
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
 import com.example.data.model.ReservationStatus
+import com.example.data.model.SelfOption
 import com.example.data.model.WeeklyMenu
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -24,9 +26,13 @@ object ReservationHtmlParser {
         val weekDateText = doc.select("#cphMain_lblWeekDate").text().trim()
             .ifEmpty { "1405/08/16 الی 1405/08/22" }
 
-        // 2. Credit Info
-        val creditText = doc.select("#cphMain_lblCreditValue").text().trim()
-        val creditRials = parseCreditRials(creditText)
+        // 2. Credit Info (cphMain_lblCreditValue or lblUserCreditPrice)
+        var rawCreditText = doc.select("#cphMain_lblCreditValue").text().trim()
+        if (rawCreditText.isEmpty()) {
+            rawCreditText = doc.select("#lblUserCreditPrice, #ctl00_lblUserCreditPrice").text().trim()
+        }
+        val creditRials = parseCreditRials(rawCreditText)
+        val creditText = rawCreditText.removePrefix("اعتبار شما:").trim()
 
         // 3. User / Student Info
         val titleBoxValue = doc.select("#cphMain_titleBoxValue").text().trim()
@@ -62,9 +68,9 @@ object ReservationHtmlParser {
         }.toMutableList()
 
         // 6. Parse meals for Breakfast, Lunch, Dinner
-        val breakfastMeals = parseTableMeals(doc.select("#cphMain_grdReservationBreakfast").first(), MealType.BREAKFAST)
-        val lunchMeals = parseTableMeals(doc.select("#cphMain_grdReservationLunch").first(), MealType.LUNCH)
-        val dinnerMeals = parseTableMeals(doc.select("#cphMain_grdReservationDinner").first(), MealType.DINNER)
+        val breakfastMeals = parseTableMeals(doc.select("#cphMain_grdReservationBreakfast").first(), MealType.BREAKFAST, daysList)
+        val lunchMeals = parseTableMeals(doc.select("#cphMain_grdReservationLunch").first(), MealType.LUNCH, daysList)
+        val dinnerMeals = parseTableMeals(doc.select("#cphMain_grdReservationDinner").first(), MealType.DINNER, daysList)
 
         // Merge meals into their corresponding days
         populateDayMeals(daysList, breakfastMeals, MealType.BREAKFAST)
@@ -84,34 +90,78 @@ object ReservationHtmlParser {
         )
     }
 
-    private fun parseTableMeals(table: Element?, mealType: MealType): List<MealItem> {
+    private fun parseTableMeals(
+        table: Element?,
+        mealType: MealType,
+        daysList: MutableList<DayMenu>
+    ): List<MealItem> {
         if (table == null) return emptyList()
         val items = mutableListOf<MealItem>()
 
         val rows = table.select("tr").filter { !it.hasClass("HeaderStyle") && it.select("td").size >= 6 }
 
         for ((index, row) in rows.withIndex()) {
-            val dayIndex = index.coerceIn(0, 6)
             val tds = row.select("td")
             if (tds.size < 6) continue
+
+            // Determine dayIndex and date from td[1] if present, otherwise by row index
+            val td1Text = if (tds.size > 1) tds[1].text().trim() else ""
+            val dayIndex = resolveDayIndex(td1Text, index)
+            val rowControlId = "ctl%02d".format(dayIndex + 2)
+
+            // Extract Jalali date (e.g. 1405/08/20 from "چهارشنبه 1405/08/20")
+            val dateJalali = extractJalaliDate(td1Text)
+            if (dateJalali.isNotEmpty() && dayIndex in daysList.indices) {
+                val currentDay = daysList[dayIndex]
+                if (currentDay.dateJalali.isEmpty()) {
+                    daysList[dayIndex] = currentDay.copy(dateJalali = dateJalali)
+                }
+            }
 
             // td[0]: Checkbox
             val chkBox = tds[0].select("input[type=checkbox]").first()
             val isChecked = chkBox?.hasAttr("checked") == true
-            val isDisabled = chkBox?.hasAttr("disabled") == true || row.hasClass("aspNetDisabled")
+            val isDisabled = chkBox == null || chkBox.hasAttr("disabled") || row.hasClass("aspNetDisabled")
+            val isEditable = !isDisabled
 
             // td[2]: Dining Hall (سلف)
             val selfSelect = tds[2].select("select").first()
-            val selectedSelf = selfSelect?.select("option[selected]")?.text()?.trim() ?: "-"
-            val diningHall = if (selectedSelf == "-") "" else selectedSelf
+            val selfOptions = selfSelect?.select("option")?.mapNotNull { opt ->
+                val valId = opt.attr("value")
+                val optText = opt.text().trim()
+                if (valId.isEmpty() || valId == "-1" || optText == "-" || optText.isEmpty()) null
+                else SelfOption(id = valId, name = optText, isDefault = opt.hasAttr("selected"))
+            } ?: emptyList()
+
+            val selectedSelfOption = selfSelect?.select("option[selected]")?.first()
+            val selectedSelfId = selectedSelfOption?.attr("value")
+                ?: selfOptions.firstOrNull { it.isDefault }?.id
+                ?: selfOptions.firstOrNull()?.id
+                ?: "-1"
+
+            val diningHall = selectedSelfOption?.text()?.trim()?.takeIf { it != "-" && it.isNotEmpty() }
+                ?: (selfOptions.firstOrNull { it.id == selectedSelfId }?.name ?: "")
 
             // td[3]: Food selection (غذا)
             val foodSelect = tds[3].select("select").first()
-            val selectedFood = foodSelect?.select("option[selected]")?.text()?.trim() ?: "-"
-            val availableFoods = foodSelect?.select("option")
-                ?.map { it.text().trim() }
-                ?.filter { it != "-" && it != "0" && it.isNotEmpty() }
-                ?: emptyList()
+            val foodOptions = foodSelect?.select("option")?.mapNotNull { opt ->
+                val valId = opt.attr("value")
+                val rawText = opt.text().trim()
+                if (valId.isEmpty() || valId == "-1" || valId == "0" || rawText == "-" || rawText.isEmpty()) null
+                else {
+                    val price = extractPriceFromOptionText(rawText)
+                    val cleanName = extractCleanFoodName(rawText)
+                    val isHalf = rawText.contains("نیم پرس") || rawText.contains("نیم‌پرس")
+                    FoodOption(id = valId, name = cleanName, priceRials = price, isHalfPortion = isHalf)
+                }
+            } ?: emptyList()
+
+            val selectedFoodOption = foodSelect?.select("option[selected]")?.first()
+            val selectedFoodId = selectedFoodOption?.attr("value")
+                ?: (if (foodOptions.isNotEmpty()) foodOptions.first().id else "-1")
+
+            val rawFoodName = selectedFoodOption?.text()?.trim() ?: "-"
+            val cleanFoodName = extractCleanFoodName(rawFoodName)
 
             // td[4]: Count (تعداد)
             val countSelect = tds[4].select("select").first()
@@ -123,7 +173,8 @@ object ReservationHtmlParser {
 
             // td[6]: Buy Amount (مبلغ خرید)
             val amountText = if (tds.size > 6) tds[6].text().trim() else "0"
-            val priceRials = amountText.replace(Regex("[^0-9]"), "").toLongOrNull() ?: 0L
+            val priceRials = amountText.replace(Regex("[^0-9]"), "").toLongOrNull()
+                ?: (foodOptions.find { it.id == selectedFoodId }?.priceRials ?: 0L)
 
             // td[7]: Status Image (وضعیت)
             val statusImg = if (tds.size > 7) tds[7].select("img").first() else null
@@ -131,7 +182,6 @@ object ReservationHtmlParser {
             val statusSrc = statusImg?.attr("src") ?: ""
 
             val status = determineStatus(isChecked, isDisabled, statusTitle, statusSrc)
-            val cleanFoodName = extractCleanFoodName(selectedFood)
             val formattedPrice = formatRials(priceRials)
             val id = chkBox?.attr("id") ?: "${mealType.name}_$dayIndex"
 
@@ -140,6 +190,7 @@ object ReservationHtmlParser {
                     id = id,
                     mealType = mealType,
                     dayIndex = dayIndex,
+                    tableRowIndex = rowControlId,
                     foodName = cleanFoodName,
                     diningHall = diningHall,
                     priceRials = priceRials,
@@ -147,12 +198,45 @@ object ReservationHtmlParser {
                     calories = calories,
                     status = status,
                     count = count,
-                    availableFoods = availableFoods
+                    isEditable = isEditable,
+                    selectedFoodId = selectedFoodId,
+                    selectedSelfId = selectedSelfId,
+                    availableFoods = foodOptions.map { it.name },
+                    availableFoodOptions = foodOptions,
+                    availableSelfOptions = selfOptions
                 )
             )
         }
 
         return items
+    }
+
+    private fun resolveDayIndex(td1Text: String, defaultIndex: Int): Int {
+        val clean = td1Text.trim()
+        return when {
+            clean.startsWith("شنبه") -> 0
+            clean.startsWith("یکشنبه") -> 1
+            clean.startsWith("دوشنبه") -> 2
+            clean.startsWith("سه شنبه") || clean.startsWith("سه‌شنبه") -> 3
+            clean.startsWith("چهارشنبه") -> 4
+            clean.startsWith("پنجشنبه") -> 5
+            clean.startsWith("جمعه") -> 6
+            else -> defaultIndex.coerceIn(0, 6)
+        }
+    }
+
+    private fun extractJalaliDate(td1Text: String): String {
+        val parts = td1Text.split(" ")
+        return parts.lastOrNull { it.contains("/") && it.length >= 8 } ?: ""
+    }
+
+    private fun extractPriceFromOptionText(rawText: String): Long {
+        val regex = Regex("""(\d+)\s*ریال""")
+        val match = regex.find(rawText)
+        if (match != null) {
+            return match.groupValues[1].toLongOrNull() ?: 0L
+        }
+        return rawText.replace(Regex("[^0-9]"), "").toLongOrNull() ?: 0L
     }
 
     private fun populateDayMeals(
@@ -197,7 +281,8 @@ object ReservationHtmlParser {
 
     private fun extractCleanFoodName(rawFood: String): String {
         if (rawFood == "-" || rawFood.isBlank()) return "غذا انتخاب نشده است"
-        return rawFood.replace(Regex("""\s+\d+\s+ریال\s*$"""), "").trim()
+        // Remove trailing price e.g. "180000 ریال"
+        return rawFood.replace(Regex("""\s+\d+\s*ریال\s*$"""), "").trim()
     }
 
     private fun parseCreditRials(creditText: String): Long {
