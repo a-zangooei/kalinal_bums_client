@@ -1,143 +1,158 @@
-# Reliable Android CI & Manual Multi-Device Build Architecture
+# Permanent Android Release Signing & Verification Architecture
 
-A diagnostic analysis and architectural plan to separate lightweight automated CI checks from an on-demand, manual multi-device APK and AAB build pipeline for the Kalinal Android client.
+An end-to-end, cryptographically enforced release signing system for the Kalinal Android client, ensuring consistent, permanent signatures across all architecture variants, Universal APKs, and the Android App Bundle.
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following decisions were confirmed by the user and govern this implementation plan:
+> The following user-confirmed decisions govern this implementation:
 
-- **Confirmed Decision 1 (Workflow Separation)**: Split the CI/CD pipeline into **two independent workflow files**:
-  1. `.github/workflows/ci.yml`: Automated, lightweight verification triggered on every `push` and `pull_request` (tests and reports only; no APK or AAB builds).
-  2. `.github/workflows/manual-build.yml`: Dedicated on-demand build workflow triggered exclusively via `workflow_dispatch` to package Universal APK, architecture-specific APKs (ARM64, ARMv7, x86_64), and the Android App Bundle.
-- **Confirmed Decision 2 (Failure Root Cause in Run 42188336707)**:
-  - Error: `find: ‘app/build/outputs/apk’: No such file or directory` -> `Error: No APK file generated in app/build/outputs/apk for target armeabi-v7a`.
-  - Cause: In AGP 8.x, passing the internal IDE property `-Pandroid.injected.build.abi` without Android Studio IDE flags causes Gradle to package the APK into `app/build/intermediates/apk/debug/` rather than creating the standard `app/build/outputs/apk/debug/` directory structure.
-  - Solution: Use official Android App Bundle + `bundletool` device extraction and broader output search (`find app/build -type f -name "*.apk"`), or standard ABI-split packaging, ensuring guaranteed artifact discovery.
-- **Confirmed Decision 3 (Manual Build Scope)**: A single manual run packages all 4 APK targets plus the Android App Bundle in one execution, publishing distinct, clearly labeled artifacts.
+- **Confirmed Decision 1 (Keystore Generation)**: The permanent keystore will be generated locally on the user's computer using a dedicated, secure PowerShell script. Private keys and passwords will never be committed to Git or exposed in logs.
+- **Confirmed Decision 2 (Keystore Format & Longevity)**: PKCS12 format (`.p12` / `.jks`) with RSA 2048-bit keys, alias `upload`, and 25-year validity (10,000 days) to prevent certificate expiration across the app's entire lifecycle.
+- **Confirmed Decision 3 (Build Variants)**: The manual pipeline (`.github/workflows/manual-build.yml`) will package pure **Release build type** artifacts (`assembleRelease` and `bundleRelease`), signed with the permanent release key. Routine CI (`.github/workflows/ci.yml`) remains purely for fast unit/Robolectric tests without requiring secrets.
+- **Confirmed Decision 4 (Mandatory Automated Verification)**: Every generated artifact will be verified via `apksigner` and `keytool`. If any architecture variant or the AAB is unsigned or signed with a mismatched certificate fingerprint, the build fails immediately.
 
 ---
 
-## 1. Diagnostic Findings & Root Cause Analysis
-
-### Investigation of Run 42188336707
-
-| Job | Status | Log Evidence / Observed Behavior | Root Cause |
-|---|---|---|---|
-| **🧪 test (JDK 21)** | **SUCCESS** | All Unit and Robolectric tests passed on JDK 21 | Upgrading to JDK 21 resolved the SDK 36 class version incompatibility. |
-| **📱 Universal APK** | **SUCCESS** | Standard `./gradlew assembleDebug` created `app/build/outputs/apk/debug/app-debug.apk` | Unconstrained debug builds follow the standard output path. |
-| **📦 Android App Bundle** | **SUCCESS** | `./gradlew bundleDebug` + `bundletool` generated `all-splits.apks` and `bundle.aab` | Official bundle tooling operates reliably across all runners. |
-| **📱 ARM64-v8a** | **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | AGP internal injection property bypasses standard `outputs/apk` directory creation. |
-| **📱 ARMv7 (armeabi-v7a)**| **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | Same as ARM64. |
-| **📱 x86_64** | **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | Same as ARM64. |
-
-### Technical Analysis of `-Pandroid.injected.build.abi`
-In modern Android Gradle Plugin versions, `android.injected.build.abi` is an internal private contract designed specifically for Android Studio's Instant Run / Deploy-to-Device flow. When invoked from standard CLI without Android Studio IDE flags:
-1. AGP places the intermediate APK inside `app/build/intermediates/apk/debug/` instead of publishing to `app/build/outputs/apk/debug/`.
-2. Furthermore, unless NDK native compilation or ABI packaging splits are declared, `-Pandroid.injected.build.abi` does not strip native libraries from pre-compiled AARs (`libandroidx.graphics.path.so` and `libdatastore_shared_counter.so`).
-3. To reliably produce true architecture-specific APKs, the standard Google-recommended mechanism is either **Google `bundletool` device extraction** from the AAB or **Gradle ABI splits**.
-
----
-
-## 2. Recommended Workflow Architecture
+## 1. Overview & System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          TRIGGER STRATEGY                               │
-├───────────────────────────────────┬─────────────────────────────────────┤
-│  Automatic: push & pull_request   │  Manual: workflow_dispatch          │
-│  (Every commit / PR branch)       │  (On-demand via GitHub Actions UI)  │
-└─────────────────┬─────────────────┴──────────────────┬──────────────────┘
-                  │                                    │
-                  ▼                                    ▼
-┌───────────────────────────────────┐ ┌───────────────────────────────────┐
-│     .github/workflows/ci.yml      │ │ .github/workflows/manual-build.yml│
-│                                   │ │                                   │
-│  • JDK 21 (Temurin)               │ │  • Select Ref / Branch            │
-│  • Keystore & Secrets prep        │ │  • Run Tests (Quality Gate)       │
-│  • ./gradlew testDebugUnitTest    │ │  • Build Universal APK            │
-│  • Upload test-reports (always)   │ │  • Build ARM64-v8a APK            │
-│                                   │ │  • Build ARMv7 APK                │
-│  ⏱️ Duration: ~1.5 - 2 minutes    │ │  • Build x86_64 APK               │
-│  🛑 NO APK or AAB generation      │ │  • Build Android App Bundle (AAB) │
-│  🔄 Concurrency: cancel-in-prog   │ │  • Upload 5 distinct artifacts    │
-└───────────────────────────────────┘ │  🔄 Concurrency: NO cancel        │
-                                      └───────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        LOCAL ONE-TIME GENERATION                       │
+│  PowerShell script generates kalinal-release-key.p12 (PKCS12, 25 yrs)  │
+│  User backs up keystore safely & uploads Base64 to GitHub Secrets      │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        GITHUB REPOSITORY SECRETS                       │
+│  • RELEASE_KEYSTORE_BASE64   • RELEASE_STORE_PASSWORD                  │
+│  • RELEASE_KEY_ALIAS         • RELEASE_KEY_PASSWORD                    │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               .github/workflows/manual-build.yml (RELEASE)             │
+│                                                                        │
+│  1. Validate Secrets: Fail immediately if any secret is empty          │
+│  2. Ephemeral Keystore: Decode to secure temp path ($RUNNER_TEMP)      │
+│  3. Map Environment: KEYSTORE_PATH, STORE_PASSWORD, KEY_PASSWORD       │
+│  4. Build Release: ./gradlew assembleRelease bundleRelease             │
+│  5. Bundletool Splits: Generate signed architecture-specific APKs      │
+│  6. Cryptographic Audit (apksigner):                                   │
+│     - Verify SHA-256 certificate fingerprint across all APKs & AAB     │
+│     - Fail build if any artifact fingerprint mismatches                │
+│  7. Generate release-metadata.json (Version, SHA-256 fingerprint, git) │
+│  8. Cleanup: Securely shred/remove temporary keystore file             │
+│  9. Upload 5 verified release artifacts + metadata                     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Separation Characteristics
+---
 
-1. **Lightweight Automated CI (`.github/workflows/ci.yml`)**:
-   - Executes strictly on `push: branches: ['**']` and `pull_request`.
-   - Never consumes runner minutes compiling packaging variants on routine code commits.
-   - Uploads unit test and Robolectric reports even on test failure (`if: always()`).
-   - Concurrency group `ci-${{ github.ref }}` with `cancel-in-progress: true` cancels stale runs when new commits are pushed quickly.
+## 2. Key Product Decisions & Trade-Offs
 
-2. **On-Demand Manual Pipeline (`.github/workflows/manual-build.yml`)**:
-   - Executes strictly on `workflow_dispatch`.
-   - Concurrency group `manual-build-${{ github.ref }}` with `cancel-in-progress: false` ensures a routine git push never terminates an active manual build.
-   - Generates all 5 package variations with robust fallback search across both `app/build/outputs/` and `app/build/intermediates/`.
+### Safe Alignment with AI Studio Platform Rules
+- **Rule**: Never modify `signingConfigs` (`release` and `debugConfig`) or `signingConfig` assignments in `app/build.gradle.kts`.
+- **Existing Config in `app/build.gradle.kts`**:
+  ```kotlin
+  signingConfigs {
+    create("release") {
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      storeFile = file(keystorePath)
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
+    }
+  }
+  ```
+- **Architectural Solution**: By setting the keystore alias to `upload` in the local generation script and mapping `KEYSTORE_PATH`, `STORE_PASSWORD`, and `KEY_PASSWORD` in the CI runner environment, the existing release signing configuration works out of the box with zero disruption to AI Studio's internal build system.
+
+### Fail-Closed Security Policy
+- Release builds will **never** silently fall back to debug signing.
+- If `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, or `RELEASE_KEY_PASSWORD` is not configured in the repository, the manual workflow aborts at Step 1 with a visible GitHub annotation:
+  `::error::Required release signing secrets are missing. Release build aborted.`
 
 ---
 
-## 3. File-by-File Changes
+## 3. Cryptographic Verification & Audit Strategy
 
-### File 1: `.github/workflows/ci.yml` (New File)
-- **Role**: Dedicated lightweight CI.
-- **Triggers**: `push` (all branches), `pull_request` (all branches).
-- **Steps**:
-  1. `actions/checkout@v4`
-  2. `actions/setup-java@v4` (JDK 21, Temurin, Gradle cache)
-  3. Prepare dummy keystore (`debug.keystore.base64` decode) and `.env`
-  4. `./gradlew testDebugUnitTest --no-daemon --stacktrace`
-  5. `actions/upload-artifact@v4` for test reports (`app/build/reports/tests/testDebugUnitTest/`) with `if: always()`
+The release workflow will execute an automated audit using `apksigner` and `keytool`:
 
-### File 2: `.github/workflows/manual-build.yml` (New File)
-- **Role**: Comprehensive manual release and device artifact builder.
-- **Triggers**: `workflow_dispatch` only.
-- **Jobs**:
-  - `test-verification`: Runs unit tests first to ensure the selected ref builds cleanly.
-  - `build-universal`: Runs `./gradlew assembleDebug`, searches `app/build` for the APK, and packages `Kalinal-Universal-debug.apk`.
-  - `build-bundle-and-device-apks`: Runs `./gradlew bundleDebug`, uses official Google `bundletool` (v1.17.2) to extract:
-    - `Kalinal-Universal-from-bundle.apk`
-    - `Kalinal-arm64-v8a-standalone.apk`
-    - `Kalinal-armeabi-v7a-standalone.apk`
-    - `Kalinal-x86_64-standalone.apk`
-    - `Kalinal-AppBundle.aab`
-  - Uploads artifacts with 14-day retention.
-  - Publishes a formatted Markdown summary to `$GITHUB_STEP_SUMMARY`.
-
-### File 3: `.github/workflows/android-ci.yml` (Deletion/Replacement)
-- The legacy single monolithic workflow file will be replaced by the two focused workflow files above to prevent dual-triggering or overlapping configurations.
+1. **Fingerprint Extraction**:
+   For the Universal APK, each architecture split (`arm64-v8a`, `armeabi-v7a`, `x86_64`), and the App Bundle (`.aab`):
+   ```bash
+   apksigner verify --print-certs "$APK_FILE"
+   ```
+2. **Strict Equality Check**:
+   The workflow captures the SHA-256 digest of Signer #1 for every artifact:
+   - If any artifact lacks a signature: **BUILD FAILED**.
+   - If any artifact has a different SHA-256 digest than the master release fingerprint: **BUILD FAILED**.
+3. **Release Metadata Publication**:
+   A tamper-evident, non-sensitive JSON file (`release-metadata.json`) is packaged alongside artifacts containing:
+   - `appName`: Kalinal
+   - `applicationId`: `com.aistudio.cullinan.vfkzrw`
+   - `versionName`: `1.0`
+   - `versionCode`: `1`
+   - `gitCommit`: `${{ github.sha }}`
+   - `signingCertificateSha256`: `[SHA-256 Fingerprint]`
+   - `buildTimestamp`: ISO-8601 UTC timestamp
 
 ---
 
-## 4. Verification & Validation Plan
+## 4. Local Keystore Generation Procedure (PowerShell)
 
-1. **Local Syntax & Compilation Verification**:
-   - Verify workflow YAML structures and schema validation.
-   - Run `compile_applet` to confirm no regressions in project dependencies or build configuration.
-2. **Workflow Trigger Verification**:
-   - Push a test commit to verify `.github/workflows/ci.yml` executes only the test suite and terminates quickly.
-   - Verify that no APK jobs are triggered by git push.
-3. **Manual Execution Verification**:
-   - Trigger `.github/workflows/manual-build.yml` via GitHub Actions web UI (`Run workflow`).
-   - Verify all 5 artifacts appear in the run's **Artifacts** panel:
-     - `Kalinal-Universal-APK`
-     - `Kalinal-arm64-v8a-APK`
-     - `Kalinal-armeabi-v7a-APK`
-     - `Kalinal-x86_64-APK`
-     - `Kalinal-AppBundle-AAB`
-4. **Binary Inspection**:
-   - Unzip generated APKs and verify presence of `classes.dex`, `resources.arsc`, and appropriate native `.so` architectures.
+The user will run this script once on their local Windows computer:
+
+```powershell
+# Generate permanent 25-year PKCS12 keystore
+keytool -genkeypair -v `
+  -keystore kalinal-release-key.p12 `
+  -storetype PKCS12 `
+  -alias upload `
+  -keyalg RSA `
+  -keysize 2048 `
+  -validity 10000 `
+  -dname "CN=Kalinal Mobile, OU=Release, O=Kalinal, L=Birjand, ST=South Khorasan, C=IR"
+
+# Copy base64 string directly to clipboard for GitHub Secrets
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("kalinal-release-key.p12")) | Set-Clipboard
+Write-Host "Keystore generated and base64 copied to clipboard!"
+```
+
+The user will configure 4 GitHub Secrets in repository Settings -> Secrets and variables -> Actions:
+1. `RELEASE_KEYSTORE_BASE64`: Copied from clipboard.
+2. `RELEASE_STORE_PASSWORD`: The password chosen during generation.
+3. `RELEASE_KEY_ALIAS`: `upload`
+4. `RELEASE_KEY_PASSWORD`: The key password (identical to store password in PKCS12).
 
 ---
 
-## 5. Risks & Compatibility Safeguards
+## 5. File-by-File Changes
 
-- **Keystore Missing Risk**: Runner initializes `debug.keystore` from `debug.keystore.base64` or generates one via `keytool` on the fly, preventing signing crashes.
-- **Runner Disk Space**: Cleaning intermediate caches before bundletool extraction prevents runner out-of-memory or out-of-disk errors.
-- **Secrets Security**: No API tokens, passwords, or credentials are logged or exposed.
-- **Zero Application Code Changes**: Neither Kotlin sources, XML layouts, nor Gradle dependency versions are altered.
+### 1. `.github/workflows/manual-build.yml`
+- Switch build commands to release: `./gradlew assembleRelease bundleRelease`.
+- Add validation step for required release secrets.
+- Securely decode keystore to `${{ runner.temp }}/release.keystore` with `chmod 600`.
+- Sign bundletool-extracted device splits using the release keystore.
+- Add automated `apksigner` and `keytool` certificate fingerprint audit.
+- Generate and upload `release-metadata.json`.
+- Add post-build cleanup step (`rm -f ${{ runner.temp }}/release.keystore`) running on success and failure (`if: always()`).
+
+### 2. `.github/workflows/ci.yml`
+- Preserve lightweight test execution (`./gradlew testDebugUnitTest`).
+- Confirm zero requirement for release secrets on routine pull requests and commits.
+
+### 3. `CI_GUIDE.md` & Documentation
+- Document the permanent release signing system, secret configuration, and PowerShell keystore generation steps.
+- Explain the role of Play Protect and update compatibility (uninstalling old debug-signed app once to adopt the permanent release key).
+
+---
+
+## 6. Validation Plan
+
+1. **Local Project Verification**: Run `compile_applet` to ensure the project compiles and signing configuration declarations are preserved.
+2. **Missing Secrets Test**: Verify that the workflow halts if secrets are omitted.
+3. **Full Signature Consistency Test**: Run the manual release build on GitHub Actions with configured secrets and confirm that all 5 published artifacts share the exact same SHA-256 certificate fingerprint in `release-metadata.json`.

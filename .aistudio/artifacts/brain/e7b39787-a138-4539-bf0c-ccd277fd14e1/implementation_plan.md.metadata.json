@@ -1,6 +1,6 @@
 {
-  "summary": "Comprehensive diagnostic and implementation plan to separate lightweight automated CI from on-demand manual multi-device APK/AAB builds, resolving architecture-specific packaging failures in GitHub Actions.",
-  "updatedAt": "2026-11-06T08:49:08.834580194Z",
+  "summary": "Comprehensive implementation plan for permanent, cryptographically verified Android release signing for Kalinal across all architectures and artifacts in GitHub Actions and local workflows.",
+  "updatedAt": "2026-11-06T09:18:59.211705995Z",
   "requestFeedback": true,
   "userFacing": true
 }

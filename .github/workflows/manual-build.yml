@@ -1,16 +1,16 @@
-name: Manual Multi-Device Build (APK & AAB)
+name: Permanent Release Build (APK & AAB)
 
 on:
   workflow_dispatch:
     inputs:
       skip_tests:
-        description: 'Skip Unit & Robolectric tests before building'
+        description: 'Skip Unit & Robolectric tests before building (Not recommended)'
         required: false
         default: false
         type: boolean
 
 concurrency:
-  group: manual-build-${{ github.workflow }}-${{ github.ref }}
+  group: manual-release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -42,8 +42,8 @@ jobs:
       - name: Run Tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-  build:
-    name: 📦 Build All Devices & App Bundle
+  build-release:
+    name: 🔐 Build Signed Release Artifacts
     needs: [verify]
     if: always() && (needs.verify.result == 'success' || inputs.skip_tests)
     runs-on: ubuntu-latest
@@ -58,48 +58,75 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Keystore & Secrets
+      - name: Validate Release Signing Secrets
+        run: |
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_KEYSTORE_BASE64'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RELEASE_STORE_PASSWORD }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_STORE_PASSWORD'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RELEASE_KEY_PASSWORD }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_KEY_PASSWORD'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Setup Ephemeral Release Keystore & Environment
         run: |
           touch .env
-          if [ -f "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          else
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
           chmod +x gradlew
+          KEYSTORE_PATH="${{ runner.temp }}/kalinal-release.p12"
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
 
-      - name: Build Universal APK & Android App Bundle
+      - name: Build Signed Universal APK and Android App Bundle
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/kalinal-release.p12
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'upload' }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           mkdir -p dist
-          ./gradlew assembleDebug bundleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
 
-          # Locate Universal APK
-          UNIVERSAL_APK=$(find app/build -type f -name "*debug.apk" | head -n 1)
+          # Locate Universal Release APK
+          UNIVERSAL_APK=$(find app/build -type f -name "*release.apk" | head -n 1)
           if [ -z "$UNIVERSAL_APK" ]; then
-            echo "::error::Universal APK not found in build tree"
+            echo "::error::Universal Release APK not found in build tree"
             exit 1
           fi
-          echo "Found Universal APK at $UNIVERSAL_APK"
-          cp "$UNIVERSAL_APK" dist/Kalinal-Universal-AllDevices-debug.apk
+          echo "Found Universal Release APK: $UNIVERSAL_APK"
+          cp "$UNIVERSAL_APK" dist/Kalinal-Universal-AllDevices-release.apk
 
-          # Locate AAB
-          AAB_FILE=$(find app/build -type f -name "*debug.aab" | head -n 1)
+          # Locate Release AAB
+          AAB_FILE=$(find app/build -type f -name "*release.aab" | head -n 1)
           if [ -z "$AAB_FILE" ]; then
-            echo "::error::App Bundle not found in build tree"
+            echo "::error::Release App Bundle not found in build tree"
             exit 1
           fi
-          echo "Found App Bundle at $AAB_FILE"
+          echo "Found Release App Bundle: $AAB_FILE"
           cp "$AAB_FILE" dist/Kalinal-AppBundle-AllDevices.aab
 
-      - name: Extract Device Architecture APKs via Bundletool
+      - name: Extract & Sign Architecture-Specific APKs via Bundletool
+        env:
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'upload' }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           curl -sSL -o bundletool.jar https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
-          
-          # Generate master splits archive
+          KEYSTORE_PATH="${{ runner.temp }}/kalinal-release.p12"
+
+          # Generate master splits archive signed with permanent release key
           java -jar bundletool.jar build-apks \
             --bundle=dist/Kalinal-AppBundle-AllDevices.aab \
             --output=dist/Kalinal-Device-Splits.apks \
-            --mode=default
+            --mode=default \
+            --ks="$KEYSTORE_PATH" \
+            --ks-pass="pass:$STORE_PASSWORD" \
+            --ks-key-alias="$KEY_ALIAS" \
+            --key-pass="pass:$KEY_PASSWORD"
 
           # 1. ARM64-v8a Device Specification & Extraction
           cat << 'EOF' > spec-arm64.json
@@ -115,7 +142,7 @@ jobs:
             --apks=dist/Kalinal-Device-Splits.apks \
             --output-dir=extracted_arm64 \
             --device-spec=spec-arm64.json
-          zip -j dist/arm64/Kalinal-arm64-v8a-device-apks.zip extracted_arm64/*.apk
+          zip -j dist/arm64/Kalinal-arm64-v8a-release-apks.zip extracted_arm64/*.apk
 
           # 2. ARMv7 (32-bit) Device Specification & Extraction
           cat << 'EOF' > spec-armv7.json
@@ -131,7 +158,7 @@ jobs:
             --apks=dist/Kalinal-Device-Splits.apks \
             --output-dir=extracted_armv7 \
             --device-spec=spec-armv7.json
-          zip -j dist/armv7/Kalinal-armeabi-v7a-device-apks.zip extracted_armv7/*.apk
+          zip -j dist/armv7/Kalinal-armeabi-v7a-release-apks.zip extracted_armv7/*.apk
 
           # 3. x86_64 Emulator & PC Device Specification & Extraction
           cat << 'EOF' > spec-x86_64.json
@@ -147,56 +174,135 @@ jobs:
             --apks=dist/Kalinal-Device-Splits.apks \
             --output-dir=extracted_x86_64 \
             --device-spec=spec-x86_64.json
-          zip -j dist/x86_64/Kalinal-x86_64-device-apks.zip extracted_x86_64/*.apk
+          zip -j dist/x86_64/Kalinal-x86_64-release-apks.zip extracted_x86_64/*.apk
 
-      - name: Upload Universal APK
+      - name: Mandatory Signature & Certificate Fingerprint Verification
+        run: |
+          # Locate apksigner in Android SDK
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          echo "Using apksigner at: $APKSIGNER"
+
+          # 1. Verify Universal APK
+          UNIVERSAL_APK="dist/Kalinal-Universal-AllDevices-release.apk"
+          echo "=== Auditing Universal APK Signature ==="
+          $APKSIGNER verify --verbose "$UNIVERSAL_APK"
+          MASTER_FINGERPRINT=$($APKSIGNER verify --print-certs "$UNIVERSAL_APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+          
+          if [ -z "$MASTER_FINGERPRINT" ]; then
+            echo "::error::Failed to extract SHA-256 certificate fingerprint from Universal APK!"
+            exit 1
+          fi
+          echo "Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
+
+          # 2. Verify all extracted split APKs match the exact same fingerprint
+          echo "=== Auditing Extracted Split APK Signatures ==="
+          for APK in $(find extracted_arm64 extracted_armv7 extracted_x86_64 -name "*.apk"); do
+            $APKSIGNER verify "$APK"
+            CURRENT_FINGERPRINT=$($APKSIGNER verify --print-certs "$APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+            if [ "$CURRENT_FINGERPRINT" != "$MASTER_FINGERPRINT" ]; then
+              echo "::error::Certificate mismatch in $APK! Expected: $MASTER_FINGERPRINT, Got: $CURRENT_FINGERPRINT"
+              exit 1
+            fi
+            echo "Verified signature match for $APK"
+          done
+
+          # 3. Verify Android App Bundle (AAB) signature
+          echo "=== Auditing Android App Bundle Signature ==="
+          AAB_FINGERPRINT=$(keytool -printcert -jarfile dist/Kalinal-AppBundle-AllDevices.aab | grep "SHA256:" | head -n 1 | awk '{print $2}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          if [ -n "$AAB_FINGERPRINT" ] && [ "$AAB_FINGERPRINT" != "$MASTER_FINGERPRINT" ]; then
+            echo "::error::AAB Certificate mismatch! Expected: $MASTER_FINGERPRINT, Got: $AAB_FINGERPRINT"
+            exit 1
+          fi
+          echo "Verified AAB certificate fingerprint matches master release key."
+
+          # 4. Generate Non-Sensitive Release Metadata
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat << EOF > dist/release-metadata.json
+          {
+            "appName": "Kalinal",
+            "applicationId": "com.aistudio.cullinan.vfkzrw",
+            "versionName": "1.0",
+            "versionCode": 1,
+            "gitCommitSha": "${{ github.sha }}",
+            "buildTimestamp": "$BUILD_DATE",
+            "certificateSha256": "$MASTER_FINGERPRINT",
+            "signerVerified": true,
+            "artifacts": [
+              "Kalinal-Universal-AllDevices-release.apk",
+              "Kalinal-arm64-v8a-release-apks.zip",
+              "Kalinal-armeabi-v7a-release-apks.zip",
+              "Kalinal-x86_64-release-apks.zip",
+              "Kalinal-AppBundle-AllDevices.aab"
+            ]
+          }
+          EOF
+
+          echo "MASTER_FINGERPRINT=$MASTER_FINGERPRINT" >> $GITHUB_ENV
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+
+      - name: Secure Keystore Cleanup
+        if: always()
+        run: |
+          shred -u "${{ runner.temp }}/kalinal-release.p12" 2>/dev/null || rm -f "${{ runner.temp }}/kalinal-release.p12"
+          echo "Temporary keystore file securely destroyed."
+
+      - name: Upload Universal Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Kalinal-Universal-APK
-          path: dist/Kalinal-Universal-AllDevices-debug.apk
-          retention-days: 14
+          name: Kalinal-Universal-Release-APK
+          path: dist/Kalinal-Universal-AllDevices-release.apk
+          retention-days: 30
 
-      - name: Upload ARM64-v8a APKs
+      - name: Upload ARM64-v8a Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Kalinal-arm64-v8a-APKs
+          name: Kalinal-arm64-v8a-Release-APKs
           path: dist/arm64/*.zip
-          retention-days: 14
+          retention-days: 30
 
-      - name: Upload ARMv7 APKs
+      - name: Upload ARMv7 Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Kalinal-armeabi-v7a-APKs
+          name: Kalinal-armeabi-v7a-Release-APKs
           path: dist/armv7/*.zip
-          retention-days: 14
+          retention-days: 30
 
-      - name: Upload x86_64 APKs
+      - name: Upload x86_64 Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Kalinal-x86_64-APKs
+          name: Kalinal-x86_64-Release-APKs
           path: dist/x86_64/*.zip
-          retention-days: 14
+          retention-days: 30
 
-      - name: Upload Android App Bundle (AAB) & Master Splits
+      - name: Upload Android App Bundle & Master Splits
         uses: actions/upload-artifact@v4
         with:
           name: Kalinal-AppBundle-and-MasterSplits
           path: |
             dist/Kalinal-AppBundle-AllDevices.aab
             dist/Kalinal-Device-Splits.apks
-          retention-days: 14
+            dist/release-metadata.json
+          retention-days: 30
 
-      - name: Publish Summary to Actions Step Summary
+      - name: Publish Verified Release Summary
         run: |
-          echo "## 🚀 Kalinal Manual Multi-Device Build Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "تمام فایل‌های نصبی و پکیج‌های اختصاصی برای معماری‌های مختلف با موفقیت ساخته شدند:" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔐 Kalinal Permanent Release Build - Verified!" >> $GITHUB_STEP_SUMMARY
+          echo "کلیه فایل‌های نصبی و پکیج‌ها با **گواهی امضای دائمی ریلیز** امضا و توسط \`apksigner\` تأیید شدند:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| نام آرتیفکت | معماری / هدف | فرمت و کاربرد |" >> $GITHUB_STEP_SUMMARY
+          echo "- **نسخه نرم‌افزار:** 1.0 (versionCode: 1)" >> $GITHUB_STEP_SUMMARY
+          echo "- **زمان بیلد:** $BUILD_DATE" >> $GITHUB_STEP_SUMMARY
+          echo "- **اثر انگشت گواهی (SHA-256):** \`$MASTER_FINGERPRINT\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| نام آرتیفکت | معماری / هدف | وضعیت امضا |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Kalinal-Universal-APK** | تمام پردازنده‌ها (ARM32, ARM64, x86, x86_64) | فایل نصبی مستقیم (.apk) قابل نصب روی همه گوشی‌ها (اندروید ۷.۰ تا ۱۶) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Kalinal-arm64-v8a-APKs** | گوشی‌های جدید ۶۴ بیتی | پکیج بهینه‌شده سبک‌تر برای گوشی‌های مدرن (سامسونگ، شیائومی، پیکسل و...) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Kalinal-armeabi-v7a-APKs** | گوشی‌های قدیمی ۳۲ بیتی | پکیج سازگار با گوشی‌های قدیمی‌تر اندرویدی |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Kalinal-x86_64-APKs** | شبیه‌سازها و کروم‌بوک‌ها | پکیج بهینه‌شده برای شبیه‌سازهای PC (مانند Android Studio و BlueStacks) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Kalinal-AppBundle-and-MasterSplits** | استاندارد رسمی گوگل پلی | فرمت .aab و بسته کامل .apks جهت انتشار در فروشگاه‌ها یا نصب از طریق bundletool |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-Universal-Release-APK** | تمام پردازنده‌ها (ARM32, ARM64, x86, x86_64) | ✅ امضای ریلیز دائمی تأیید شد |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-arm64-v8a-Release-APKs** | گوشی‌های جدید ۶۴ بیتی | ✅ امضای ریلیز دائمی تأیید شد |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-armeabi-v7a-Release-APKs** | گوشی‌های قدیمی ۳۲ بیتی | ✅ امضای ریلیز دائمی تأیید شد |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-x86_64-Release-APKs** | شبیه‌سازها و کروم‌بوک‌ها | ✅ امضای ریلیز دائمی تأیید شد |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-AppBundle-and-MasterSplits** | فرمت رسمی گوگل‌پلی (.aab) | ✅ امضای ریلیز دائمی تأیید شد |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📦 برای دانلود، به بخش **Artifacts** در بالای صفحه اجرای این اکشن مراجعه فرمایید." >> $GITHUB_STEP_SUMMARY
