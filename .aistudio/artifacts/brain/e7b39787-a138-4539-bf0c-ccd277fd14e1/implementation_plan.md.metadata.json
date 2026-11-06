@@ -1,6 +1,6 @@
 {
-  "summary": "Comprehensive implementation plan for permanent, cryptographically verified Android release signing for Kalinal across all architectures and artifacts in GitHub Actions and local workflows.",
-  "updatedAt": "2026-11-06T09:18:59.211705995Z",
+  "summary": "Implementation plan for resilient, fail-closed SHA-256 certificate fingerprint extraction and audit across all APK variants and the Android App Bundle in .github/workflows/manual-build.yml.",
+  "updatedAt": "2026-11-06T09:56:13.115060777Z",
   "requestFeedback": true,
   "userFacing": true
 }

@@ -186,38 +186,115 @@ jobs:
           fi
           echo "Using apksigner at: $APKSIGNER"
 
-          # 1. Verify Universal APK
+          extract_apk_fingerprint() {
+            local target_apk="$1"
+            local raw_output
+            raw_output=$("$APKSIGNER" verify --print-certs "$target_apk" 2>&1)
+            local status=$?
+
+            if [ $status -ne 0 ]; then
+              echo "::error::apksigner verification failed for $target_apk (exit code $status)"
+              echo "--- apksigner diagnostic output ---"
+              echo "$raw_output"
+              echo "-----------------------------------"
+              return 1
+            fi
+
+            local fp
+            fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -i "digest" | sed -E 's/.*SHA-256.*digest:?[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
+
+            if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+              fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
+            fi
+
+            if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+              echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from $target_apk"
+              echo "--- apksigner diagnostic output ---"
+              echo "$raw_output"
+              echo "-----------------------------------"
+              return 1
+            fi
+
+            echo "$fp"
+            return 0
+          }
+
+          extract_aab_fingerprint() {
+            local aab_file="$1"
+            local raw_output
+            raw_output=$(keytool -printcert -jarfile "$aab_file" 2>&1)
+            local status=$?
+
+            if [ $status -ne 0 ] || ! echo "$raw_output" | grep -qi "SHA256"; then
+              raw_output=$(unzip -p "$aab_file" 'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' 2>/dev/null | keytool -printcert 2>&1)
+              status=$?
+            fi
+
+            if [ $status -ne 0 ]; then
+              echo "::error::keytool verification failed for AAB: $aab_file (exit code $status)"
+              echo "--- keytool diagnostic output ---"
+              echo "$raw_output"
+              echo "---------------------------------"
+              return 1
+            fi
+
+            local fp
+            fp=$(echo "$raw_output" | grep -i "SHA256:" | sed -E 's/.*SHA256:[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
+
+            if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+              fp=$(echo "$raw_output" | grep -i "SHA256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
+            fi
+
+            if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+              echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from AAB: $aab_file"
+              echo "--- keytool diagnostic output ---"
+              echo "$raw_output"
+              echo "---------------------------------"
+              return 1
+            fi
+
+            echo "$fp"
+            return 0
+          }
+
+          # 1. Audit Universal APK
           UNIVERSAL_APK="dist/Kalinal-Universal-AllDevices-release.apk"
-          echo "=== Auditing Universal APK Signature ==="
-          $APKSIGNER verify --verbose "$UNIVERSAL_APK"
-          MASTER_FINGERPRINT=$($APKSIGNER verify --print-certs "$UNIVERSAL_APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
-          
-          if [ -z "$MASTER_FINGERPRINT" ]; then
-            echo "::error::Failed to extract SHA-256 certificate fingerprint from Universal APK!"
+          echo "=== Auditing Universal Release APK Signature ==="
+          MASTER_FINGERPRINT=$(extract_apk_fingerprint "$UNIVERSAL_APK")
+          if [ $? -ne 0 ] || [ -z "$MASTER_FINGERPRINT" ]; then
+            echo "::error::Universal Release APK signature audit failed!"
             exit 1
           fi
           echo "Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
 
-          # 2. Verify all extracted split APKs match the exact same fingerprint
+          # 2. Audit all extracted architecture split APKs
           echo "=== Auditing Extracted Split APK Signatures ==="
           for APK in $(find extracted_arm64 extracted_armv7 extracted_x86_64 -name "*.apk"); do
-            $APKSIGNER verify "$APK"
-            CURRENT_FINGERPRINT=$($APKSIGNER verify --print-certs "$APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+            CURRENT_FINGERPRINT=$(extract_apk_fingerprint "$APK")
+            if [ $? -ne 0 ] || [ -z "$CURRENT_FINGERPRINT" ]; then
+              echo "::error::Failed to verify signature for split APK: $APK"
+              exit 1
+            fi
             if [ "$CURRENT_FINGERPRINT" != "$MASTER_FINGERPRINT" ]; then
               echo "::error::Certificate mismatch in $APK! Expected: $MASTER_FINGERPRINT, Got: $CURRENT_FINGERPRINT"
               exit 1
             fi
-            echo "Verified signature match for $APK"
+            echo "Verified signature match for $APK ($CURRENT_FINGERPRINT)"
           done
 
-          # 3. Verify Android App Bundle (AAB) signature
+          # 3. Audit Android App Bundle (AAB)
           echo "=== Auditing Android App Bundle Signature ==="
-          AAB_FINGERPRINT=$(keytool -printcert -jarfile dist/Kalinal-AppBundle-AllDevices.aab | grep "SHA256:" | head -n 1 | awk '{print $2}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
-          if [ -n "$AAB_FINGERPRINT" ] && [ "$AAB_FINGERPRINT" != "$MASTER_FINGERPRINT" ]; then
+          AAB_FILE="dist/Kalinal-AppBundle-AllDevices.aab"
+          AAB_FINGERPRINT=$(extract_aab_fingerprint "$AAB_FILE")
+          if [ $? -ne 0 ] || [ -z "$AAB_FINGERPRINT" ]; then
+            echo "::error::AAB signature audit failed!"
+            exit 1
+          fi
+          if [ "$AAB_FINGERPRINT" != "$MASTER_FINGERPRINT" ]; then
             echo "::error::AAB Certificate mismatch! Expected: $MASTER_FINGERPRINT, Got: $AAB_FINGERPRINT"
             exit 1
           fi
-          echo "Verified AAB certificate fingerprint matches master release key."
+          echo "Verified AAB certificate fingerprint matches master release key ($AAB_FINGERPRINT)."
 
           # 4. Generate Non-Sensitive Release Metadata
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

@@ -1,6 +1,6 @@
-# Permanent Android Release Signing & Verification Architecture
+# Resilient Cryptographic Release Signature Audit Plan
 
-An end-to-end, cryptographically enforced release signing system for the Kalinal Android client, ensuring consistent, permanent signatures across all architecture variants, Universal APKs, and the Android App Bundle.
+A targeted, fail-closed solution to resolve the certificate fingerprint extraction failure in `.github/workflows/manual-build.yml`, standardizing SHA-256 extraction across `apksigner` and `keytool`.
 
 ---
 
@@ -9,150 +9,172 @@ An end-to-end, cryptographically enforced release signing system for the Kalinal
 > [!IMPORTANT]
 > The following user-confirmed decisions govern this implementation:
 
-- **Confirmed Decision 1 (Keystore Generation)**: The permanent keystore will be generated locally on the user's computer using a dedicated, secure PowerShell script. Private keys and passwords will never be committed to Git or exposed in logs.
-- **Confirmed Decision 2 (Keystore Format & Longevity)**: PKCS12 format (`.p12` / `.jks`) with RSA 2048-bit keys, alias `upload`, and 25-year validity (10,000 days) to prevent certificate expiration across the app's entire lifecycle.
-- **Confirmed Decision 3 (Build Variants)**: The manual pipeline (`.github/workflows/manual-build.yml`) will package pure **Release build type** artifacts (`assembleRelease` and `bundleRelease`), signed with the permanent release key. Routine CI (`.github/workflows/ci.yml`) remains purely for fast unit/Robolectric tests without requiring secrets.
-- **Confirmed Decision 4 (Mandatory Automated Verification)**: Every generated artifact will be verified via `apksigner` and `keytool`. If any architecture variant or the AAB is unsigned or signed with a mismatched certificate fingerprint, the build fails immediately.
+- **Confirmed Decision 1 (AAB Extraction Mechanism)**: Use `keytool` with `-printcert -jarfile` combined with a direct `META-INF/*.RSA` pipeline fallback and lowercase hex normalization to extract the AAB certificate fingerprint reliably.
+- **Confirmed Decision 2 (Diagnostic Log Verbosity)**: Print sanitized stdout and stderr output on any signature failure to facilitate clear troubleshooting without leaking secrets, keystore paths, or passwords.
+- **Confirmed Decision 3 (Strict Fail-Closed Enforcement)**: The build must exit with code 1 if:
+  - An APK or AAB fails signature extraction.
+  - An extracted fingerprint is not exactly 64 hexadecimal characters.
+  - Any split APK or the AAB has a fingerprint that differs from the master Universal APK fingerprint.
+  - No conditions will allow an empty or unverified fingerprint to print a success message.
 
 ---
 
-## 1. Overview & System Architecture
+## 1. Root Cause Analysis
+
+### Previous Implementation
+In `.github/workflows/manual-build.yml`:
+```bash
+MASTER_FINGERPRINT=$($APKSIGNER verify --print-certs "$UNIVERSAL_APK" | grep "Signer #1 certificate SHA-256 digest:" | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+```
+
+### Why it Failed
+1. **Stdout vs. Stderr Redirection**: `apksigner` in certain Android build-tools revisions or runner environments emits certificate details or diagnostic warnings to stderr instead of stdout. Piping without `2>&1` caused the subshell to capture an empty string.
+2. **Brittle String Pattern Matching**: Grepping strictly for `"Signer #1 certificate SHA-256 digest:"` fails if build-tools formats the output slightly differently (e.g., `"Certificate SHA-256 digest:"`, `"Signer #1 (v1/v2/v3):"`, or localized/reformatted prefixes).
+3. **Format Standardization**: Without stripping colons, spaces, and validating against `^[0-9a-f]{64}$`, empty strings or mismatched formatting bypassed regex checks.
+4. **Permissive AAB Check**: The previous check `if [ -n "$AAB_FINGERPRINT" ] ...` allowed an empty AAB fingerprint to be silently skipped.
+
+---
+
+## 2. Resilient Extraction Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        LOCAL ONE-TIME GENERATION                       │
-│  PowerShell script generates kalinal-release-key.p12 (PKCS12, 25 yrs)  │
-│  User backs up keystore safely & uploads Base64 to GitHub Secrets      │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        GITHUB REPOSITORY SECRETS                       │
-│  • RELEASE_KEYSTORE_BASE64   • RELEASE_STORE_PASSWORD                  │
-│  • RELEASE_KEY_ALIAS         • RELEASE_KEY_PASSWORD                    │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│               .github/workflows/manual-build.yml (RELEASE)             │
+│                        APK SIGNATURE AUDIT                             │
 │                                                                        │
-│  1. Validate Secrets: Fail immediately if any secret is empty          │
-│  2. Ephemeral Keystore: Decode to secure temp path ($RUNNER_TEMP)      │
-│  3. Map Environment: KEYSTORE_PATH, STORE_PASSWORD, KEY_PASSWORD       │
-│  4. Build Release: ./gradlew assembleRelease bundleRelease             │
-│  5. Bundletool Splits: Generate signed architecture-specific APKs      │
-│  6. Cryptographic Audit (apksigner):                                   │
-│     - Verify SHA-256 certificate fingerprint across all APKs & AAB     │
-│     - Fail build if any artifact fingerprint mismatches                │
-│  7. Generate release-metadata.json (Version, SHA-256 fingerprint, git) │
-│  8. Cleanup: Securely shred/remove temporary keystore file             │
-│  9. Upload 5 verified release artifacts + metadata                     │
+│  RAW_OUT=$($APKSIGNER verify --print-certs "$APK" 2>&1)                │
+│                                                                        │
+│  1. Check exit code == 0 (else fail with sanitized diagnostic log)     │
+│  2. Extract SHA-256 line -> Strip colons, whitespace -> Lowercase      │
+│  3. Fallback: Regex match 64 hex characters or 32 colon-hex pairs       │
+│  4. Assert string matches: ^[0-9a-f]{64}$ (else fail build)           │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Master Fingerprint
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     SPLIT APKS & AAB AUDIT (FAIL-CLOSED)               │
+│                                                                        │
+│  • ARM64, ARMv7, x86_64 splits must match Master Fingerprint           │
+│  • AAB extracted via keytool -printcert -jarfile 2>&1                   │
+│  • AAB fingerprint must match Master Fingerprint                       │
+│  • Any mismatch or empty value -> Exit code 1                          │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Key Product Decisions & Trade-Offs
+## 3. Implementation Details
 
-### Safe Alignment with AI Studio Platform Rules
-- **Rule**: Never modify `signingConfigs` (`release` and `debugConfig`) or `signingConfig` assignments in `app/build.gradle.kts`.
-- **Existing Config in `app/build.gradle.kts`**:
-  ```kotlin
-  signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
-    }
-  }
-  ```
-- **Architectural Solution**: By setting the keystore alias to `upload` in the local generation script and mapping `KEYSTORE_PATH`, `STORE_PASSWORD`, and `KEY_PASSWORD` in the CI runner environment, the existing release signing configuration works out of the box with zero disruption to AI Studio's internal build system.
+### Step 1: Encapsulate Robust Extraction Functions in `manual-build.yml`
 
-### Fail-Closed Security Policy
-- Release builds will **never** silently fall back to debug signing.
-- If `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, or `RELEASE_KEY_PASSWORD` is not configured in the repository, the manual workflow aborts at Step 1 with a visible GitHub annotation:
-  `::error::Required release signing secrets are missing. Release build aborted.`
+```bash
+extract_apk_fingerprint() {
+  local target_apk="$1"
+  local raw_output
+  raw_output=$("$APKSIGNER" verify --print-certs "$target_apk" 2>&1)
+  local status=$?
 
----
+  if [ $status -ne 0 ]; then
+    echo "::error::apksigner verification failed for $target_apk (exit code $status)"
+    echo "--- apksigner diagnostic output ---"
+    echo "$raw_output"
+    echo "-----------------------------------"
+    return 1
+  fi
 
-## 3. Cryptographic Verification & Audit Strategy
+  # Primary extraction: search for SHA-256 digest line
+  local fp
+  fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -i "digest" | sed -E 's/.*SHA-256.*digest:?[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
 
-The release workflow will execute an automated audit using `apksigner` and `keytool`:
+  # Fallback extraction: look for 64 contiguous hex chars on a line with SHA-256
+  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+    fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
+  fi
 
-1. **Fingerprint Extraction**:
-   For the Universal APK, each architecture split (`arm64-v8a`, `armeabi-v7a`, `x86_64`), and the App Bundle (`.aab`):
-   ```bash
-   apksigner verify --print-certs "$APK_FILE"
-   ```
-2. **Strict Equality Check**:
-   The workflow captures the SHA-256 digest of Signer #1 for every artifact:
-   - If any artifact lacks a signature: **BUILD FAILED**.
-   - If any artifact has a different SHA-256 digest than the master release fingerprint: **BUILD FAILED**.
-3. **Release Metadata Publication**:
-   A tamper-evident, non-sensitive JSON file (`release-metadata.json`) is packaged alongside artifacts containing:
-   - `appName`: Kalinal
-   - `applicationId`: `com.aistudio.cullinan.vfkzrw`
-   - `versionName`: `1.0`
-   - `versionCode`: `1`
-   - `gitCommit`: `${{ github.sha }}`
-   - `signingCertificateSha256`: `[SHA-256 Fingerprint]`
-   - `buildTimestamp`: ISO-8601 UTC timestamp
+  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+    echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from $target_apk"
+    echo "--- apksigner diagnostic output ---"
+    echo "$raw_output"
+    echo "-----------------------------------"
+    return 1
+  fi
 
----
-
-## 4. Local Keystore Generation Procedure (PowerShell)
-
-The user will run this script once on their local Windows computer:
-
-```powershell
-# Generate permanent 25-year PKCS12 keystore
-keytool -genkeypair -v `
-  -keystore kalinal-release-key.p12 `
-  -storetype PKCS12 `
-  -alias upload `
-  -keyalg RSA `
-  -keysize 2048 `
-  -validity 10000 `
-  -dname "CN=Kalinal Mobile, OU=Release, O=Kalinal, L=Birjand, ST=South Khorasan, C=IR"
-
-# Copy base64 string directly to clipboard for GitHub Secrets
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("kalinal-release-key.p12")) | Set-Clipboard
-Write-Host "Keystore generated and base64 copied to clipboard!"
+  echo "$fp"
+  return 0
+}
 ```
 
-The user will configure 4 GitHub Secrets in repository Settings -> Secrets and variables -> Actions:
-1. `RELEASE_KEYSTORE_BASE64`: Copied from clipboard.
-2. `RELEASE_STORE_PASSWORD`: The password chosen during generation.
-3. `RELEASE_KEY_ALIAS`: `upload`
-4. `RELEASE_KEY_PASSWORD`: The key password (identical to store password in PKCS12).
+### Step 2: Encapsulate Robust AAB Fingerprint Extraction
+
+```bash
+extract_aab_fingerprint() {
+  local aab_file="$1"
+  local raw_output
+  raw_output=$(keytool -printcert -jarfile "$aab_file" 2>&1)
+  local status=$?
+
+  # If -jarfile doesn't find cert, fall back to extracting META-INF cert stream
+  if [ $status -ne 0 ] || ! echo "$raw_output" | grep -qi "SHA256"; then
+    raw_output=$(unzip -p "$aab_file" 'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' 2>/dev/null | keytool -printcert 2>&1)
+    status=$?
+  fi
+
+  if [ $status -ne 0 ]; then
+    echo "::error::keytool verification failed for AAB: $aab_file (exit code $status)"
+    echo "--- keytool diagnostic output ---"
+    echo "$raw_output"
+    echo "---------------------------------"
+    return 1
+  fi
+
+  local fp
+  fp=$(echo "$raw_output" | grep -i "SHA256:" | sed -E 's/.*SHA256:[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
+
+  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+    fp=$(echo "$raw_output" | grep -i "SHA256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
+  fi
+
+  if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+    echo "::error::Failed to extract a valid 64-hex SHA-256 fingerprint from AAB: $aab_file"
+    echo "--- keytool diagnostic output ---"
+    echo "$raw_output"
+    echo "---------------------------------"
+    return 1
+  fi
+
+  echo "$fp"
+  return 0
+}
+```
+
+### Step 3: Enforce Strict Equality Across All Outputs
+
+```bash
+MASTER_FINGERPRINT=$(extract_apk_fingerprint "$UNIVERSAL_APK") || exit 1
+echo "Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
+
+# Audit each extracted split APK
+for APK in $(find extracted_arm64 extracted_armv7 extracted_x86_64 -name "*.apk"); do
+  CURRENT_FP=$(extract_apk_fingerprint "$APK") || exit 1
+  if [ "$CURRENT_FP" != "$MASTER_FINGERPRINT" ]; then
+    echo "::error::Certificate fingerprint mismatch in $APK! Expected: $MASTER_FINGERPRINT, Got: $CURRENT_FP"
+    exit 1
+  fi
+  echo "Verified signature match for $APK"
+done
+
+# Audit AAB
+AAB_FP=$(extract_aab_fingerprint "dist/Kalinal-AppBundle-AllDevices.aab") || exit 1
+if [ "$AAB_FP" != "$MASTER_FINGERPRINT" ]; then
+  echo "::error::AAB Certificate fingerprint mismatch! Expected: $MASTER_FINGERPRINT, Got: $AAB_FP"
+  exit 1
+fi
+echo "Verified AAB certificate fingerprint matches master release key ($AAB_FP)."
+```
 
 ---
 
-## 5. File-by-File Changes
+## 4. Verification Plan
 
-### 1. `.github/workflows/manual-build.yml`
-- Switch build commands to release: `./gradlew assembleRelease bundleRelease`.
-- Add validation step for required release secrets.
-- Securely decode keystore to `${{ runner.temp }}/release.keystore` with `chmod 600`.
-- Sign bundletool-extracted device splits using the release keystore.
-- Add automated `apksigner` and `keytool` certificate fingerprint audit.
-- Generate and upload `release-metadata.json`.
-- Add post-build cleanup step (`rm -f ${{ runner.temp }}/release.keystore`) running on success and failure (`if: always()`).
-
-### 2. `.github/workflows/ci.yml`
-- Preserve lightweight test execution (`./gradlew testDebugUnitTest`).
-- Confirm zero requirement for release secrets on routine pull requests and commits.
-
-### 3. `CI_GUIDE.md` & Documentation
-- Document the permanent release signing system, secret configuration, and PowerShell keystore generation steps.
-- Explain the role of Play Protect and update compatibility (uninstalling old debug-signed app once to adopt the permanent release key).
-
----
-
-## 6. Validation Plan
-
-1. **Local Project Verification**: Run `compile_applet` to ensure the project compiles and signing configuration declarations are preserved.
-2. **Missing Secrets Test**: Verify that the workflow halts if secrets are omitted.
-3. **Full Signature Consistency Test**: Run the manual release build on GitHub Actions with configured secrets and confirm that all 5 published artifacts share the exact same SHA-256 certificate fingerprint in `release-metadata.json`.
+1. Verify that `extract_apk_fingerprint` correctly parses simulated and real `apksigner` outputs in local bash tests.
+2. Run `compile_applet` to confirm overall project integrity.
+3. Review the Git diff in `.github/workflows/manual-build.yml`.
