@@ -101,13 +101,18 @@ jobs:
         run: |
           if [ "${{ matrix.target.abi }}" = "universal" ]; then
             ./gradlew assembleDebug --no-daemon --stacktrace
-            mkdir -p build-output
-            cp app/build/outputs/apk/debug/app-debug.apk build-output/Kalinal-Universal-AllDevices-debug.apk
           else
             ./gradlew assembleDebug -Pandroid.injected.build.abi=${{ matrix.target.abi }} --no-daemon --stacktrace
-            mkdir -p build-output
-            cp app/build/outputs/apk/debug/app-debug.apk build-output/Kalinal-${{ matrix.target.id }}-debug.apk
           fi
+
+          mkdir -p build-output
+          APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No APK file generated in app/build/outputs/apk for target ${{ matrix.target.id }}"
+            exit 1
+          fi
+          echo "Found APK at: $APK_PATH"
+          cp "$APK_PATH" "build-output/Kalinal-${{ matrix.target.id }}-debug.apk"
 
       - name: Upload Device APK Artifact
         uses: actions/upload-artifact@v4

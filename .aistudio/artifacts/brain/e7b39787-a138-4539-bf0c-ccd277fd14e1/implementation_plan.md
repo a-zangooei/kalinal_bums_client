@@ -1,140 +1,119 @@
-# کلاینت کالینان (Kalinal) — مرحله ۱: رابط کاربری بومی، احراز هویت و نمایش برنامه غذایی
+# CI Workflow Multi-Device APK Discovery & Phase 1.1 Mobile Testing Plan
 
-طراحی و پیاده‌سازی کلاینت غیررسمی، سریع و بومی اندروید برای سامانه رزرواسیون غذای دانشجویی دانشگاه علوم پزشکی بیرجند (سامانه کالینان / `jeton.bums.ac.ir`)، متمرکز بر احراز هویت امن با RSA، حل کپچا، و مشاهده شفاف برنامه غذایی هفتگی بدون نیاز به مرورگر یا وب‌ویو.
+A targeted solution to resolve the artifact copying failure in architecture-specific GitHub Actions jobs (`ARMv7`, `ARM64`, `x86_64`) followed by a structured approach to validate and debug mobile runtime behavior.
 
 ---
 
-### تصمیمات نهایی و نیازمندی‌های تأییدشده توسط کاربر
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> در راستای هماهنگی دقیق با نیازهای کاربر در فاز شفاف‌سازی، ۳ تصمیم کلیدی زیر در پیاده‌سازی لحاظ می‌شوند:
+> The following decisions were confirmed by the user and guide this implementation:
 
-- **حالت آزمایشی آفلاین (Demo / Offline Mode)**: اپلیکیشن مجهز به یک کلید سوییچ هوشمند بین "سرور زنده دانشگاه" و "داده‌های واقعی نمونه" (بر اساس فایل‌های ارسالی کاربر) خواهد بود تا حتی خارج از شبکه دانشگاه یا در صورت قطعی سامانه، تمامی بخش‌ها و ناوبری برنامه قابل بررسی و آزمایش باشد.
-- **چیدمان برنامه هفتگی**: استفاده از تب‌های افقی روزهای هفته (شنبه تا جمعه) همراه با کارت‌های مجزای وعده‌های غذایی (صبحانه، ناهار، شام) برای هر روز، به همراه نشانگرهای وضعیت رزرو، نام غذا، سالن توزیع، قیمت و کالری.
-- **ذخیره امن مشخصات کاربری**: پیاده‌سازی قابلیت "مرا به خاطر بسپار" (Remember Me) در حافظه محلی برای تکمیل خودکار نام کاربری و رمز عبور در مراجعات بعدی.
-
----
-
-### ۱. نمای کلی و ارزش پروژه (Overview & Core Concept)
-
-- **هدف**: ایجاد یک رابط کاربری مدرن، زیبا، راست‌چین (RTL) و بومی اندروید با Jetpack Compose بر پایه معماری تمیز (Clean MVVM) که مستقیماً با سرویس‌های وب‌فرم ASP.NET سامانه کالینان ارتباط برقرار کرده و فرآیند دسترسی به برنامه غذایی و رزرو را برای دانشجو تسهیل می‌کند.
-- **مخاطب هدف**: دانشجویان و پرسنل دانشگاه علوم پزشکی بیرجند که برای دیدن برنامه غذایی، بررسی وضعیت رزرو و بررسی اعتبار، نیازمند یک ابزار سریع، پایدار و در دسترس روی تلفن همراه خود هستند.
-- **مرزهای مرحله ۱**:
-  - احراز هویت کامل (دریافت کلید عمومی RSA، دریافت کپچا از سرور، رمزنگاری کلمه عبور، ورود و نگهداری سشن).
-  - دریافت و نمایش مشخصات دانشجو، شماره دانشجویی، کد ملی و مانده اعتبار ریالی.
-  - دریافت جدول هفتگی غذاها و جابه‌جایی بین هفته‌ها با پارس دقیق جریان دلتا (AJAX Delta Stream).
-  - **محدودیت قطعی مرحله ۱**: کاملاً خواندنی (Read-Only)؛ هیچ درخواست جهش‌یافته (تغییر رزرو، لغو یا واریز) به سرور ارسال نخواهد شد.
+- **Confirmed Decision 1 (Execution Priority)**: Fix the CI workflow first to ensure all 6 matrix jobs pass and publish valid artifacts, then immediately proceed to mobile runtime testing and debugging (Phase 1.1).
+- **Confirmed Decision 2 (APK Discovery Strategy)**: Use robust dynamic auto-detection in `.github/workflows/android-ci.yml` using `find` to discover any generated APK in `app/build/outputs/apk/debug/`, validating that an APK exists before copying to `build-output/Kalinal-${{ matrix.target.id }}-debug.apk`.
 
 ---
 
-### ۲. تجربه کاربری و طراحی بصری (UX & Visual Design)
+## 1. Overview & Problem Analysis
 
-- **جهت‌گیری بصری**: مینیمال، مدرن و پرانرژی با تم فیروزه‌ای تیره دانشگاهی و رنگ‌های تأکیدی گرم برای غذاها و نشانگرها، پشتیبانی کامل از زبان فارسی و راست‌چین (RTL).
-- **جریان‌های اصلی کاربر**:
-  1. **صفحه ورود (Authentication Screen)**:
-     - فیلد نام کاربری (شماره دانشجویی) و رمز عبور (کد ملی) با قابلیت نمایش/پنهان‌سازی رمز.
-     - باکس تصویر کپچای زنده به همراه دکمه تازه‌سازی (Refresh) چرخان.
-     - کلید سوییچ "حالت دمو / سرور زنده".
-     - چک‌باکس ذخیره اطلاعات ورود.
-     - دکمه ورود با بازخورد لودینگ و مدیریت پیام‌های خطای سرور.
-  2. **صفحه اصلی / برنامه غذایی هفتگی (Weekly Menu Screen)**:
-     - **نوار بالایی (AppBar)**: نمایش نام و مشخصات کاربر، نشانگر مانده اعتبار، و دکمه خروج / رفرش.
-     - **هدایت هفته‌ها**: نمایش بازه زمانی هفته جاری (مثلاً `1405/08/16 الی 1405/08/22`) همراه با دکمه‌های هفته قبل و هفته بعد.
-     - **انتخابگر روزهای هفته**: تب‌های روزها (شنبه، یکشنبه، دوشنبه، سه‌شنبه، چهارشنبه، پنج‌شنبه، جمعه) با تاریخ شمسی.
-     - **کارت‌های وعده غذایی (Meal Cards)**:
-       - تفکیک صبحانه، ناهار و شام.
-       - نام غذا و محتویات.
-       - بج وضعیت رزرو با رنگ‌بندی شفاف: سبز برای رزرو شده، خاکستری برای غیرفعال/قفل‌شده، آبی برای رزرو نشده، نارنجی برای خورده‌شده.
-       - سلف/رستوران توزیع، قیمت (ریال) و کالری.
+In GitHub Actions run `42125120768`, Gradle successfully compiled and packaged debug APKs for all target architectures:
+- Universal APK: **Success**
+- Android App Bundle (AAB): **Success**
+- Unit & Robolectric Tests: **Success**
+- ARMv7 (32-bit): **Failed at copy step**
+- ARM64 (64-bit): **Failed at copy step**
+- x86_64: **Failed at copy step**
+
+### Root Cause
+When `-Pandroid.injected.build.abi=<abi>` or architecture filters are supplied, Android Gradle Plugin (AGP) generates names reflecting the ABI (e.g., `app-arm64-v8a-debug.apk` or subdirectories) rather than the standard unconstrained filename `app-debug.apk`. The workflow failed with `cp: cannot stat 'app/build/outputs/apk/debug/app-debug.apk': No such file or directory`.
 
 ---
 
-### ۳. تصمیمات فنی کلیدی و پروتکل سامانه (Technical Protocol & Decisions)
+## 2. Key Product Decisions & Trade-Offs
 
-1. **مدیریت سشن و کوکی‌ها (`OkHttpClient` + `CookieJar`)**:
-   - وب‌فرم‌های ASP.NET به کوکی‌های `ASP.NET_SessionId` و `__AntiXsrfToken` وابسته هستند. کپچا و فرم لاگین باید حتماً در یک سشن مشترک ارسال شوند؛ لذا یک `PersistentCookieJar` درون‌حافظه‌ای ساخته می‌شود.
-2. **رمزنگاری کلاینت-ساید RSA PKCS#1 v1.5**:
-   - سامانه کالینان کلید عمومی RSA را درون فیلد متنی `publicKeytxt` در صفحه لاگین قرار می‌دهد. ماژول `RsaEncryptor` کلید PEM را با استفاده از استاندارد بومی جاوا (`java.security.KeyFactory` و `Cipher.getInstance("RSA/ECB/PKCS1Padding")`) بدون وابستگی سنگین خارجی پارس کرده و متن رمزشده را با Base64 خروجی می‌دهد.
-3. **پارسر جریان دلتای ایجکس (`DeltaParser`)**:
-   - پاسخ درخواست‌های جابه‌جایی هفته با هدر `X-MicrosoftAjax: Delta=true` بازمی‌گردد. ساختار پاسخ به فرمت `length|type|id|content|` است. **نکته بحرانی**: عدد `length` نمایانگر تعداد **بایت‌های UTF-8** است نه کاراکترهای رشته. پارسر بومی اختصاصی با پشتیبانی از شمارش دقیق بایت پیاده‌سازی می‌شود تا بلاک‌های `UpdatePanel` و `__VIEWSTATE` به درستی استخراج شوند.
-4. **پارسر ساختار HTML جدول غذاها (`ReservationHtmlParser`)**:
-   - استخراج ردیف‌های `ctl02` تا `ctl08` برای ۷ روز هفته، استخراج تب‌استریپ‌های صبحانه (`css3-tabstrip-0-0`)، ناهار (`css3-tabstrip-0-1`) و شام (`css3-tabstrip-0-2`)، وضعیت چک‌باکس‌ها، کلاس‌های `aspNetDisabled` و آیکون‌های وضعیت (`lockAcceptGreen24.png`، `lock24.png`، `AcceptGreen16.png`، `Eating16.png`).
+### Dynamic Auto-Detection vs. Hardcoded Naming Conventions
+- **Chosen Approach**: Scan `app/build/outputs/apk/debug/` recursively for `*.apk` files using `find`, verify at least one file was created, and copy the first matching binary to the target artifact directory.
+- **Why**: Protects against variations in AGP naming across minor Gradle versions, ABI naming conventions (e.g. `armeabi-v7a` vs `armv7`), and directory nesting.
+- **Fail-Safe**: If no APK is found, the script outputs a clear GitHub Actions error annotation (`::error::No APK found in app/build/outputs/apk/debug`) and exits with code 1, preventing empty or corrupted artifacts.
 
 ---
 
-### ۴. معماری سیستم و نمودار کامپوننت‌ها (Architecture & Data Strategy)
+## 3. Technical Architecture & CI Pipeline
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Jetpack Compose UI (RTL)                        │
-│                                                                        │
-│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
-│   │        LoginScreen        │      │          MenuScreen         │   │
-│   │  - User/Pass Input        │      │  - Header & Credit Info     │   │
-│   │  - Captcha Image Display  │      │  - Week Navigation (Prev/Next│   │
-│   │  - Live / Demo Toggle     │      │  - Weekday Tabs (Sat - Fri) │   │
-│   │  - Remember Credentials   │      │  - Meal Cards (Status Badges│   │
-│   └─────────────┬─────────────┘      └──────────────┬──────────────┘   │
-└─────────────────┼───────────────────────────────────┼──────────────────┘
-                  │                                   │
-                  ▼                                   ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        ViewModels (MVVM Pattern)                       │
-│                                                                        │
-│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
-│   │       AuthViewModel       │      │        MenuViewModel        │   │
-│   │  State: Captcha, Status   │      │  State: Week, Days, Meals   │   │
-│   └─────────────┬─────────────┘      └──────────────┬──────────────┘   │
-└─────────────────┼───────────────────────────────────┼──────────────────┘
-                  │                                   │
-                  ▼                                   ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                           Repository Layer                             │
-│                                                                        │
-│   ┌───────────────────────────┐      ┌─────────────────────────────┐   │
-│   │       AuthRepository      │      │        MenuRepository       │   │
-│   │  - Fetch Page & PublicKey │      │  - Fetch Initial Menu       │   │
-│   │  - Fetch Captcha Bytes    │      │  - Navigate Delta (Next/Prev│   │
-│   │  - Submit RSA Encrypted   │      │  - Demo Mock Provider       │   │
-│   └─────────────┬─────────────┘      └──────────────┬──────────────┘   │
-└─────────────────┼───────────────────────────────────┼──────────────────┘
-                  │                                   │
-                  ▼                                   ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      Data, Network & Crypto Engine                     │
-│                                                                        │
-│  ┌──────────────────┐  ┌─────────────────┐  ┌───────────────────────┐  │
-│  │   RsaEncryptor   │  │   DeltaParser   │  │ ReservationHtmlParser │  │
-│  │  RSA/ECB/PKCS1   │  │ UTF-8 Byte Split│  │ ASP.NET Elements & DOM│  │
-│  └──────────────────┘  └─────────────────┘  └───────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │     CullinanHttpClient (OkHttp + Session CookieJar + SSL)        │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────┬─────────────────────────────────────┘
-                                   │
-                                   ▼
-                 https://jeton.bums.ac.ir (یا Demo Data)
+┌─────────────────────────────────────────────────────────────┐
+│                      GitHub Actions                         │
+│                    (Push / PR Trigger)                      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Job 1: 🧪 test (JDK 21)                     │
+│  - RSA Crypto Unit Tests                                    │
+│  - ASP.NET AJAX Delta Stream Parser Tests                   │
+│  - Reservation HTML Parser Tests                            │
+│  - Robolectric Tests (@Config sdk = 36)                     │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │ (needs: test)                │ (needs: test)
+               ▼                              ▼
+┌───────────────────────────────┐ ┌───────────────────────────┐
+│ Job 2: 📱 build-multi-device  │ │   Job 3: 📦 build-bundle  │
+│  Matrix Strategy (4 targets): │ │  - bundleDebug            │
+│   • universal                 │ │  - bundletool splits      │
+│   • arm64-v8a                 │ │  - Universal APK bundle   │
+│   • armeabi-v7a               │ └─────────────┬─────────────┘
+│   • x86_64                    │               │
+│                               │               │
+│  [Dynamic APK Discovery]:     │               │
+│   find outputs/apk/debug      │               │
+│   cp to Kalinal-<target>.apk  │               │
+└──────────────┬────────────────┘               │
+               │                                │
+               ▼                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     GitHub Artifacts                        │
+│  • Kalinal-universal-APK                                    │
+│  • Kalinal-arm64-v8a-APK                                    │
+│  • Kalinal-armeabi-v7a-APK                                  │
+│  • Kalinal-x86_64-APK                                       │
+│  • Kalinal-AppBundle-and-Splits                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### ۵. برنامه گام‌به‌گام پیاده‌سازی پس از تأیید (Implementation Steps)
+## 4. Implementation Steps
 
-1. **مرحله ۱ - زیرساخت شبکه و امنیت**:
-   - پیاده‌سازی `CullinanCookieJar` برای حفظ کوکی‌های ASP.NET.
-   - پیاده‌سازی `RsaEncryptor` برای رمزنگاری متقارن/نامتقارن طبق رفتار وب‌فرم ورود.
-   - پیاده‌سازی مخزن ترجیحات محلی (`UserPreferences`) برای ذخیره نام کاربری و وضعیت ورود.
-2. **مرحله ۲ - پارسرها و ارائه‌دهنده داده‌های نمونه (Mock/Demo Engine)**:
-   - پیاده‌سازی `DeltaParser` مبتنی بر بایت برای هندل کردن آپدیت‌پنل‌های ایجکس.
-   - پیاده‌سازی `ReservationHtmlParser` برای استخراج روزها، وعده‌ها، قیمت‌ها، نام غذاها و وضعیت قفل/رزرو.
-   - ایجاد `DemoDataSource` شامل داده‌های واقعی استخراج‌شده از فایل‌های ارسالی کاربر (`کالینان.html` و `nextweek_response.txt`) جهت فعال‌سازی فوری در حالت آفلاین.
-3. **مرحله ۳ - سرویس‌ها و ریپازیتوری‌ها**:
-   - `AuthRepository`: دریافت صفحه ورود، دریافت کپچا (`/UserControls/Captcha.ashx`)، ارسال فرم لاگین با تمام فیلدهای پنهان و ViewState.
-   - `MenuRepository`: دریافت صفحه `/Reservation/Reservation.aspx` و ارسال درخواست‌های دلتا برای هفته‌های بعدی و قبلی.
-4. **مرحله ۴ - لایه رابط کاربری (Jetpack Compose UI)**:
-   - تم RTL و رنگ‌های اختصاصی در `Theme.kt`.
-   - طراحی `LoginScreen` با پیش‌نمایش تصویر کپچا، دکمه تازه‌سازی کپچا، سوییچر زنده/دمو و ورود سریع.
-   - طراحی `MenuScreen` با هدر اطلاعات کاربر و اعتبار، کنترل بازه هفته، تب‌های روزهای شنبه تا جمعه، و کارت‌های شیک برای وعده‌های صبحانه، ناهار و شام.
-5. **مرحله ۵ - تست و اعتبارسنجی**:
-   - تست‌های واحد JVM برای `DeltaParser` و `RsaEncryptor`.
-   - کامپایل و راه‌اندازی موفقیت‌آمیز اپلیکیشن با `compile_applet`.
+### Step 1: Update `.github/workflows/android-ci.yml`
+Replace the rigid `cp` command in the `build-multi-device` job with:
+```bash
+- name: Build APK for ${{ matrix.target.name }}
+  run: |
+    if [ "${{ matrix.target.abi }}" = "universal" ]; then
+      ./gradlew assembleDebug --no-daemon --stacktrace
+    else
+      ./gradlew assembleDebug -Pandroid.injected.build.abi=${{ matrix.target.abi }} --no-daemon --stacktrace
+    fi
+
+    mkdir -p build-output
+    APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
+    if [ -z "$APK_PATH" ]; then
+      echo "::error::No APK file generated for target ${{ matrix.target.id }}"
+      exit 1
+    fi
+    echo "Found APK at $APK_PATH, copying to build-output/Kalinal-${{ matrix.target.id }}-debug.apk"
+    cp "$APK_PATH" "build-output/Kalinal-${{ matrix.target.id }}-debug.apk"
+```
+
+### Step 2: Verification & Local Build Check
+- Run `compile_applet` to confirm Gradle build configuration integrity.
+- Verify the workflow syntax and parameter references.
+
+### Step 3: Git Diff & Push Instructions
+- Provide the exact diff and Git instructions so the user can push the fix to `github.com/a-zangooei/kalinal_byms_client`.
+
+### Step 4: Phase 1.1 Mobile Runtime Testing Roadmap
+Once the CI pipeline is green across all 6 jobs:
+- Test real authentication on physical devices (network timeout handling, captive portals, intranet routing).
+- Validate ASP.NET session continuity (`ASP.NET_SessionId`) between captcha retrieval and RSA login POST.
+- Inspect weekly schedule rendering, day tabs, and meal reservation badges under varying network latencies.
