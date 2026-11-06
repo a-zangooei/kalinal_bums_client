@@ -1,119 +1,143 @@
-# CI Workflow Multi-Device APK Discovery & Phase 1.1 Mobile Testing Plan
+# Reliable Android CI & Manual Multi-Device Build Architecture
 
-A targeted solution to resolve the artifact copying failure in architecture-specific GitHub Actions jobs (`ARMv7`, `ARM64`, `x86_64`) followed by a structured approach to validate and debug mobile runtime behavior.
+A diagnostic analysis and architectural plan to separate lightweight automated CI checks from an on-demand, manual multi-device APK and AAB build pipeline for the Kalinal Android client.
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following decisions were confirmed by the user and guide this implementation:
+> The following decisions were confirmed by the user and govern this implementation plan:
 
-- **Confirmed Decision 1 (Execution Priority)**: Fix the CI workflow first to ensure all 6 matrix jobs pass and publish valid artifacts, then immediately proceed to mobile runtime testing and debugging (Phase 1.1).
-- **Confirmed Decision 2 (APK Discovery Strategy)**: Use robust dynamic auto-detection in `.github/workflows/android-ci.yml` using `find` to discover any generated APK in `app/build/outputs/apk/debug/`, validating that an APK exists before copying to `build-output/Kalinal-${{ matrix.target.id }}-debug.apk`.
-
----
-
-## 1. Overview & Problem Analysis
-
-In GitHub Actions run `42125120768`, Gradle successfully compiled and packaged debug APKs for all target architectures:
-- Universal APK: **Success**
-- Android App Bundle (AAB): **Success**
-- Unit & Robolectric Tests: **Success**
-- ARMv7 (32-bit): **Failed at copy step**
-- ARM64 (64-bit): **Failed at copy step**
-- x86_64: **Failed at copy step**
-
-### Root Cause
-When `-Pandroid.injected.build.abi=<abi>` or architecture filters are supplied, Android Gradle Plugin (AGP) generates names reflecting the ABI (e.g., `app-arm64-v8a-debug.apk` or subdirectories) rather than the standard unconstrained filename `app-debug.apk`. The workflow failed with `cp: cannot stat 'app/build/outputs/apk/debug/app-debug.apk': No such file or directory`.
+- **Confirmed Decision 1 (Workflow Separation)**: Split the CI/CD pipeline into **two independent workflow files**:
+  1. `.github/workflows/ci.yml`: Automated, lightweight verification triggered on every `push` and `pull_request` (tests and reports only; no APK or AAB builds).
+  2. `.github/workflows/manual-build.yml`: Dedicated on-demand build workflow triggered exclusively via `workflow_dispatch` to package Universal APK, architecture-specific APKs (ARM64, ARMv7, x86_64), and the Android App Bundle.
+- **Confirmed Decision 2 (Failure Root Cause in Run 42188336707)**:
+  - Error: `find: ‘app/build/outputs/apk’: No such file or directory` -> `Error: No APK file generated in app/build/outputs/apk for target armeabi-v7a`.
+  - Cause: In AGP 8.x, passing the internal IDE property `-Pandroid.injected.build.abi` without Android Studio IDE flags causes Gradle to package the APK into `app/build/intermediates/apk/debug/` rather than creating the standard `app/build/outputs/apk/debug/` directory structure.
+  - Solution: Use official Android App Bundle + `bundletool` device extraction and broader output search (`find app/build -type f -name "*.apk"`), or standard ABI-split packaging, ensuring guaranteed artifact discovery.
+- **Confirmed Decision 3 (Manual Build Scope)**: A single manual run packages all 4 APK targets plus the Android App Bundle in one execution, publishing distinct, clearly labeled artifacts.
 
 ---
 
-## 2. Key Product Decisions & Trade-Offs
+## 1. Diagnostic Findings & Root Cause Analysis
 
-### Dynamic Auto-Detection vs. Hardcoded Naming Conventions
-- **Chosen Approach**: Scan `app/build/outputs/apk/debug/` recursively for `*.apk` files using `find`, verify at least one file was created, and copy the first matching binary to the target artifact directory.
-- **Why**: Protects against variations in AGP naming across minor Gradle versions, ABI naming conventions (e.g. `armeabi-v7a` vs `armv7`), and directory nesting.
-- **Fail-Safe**: If no APK is found, the script outputs a clear GitHub Actions error annotation (`::error::No APK found in app/build/outputs/apk/debug`) and exits with code 1, preventing empty or corrupted artifacts.
+### Investigation of Run 42188336707
+
+| Job | Status | Log Evidence / Observed Behavior | Root Cause |
+|---|---|---|---|
+| **🧪 test (JDK 21)** | **SUCCESS** | All Unit and Robolectric tests passed on JDK 21 | Upgrading to JDK 21 resolved the SDK 36 class version incompatibility. |
+| **📱 Universal APK** | **SUCCESS** | Standard `./gradlew assembleDebug` created `app/build/outputs/apk/debug/app-debug.apk` | Unconstrained debug builds follow the standard output path. |
+| **📦 Android App Bundle** | **SUCCESS** | `./gradlew bundleDebug` + `bundletool` generated `all-splits.apks` and `bundle.aab` | Official bundle tooling operates reliably across all runners. |
+| **📱 ARM64-v8a** | **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | AGP internal injection property bypasses standard `outputs/apk` directory creation. |
+| **📱 ARMv7 (armeabi-v7a)**| **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | Same as ARM64. |
+| **📱 x86_64** | **FAILED** | `find: ‘app/build/outputs/apk’: No such file or directory` | Same as ARM64. |
+
+### Technical Analysis of `-Pandroid.injected.build.abi`
+In modern Android Gradle Plugin versions, `android.injected.build.abi` is an internal private contract designed specifically for Android Studio's Instant Run / Deploy-to-Device flow. When invoked from standard CLI without Android Studio IDE flags:
+1. AGP places the intermediate APK inside `app/build/intermediates/apk/debug/` instead of publishing to `app/build/outputs/apk/debug/`.
+2. Furthermore, unless NDK native compilation or ABI packaging splits are declared, `-Pandroid.injected.build.abi` does not strip native libraries from pre-compiled AARs (`libandroidx.graphics.path.so` and `libdatastore_shared_counter.so`).
+3. To reliably produce true architecture-specific APKs, the standard Google-recommended mechanism is either **Google `bundletool` device extraction** from the AAB or **Gradle ABI splits**.
 
 ---
 
-## 3. Technical Architecture & CI Pipeline
+## 2. Recommended Workflow Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      GitHub Actions                         │
-│                    (Push / PR Trigger)                      │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 Job 1: 🧪 test (JDK 21)                     │
-│  - RSA Crypto Unit Tests                                    │
-│  - ASP.NET AJAX Delta Stream Parser Tests                   │
-│  - Reservation HTML Parser Tests                            │
-│  - Robolectric Tests (@Config sdk = 36)                     │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │ (needs: test)                │ (needs: test)
-               ▼                              ▼
-┌───────────────────────────────┐ ┌───────────────────────────┐
-│ Job 2: 📱 build-multi-device  │ │   Job 3: 📦 build-bundle  │
-│  Matrix Strategy (4 targets): │ │  - bundleDebug            │
-│   • universal                 │ │  - bundletool splits      │
-│   • arm64-v8a                 │ │  - Universal APK bundle   │
-│   • armeabi-v7a               │ └─────────────┬─────────────┘
-│   • x86_64                    │               │
-│                               │               │
-│  [Dynamic APK Discovery]:     │               │
-│   find outputs/apk/debug      │               │
-│   cp to Kalinal-<target>.apk  │               │
-└──────────────┬────────────────┘               │
-               │                                │
-               ▼                                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     GitHub Artifacts                        │
-│  • Kalinal-universal-APK                                    │
-│  • Kalinal-arm64-v8a-APK                                    │
-│  • Kalinal-armeabi-v7a-APK                                  │
-│  • Kalinal-x86_64-APK                                       │
-│  • Kalinal-AppBundle-and-Splits                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          TRIGGER STRATEGY                               │
+├───────────────────────────────────┬─────────────────────────────────────┤
+│  Automatic: push & pull_request   │  Manual: workflow_dispatch          │
+│  (Every commit / PR branch)       │  (On-demand via GitHub Actions UI)  │
+└─────────────────┬─────────────────┴──────────────────┬──────────────────┘
+                  │                                    │
+                  ▼                                    ▼
+┌───────────────────────────────────┐ ┌───────────────────────────────────┐
+│     .github/workflows/ci.yml      │ │ .github/workflows/manual-build.yml│
+│                                   │ │                                   │
+│  • JDK 21 (Temurin)               │ │  • Select Ref / Branch            │
+│  • Keystore & Secrets prep        │ │  • Run Tests (Quality Gate)       │
+│  • ./gradlew testDebugUnitTest    │ │  • Build Universal APK            │
+│  • Upload test-reports (always)   │ │  • Build ARM64-v8a APK            │
+│                                   │ │  • Build ARMv7 APK                │
+│  ⏱️ Duration: ~1.5 - 2 minutes    │ │  • Build x86_64 APK               │
+│  🛑 NO APK or AAB generation      │ │  • Build Android App Bundle (AAB) │
+│  🔄 Concurrency: cancel-in-prog   │ │  • Upload 5 distinct artifacts    │
+└───────────────────────────────────┘ │  🔄 Concurrency: NO cancel        │
+                                      └───────────────────────────────────┘
 ```
+
+### Key Separation Characteristics
+
+1. **Lightweight Automated CI (`.github/workflows/ci.yml`)**:
+   - Executes strictly on `push: branches: ['**']` and `pull_request`.
+   - Never consumes runner minutes compiling packaging variants on routine code commits.
+   - Uploads unit test and Robolectric reports even on test failure (`if: always()`).
+   - Concurrency group `ci-${{ github.ref }}` with `cancel-in-progress: true` cancels stale runs when new commits are pushed quickly.
+
+2. **On-Demand Manual Pipeline (`.github/workflows/manual-build.yml`)**:
+   - Executes strictly on `workflow_dispatch`.
+   - Concurrency group `manual-build-${{ github.ref }}` with `cancel-in-progress: false` ensures a routine git push never terminates an active manual build.
+   - Generates all 5 package variations with robust fallback search across both `app/build/outputs/` and `app/build/intermediates/`.
 
 ---
 
-## 4. Implementation Steps
+## 3. File-by-File Changes
 
-### Step 1: Update `.github/workflows/android-ci.yml`
-Replace the rigid `cp` command in the `build-multi-device` job with:
-```bash
-- name: Build APK for ${{ matrix.target.name }}
-  run: |
-    if [ "${{ matrix.target.abi }}" = "universal" ]; then
-      ./gradlew assembleDebug --no-daemon --stacktrace
-    else
-      ./gradlew assembleDebug -Pandroid.injected.build.abi=${{ matrix.target.abi }} --no-daemon --stacktrace
-    fi
+### File 1: `.github/workflows/ci.yml` (New File)
+- **Role**: Dedicated lightweight CI.
+- **Triggers**: `push` (all branches), `pull_request` (all branches).
+- **Steps**:
+  1. `actions/checkout@v4`
+  2. `actions/setup-java@v4` (JDK 21, Temurin, Gradle cache)
+  3. Prepare dummy keystore (`debug.keystore.base64` decode) and `.env`
+  4. `./gradlew testDebugUnitTest --no-daemon --stacktrace`
+  5. `actions/upload-artifact@v4` for test reports (`app/build/reports/tests/testDebugUnitTest/`) with `if: always()`
 
-    mkdir -p build-output
-    APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
-    if [ -z "$APK_PATH" ]; then
-      echo "::error::No APK file generated for target ${{ matrix.target.id }}"
-      exit 1
-    fi
-    echo "Found APK at $APK_PATH, copying to build-output/Kalinal-${{ matrix.target.id }}-debug.apk"
-    cp "$APK_PATH" "build-output/Kalinal-${{ matrix.target.id }}-debug.apk"
-```
+### File 2: `.github/workflows/manual-build.yml` (New File)
+- **Role**: Comprehensive manual release and device artifact builder.
+- **Triggers**: `workflow_dispatch` only.
+- **Jobs**:
+  - `test-verification`: Runs unit tests first to ensure the selected ref builds cleanly.
+  - `build-universal`: Runs `./gradlew assembleDebug`, searches `app/build` for the APK, and packages `Kalinal-Universal-debug.apk`.
+  - `build-bundle-and-device-apks`: Runs `./gradlew bundleDebug`, uses official Google `bundletool` (v1.17.2) to extract:
+    - `Kalinal-Universal-from-bundle.apk`
+    - `Kalinal-arm64-v8a-standalone.apk`
+    - `Kalinal-armeabi-v7a-standalone.apk`
+    - `Kalinal-x86_64-standalone.apk`
+    - `Kalinal-AppBundle.aab`
+  - Uploads artifacts with 14-day retention.
+  - Publishes a formatted Markdown summary to `$GITHUB_STEP_SUMMARY`.
 
-### Step 2: Verification & Local Build Check
-- Run `compile_applet` to confirm Gradle build configuration integrity.
-- Verify the workflow syntax and parameter references.
+### File 3: `.github/workflows/android-ci.yml` (Deletion/Replacement)
+- The legacy single monolithic workflow file will be replaced by the two focused workflow files above to prevent dual-triggering or overlapping configurations.
 
-### Step 3: Git Diff & Push Instructions
-- Provide the exact diff and Git instructions so the user can push the fix to `github.com/a-zangooei/kalinal_byms_client`.
+---
 
-### Step 4: Phase 1.1 Mobile Runtime Testing Roadmap
-Once the CI pipeline is green across all 6 jobs:
-- Test real authentication on physical devices (network timeout handling, captive portals, intranet routing).
-- Validate ASP.NET session continuity (`ASP.NET_SessionId`) between captcha retrieval and RSA login POST.
-- Inspect weekly schedule rendering, day tabs, and meal reservation badges under varying network latencies.
+## 4. Verification & Validation Plan
+
+1. **Local Syntax & Compilation Verification**:
+   - Verify workflow YAML structures and schema validation.
+   - Run `compile_applet` to confirm no regressions in project dependencies or build configuration.
+2. **Workflow Trigger Verification**:
+   - Push a test commit to verify `.github/workflows/ci.yml` executes only the test suite and terminates quickly.
+   - Verify that no APK jobs are triggered by git push.
+3. **Manual Execution Verification**:
+   - Trigger `.github/workflows/manual-build.yml` via GitHub Actions web UI (`Run workflow`).
+   - Verify all 5 artifacts appear in the run's **Artifacts** panel:
+     - `Kalinal-Universal-APK`
+     - `Kalinal-arm64-v8a-APK`
+     - `Kalinal-armeabi-v7a-APK`
+     - `Kalinal-x86_64-APK`
+     - `Kalinal-AppBundle-AAB`
+4. **Binary Inspection**:
+   - Unzip generated APKs and verify presence of `classes.dex`, `resources.arsc`, and appropriate native `.so` architectures.
+
+---
+
+## 5. Risks & Compatibility Safeguards
+
+- **Keystore Missing Risk**: Runner initializes `debug.keystore` from `debug.keystore.base64` or generates one via `keytool` on the fly, preventing signing crashes.
+- **Runner Disk Space**: Cleaning intermediate caches before bundletool extraction prevents runner out-of-memory or out-of-disk errors.
+- **Secrets Security**: No API tokens, passwords, or credentials are logged or exposed.
+- **Zero Application Code Changes**: Neither Kotlin sources, XML layouts, nor Gradle dependency versions are altered.

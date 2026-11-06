@@ -1,0 +1,202 @@
+name: Manual Multi-Device Build (APK & AAB)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip Unit & Robolectric tests before building'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: manual-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: 🧪 Quality Verification
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Prepare Keystore & Secrets
+        run: |
+          touch .env
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          chmod +x gradlew
+
+      - name: Run Tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+  build:
+    name: 📦 Build All Devices & App Bundle
+    needs: [verify]
+    if: always() && (needs.verify.result == 'success' || inputs.skip_tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Prepare Keystore & Secrets
+        run: |
+          touch .env
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          chmod +x gradlew
+
+      - name: Build Universal APK & Android App Bundle
+        run: |
+          mkdir -p dist
+          ./gradlew assembleDebug bundleDebug --no-daemon --stacktrace
+
+          # Locate Universal APK
+          UNIVERSAL_APK=$(find app/build -type f -name "*debug.apk" | head -n 1)
+          if [ -z "$UNIVERSAL_APK" ]; then
+            echo "::error::Universal APK not found in build tree"
+            exit 1
+          fi
+          echo "Found Universal APK at $UNIVERSAL_APK"
+          cp "$UNIVERSAL_APK" dist/Kalinal-Universal-AllDevices-debug.apk
+
+          # Locate AAB
+          AAB_FILE=$(find app/build -type f -name "*debug.aab" | head -n 1)
+          if [ -z "$AAB_FILE" ]; then
+            echo "::error::App Bundle not found in build tree"
+            exit 1
+          fi
+          echo "Found App Bundle at $AAB_FILE"
+          cp "$AAB_FILE" dist/Kalinal-AppBundle-AllDevices.aab
+
+      - name: Extract Device Architecture APKs via Bundletool
+        run: |
+          curl -sSL -o bundletool.jar https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
+          
+          # Generate master splits archive
+          java -jar bundletool.jar build-apks \
+            --bundle=dist/Kalinal-AppBundle-AllDevices.aab \
+            --output=dist/Kalinal-Device-Splits.apks \
+            --mode=default
+
+          # 1. ARM64-v8a Device Specification & Extraction
+          cat << 'EOF' > spec-arm64.json
+          {
+            "supportedAbis": ["arm64-v8a"],
+            "supportedLocales": ["fa", "en"],
+            "screenDensity": 440,
+            "sdkVersion": 34
+          }
+          EOF
+          mkdir -p extracted_arm64 dist/arm64
+          java -jar bundletool.jar extract-apks \
+            --apks=dist/Kalinal-Device-Splits.apks \
+            --output-dir=extracted_arm64 \
+            --device-spec=spec-arm64.json
+          zip -j dist/arm64/Kalinal-arm64-v8a-device-apks.zip extracted_arm64/*.apk
+
+          # 2. ARMv7 (32-bit) Device Specification & Extraction
+          cat << 'EOF' > spec-armv7.json
+          {
+            "supportedAbis": ["armeabi-v7a"],
+            "supportedLocales": ["fa", "en"],
+            "screenDensity": 320,
+            "sdkVersion": 28
+          }
+          EOF
+          mkdir -p extracted_armv7 dist/armv7
+          java -jar bundletool.jar extract-apks \
+            --apks=dist/Kalinal-Device-Splits.apks \
+            --output-dir=extracted_armv7 \
+            --device-spec=spec-armv7.json
+          zip -j dist/armv7/Kalinal-armeabi-v7a-device-apks.zip extracted_armv7/*.apk
+
+          # 3. x86_64 Emulator & PC Device Specification & Extraction
+          cat << 'EOF' > spec-x86_64.json
+          {
+            "supportedAbis": ["x86_64"],
+            "supportedLocales": ["fa", "en"],
+            "screenDensity": 440,
+            "sdkVersion": 34
+          }
+          EOF
+          mkdir -p extracted_x86_64 dist/x86_64
+          java -jar bundletool.jar extract-apks \
+            --apks=dist/Kalinal-Device-Splits.apks \
+            --output-dir=extracted_x86_64 \
+            --device-spec=spec-x86_64.json
+          zip -j dist/x86_64/Kalinal-x86_64-device-apks.zip extracted_x86_64/*.apk
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-Universal-APK
+          path: dist/Kalinal-Universal-AllDevices-debug.apk
+          retention-days: 14
+
+      - name: Upload ARM64-v8a APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-arm64-v8a-APKs
+          path: dist/arm64/*.zip
+          retention-days: 14
+
+      - name: Upload ARMv7 APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-armeabi-v7a-APKs
+          path: dist/armv7/*.zip
+          retention-days: 14
+
+      - name: Upload x86_64 APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-x86_64-APKs
+          path: dist/x86_64/*.zip
+          retention-days: 14
+
+      - name: Upload Android App Bundle (AAB) & Master Splits
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-AppBundle-and-MasterSplits
+          path: |
+            dist/Kalinal-AppBundle-AllDevices.aab
+            dist/Kalinal-Device-Splits.apks
+          retention-days: 14
+
+      - name: Publish Summary to Actions Step Summary
+        run: |
+          echo "## 🚀 Kalinal Manual Multi-Device Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "تمام فایل‌های نصبی و پکیج‌های اختصاصی برای معماری‌های مختلف با موفقیت ساخته شدند:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| نام آرتیفکت | معماری / هدف | فرمت و کاربرد |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-Universal-APK** | تمام پردازنده‌ها (ARM32, ARM64, x86, x86_64) | فایل نصبی مستقیم (.apk) قابل نصب روی همه گوشی‌ها (اندروید ۷.۰ تا ۱۶) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-arm64-v8a-APKs** | گوشی‌های جدید ۶۴ بیتی | پکیج بهینه‌شده سبک‌تر برای گوشی‌های مدرن (سامسونگ، شیائومی، پیکسل و...) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-armeabi-v7a-APKs** | گوشی‌های قدیمی ۳۲ بیتی | پکیج سازگار با گوشی‌های قدیمی‌تر اندرویدی |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-x86_64-APKs** | شبیه‌سازها و کروم‌بوک‌ها | پکیج بهینه‌شده برای شبیه‌سازهای PC (مانند Android Studio و BlueStacks) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kalinal-AppBundle-and-MasterSplits** | استاندارد رسمی گوگل پلی | فرمت .aab و بسته کامل .apks جهت انتشار در فروشگاه‌ها یا نصب از طریق bundletool |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 برای دانلود، به بخش **Artifacts** در بالای صفحه اجرای این اکشن مراجعه فرمایید." >> $GITHUB_STEP_SUMMARY
