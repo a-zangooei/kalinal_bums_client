@@ -1,22 +1,22 @@
 package com.example
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import java.io.File
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
-@org.junit.Ignore("Robolectric SDK download requires external internet in offline container")
 class ExampleRobolectricTest {
 
   @Test
-  fun `read string from context`() {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val appName = context.getString(R.string.app_name)
-    assertEquals("کالینان", appName)
+  fun testAppNameResourceConfigured() {
+    val candidates = listOf(
+      File("app/src/main/res/values/strings.xml"),
+      File("src/main/res/values/strings.xml"),
+      File("res/values/strings.xml")
+    )
+    val file = candidates.find { it.exists() }
+    assertTrue("strings.xml must exist in resource directory", file != null)
+
+    val content = file!!.readText()
+    assertTrue("app_name must be defined as کالینان", content.contains("<string name=\"app_name\">کالینان</string>"))
   }
 }
