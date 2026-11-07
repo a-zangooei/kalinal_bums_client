@@ -1,4 +1,4 @@
-name: Android CI (Lightweight Automated Verification)
+name: Android CI (Automated Tests & Build)
 
 on:
   push:
@@ -49,3 +49,60 @@ jobs:
           name: unit-test-reports
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
+
+  build:
+    name: 📦 Build Android App (APK)
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Prepare Keystore & Secrets
+        run: |
+          touch .env
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK Artifact
+        run: |
+          mkdir -p dist
+          APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::Debug APK not found in app/build/outputs/apk/debug"
+            exit 1
+          fi
+          cp "$APK_FILE" dist/Kalinal-debug.apk
+          echo "Found and prepared Debug APK: dist/Kalinal-debug.apk"
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalinal-Debug-APK
+          path: dist/Kalinal-debug.apk
+          retention-days: 14
+
+      - name: Publish Build Summary
+        if: always()
+        run: |
+          echo "## 📦 Kalinal Automated Build Succeeded" >> $GITHUB_STEP_SUMMARY
+          echo "بیلد خودکار اپلیکیشن در گیت‌هاب اکشن با موفقیت انجام شد و فایل APK ایجاد گردید." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **شاخه:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **کامیت:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **آرتیفکت تولیدی:** \`Kalinal-Debug-APK\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **دانلود فایل:** از بخش **Artifacts** در بالای صفحه اجرای این اکشن قابل دریافت است." >> $GITHUB_STEP_SUMMARY
