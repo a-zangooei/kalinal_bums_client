@@ -203,6 +203,7 @@ class ReservationLiveHarUnitTest {
                         params.containsKey(row.chkReserveName)
                     )
                 }
+            }
         }
     }
 
