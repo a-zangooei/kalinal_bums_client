@@ -207,11 +207,18 @@ fun MealCard(
                 }
             }
 
-            // Interactive Actions Section (for Lunch when editable)
-            if (meal.mealType == MealType.LUNCH && meal.isEditable) {
+            // Interactive Actions Section (for Breakfast, Lunch, Dinner when editable and available)
+            val isActionable = meal.isEditable && (
+                meal.status == ReservationStatus.RESERVED ||
+                (meal.status == ReservationStatus.NOT_RESERVED && (meal.availableFoodOptions.isNotEmpty() || (meal.selectedFoodId != "-1" && meal.foodName.isNotBlank() && meal.foodName != "غذا انتخاب نشده است")))
+            )
+
+            if (isActionable) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(10.dp))
+
+                val mealTag = meal.mealType.name.lowercase()
 
                 if (isProcessing) {
                     Row(
@@ -222,7 +229,7 @@ fun MealCard(
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = TealPrimary
+                            color = mealColor
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -237,8 +244,8 @@ fun MealCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp)
-                            .testTag("reserve_lunch_button_${meal.dayIndex}"),
-                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                            .testTag("reserve_${mealTag}_button_${meal.dayIndex}"),
+                        colors = ButtonDefaults.buttonColors(containerColor = mealColor),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
@@ -248,7 +255,7 @@ fun MealCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "رزرو ناهار",
+                            text = "رزرو ${meal.mealType.titlePersian}",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -263,7 +270,7 @@ fun MealCard(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp)
-                                .testTag("cancel_lunch_button_${meal.dayIndex}"),
+                                .testTag("cancel_${mealTag}_button_${meal.dayIndex}"),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
@@ -288,9 +295,9 @@ fun MealCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(42.dp)
-                                    .testTag("change_lunch_button_${meal.dayIndex}"),
+                                    .testTag("change_${mealTag}_button_${meal.dayIndex}"),
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = TealPrimary
+                                    contentColor = mealColor
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {

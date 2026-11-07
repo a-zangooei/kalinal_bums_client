@@ -160,7 +160,7 @@ class MenuViewModel(
         cancelMeal(MealType.LUNCH, dayIndex)
 
     fun selectDay(index: Int) {
-        _selectedDayIndex.value = index.coerceIn(0, 6)
+        _selectedDayIndex.value = index.coerceIn(0, 4)
     }
 
     fun selectMealFilter(filter: MealType?) {

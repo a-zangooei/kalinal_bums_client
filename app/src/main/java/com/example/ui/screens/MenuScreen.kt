@@ -132,6 +132,10 @@ fun MenuScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
+    val visibleDays = remember(weeklyMenu) {
+        weeklyMenu?.days?.filter { it.dayIndex in 0..4 } ?: emptyList()
+    }
+
     LaunchedEffect(userSession) {
         viewModel.loadInitialMenu()
     }
@@ -324,7 +328,7 @@ fun MenuScreen(
 
                         // 3. Quick-jump Day Bar & Meal Type Filter
                         item {
-                            val days = weeklyMenu?.days ?: emptyList()
+                            val days = visibleDays
                             if (days.isNotEmpty()) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
@@ -342,13 +346,13 @@ fun MenuScreen(
                                     ) {
                                         items(days.size) { index ->
                                             val day = days[index]
-                                            val isSelected = index == selectedDayIndex
+                                            val isSelected = day.dayIndex == selectedDayIndex
                                             val hasReserved = day.meals.values.flatten().any { it.status.isReserved }
 
                                             FilterChip(
                                                 selected = isSelected,
                                                 onClick = {
-                                                    viewModel.selectDay(index)
+                                                    viewModel.selectDay(day.dayIndex)
                                                     coroutineScope.launch {
                                                         val targetIndex = calculateDayScrollIndex(days, index, selectedMealFilter)
                                                         listState.animateScrollToItem(targetIndex)
@@ -425,7 +429,7 @@ fun MenuScreen(
                         }
 
                         // 4. Continuous All-Week Days and Meals
-                        val days = weeklyMenu?.days ?: emptyList()
+                        val days = visibleDays
                         if (days.isEmpty()) {
                             item {
                                 Card(
