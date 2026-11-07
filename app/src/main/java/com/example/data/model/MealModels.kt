@@ -31,6 +31,20 @@ data class SelfOption(
     val isDefault: Boolean = false
 )
 
+data class TableRowSnapshot(
+    val mealType: MealType,
+    val dayIndex: Int,
+    val rowControlId: String, // e.g. "ctl02", "ctl06"
+    val chkReserveName: String, // e.g. "ctl00$cphMain$grdReservationLunch$ctl06$chkReserve"
+    val isChecked: Boolean,
+    val drpSelfName: String, // e.g. "ctl00$cphMain$grdReservationLunch$ctl06$drpSelf"
+    val drpSelfValue: String, // e.g. "1" or "-1"
+    val drpFoodName: String, // e.g. "ctl00$cphMain$grdReservationLunch$ctl06$drpFood"
+    val drpFoodValue: String, // e.g. "89247" or "-1"
+    val drpFoodCountName: String, // e.g. "ctl00$cphMain$grdReservationLunch$ctl06$drpFoodCount"
+    val drpFoodCountValue: String // e.g. "1" or "0"
+)
+
 data class MealItem(
     val id: String,
     val mealType: MealType,
@@ -68,7 +82,8 @@ data class WeeklyMenu(
     val creditValueRials: Long = 0,
     val viewState: String = "",
     val viewStateGenerator: String = "",
-    val eventValidation: String = ""
+    val eventValidation: String = "",
+    val tableRows: List<TableRowSnapshot> = emptyList()
 )
 
 enum class WeekNavigationDirection {

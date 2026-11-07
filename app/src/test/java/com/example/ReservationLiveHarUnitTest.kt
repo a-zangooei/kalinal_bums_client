@@ -150,4 +150,61 @@ class ReservationLiveHarUnitTest {
         assertEquals("1", cancelParams["ctl00\$cphMain\$grdReservationLunch\$ctl06\$drpFoodCount"])
         assertEquals("ذخیره ناهار", cancelParams["ctl00\$cphMain\$btnSaveLunch"])
     }
+
+    @Test
+    fun testChangeFood_PreservesAllOtherDays() {
+        // Load entry 1 where Wednesday is reserved, and Sunday, Monday, Tuesday were also previously reserved
+        val respText = loadEntryText(1)
+        val delta1 = DeltaParser.parse(respText)
+        val currentMenu = ReservationHtmlParser.parse(delta1.updatePanels["UpdatePanel1"]!!, delta1.hiddenFields["__VIEWSTATE"]!!)
+
+        // Ensure table rows snapshot was parsed
+        assertTrue("Table rows snapshot must not be empty", currentMenu.tableRows.isNotEmpty())
+
+        val repository = MenuRepository()
+
+        // User changes Wednesday food from 89247 to 89268
+        val changeFoodBody = repository.buildSaveLunchBody(
+            currentMenu = currentMenu,
+            targetDayIndex = 4, // Wednesday
+            targetFoodId = "89268",
+            targetSelfId = "1",
+            isCancelling = false
+        )
+
+        val params = (0 until changeFoodBody.size).associate {
+            changeFoodBody.name(it) to changeFoodBody.value(it)
+        }
+
+        // 1. Wednesday must be checked and updated to the new food ID
+        assertEquals("on", params["ctl00\$cphMain\$grdReservationLunch\$ctl06\$chkReserve"])
+        assertEquals("89268", params["ctl00\$cphMain\$grdReservationLunch\$ctl06\$drpFood"])
+        assertEquals("1", params["ctl00\$cphMain\$grdReservationLunch\$ctl06\$drpSelf"])
+        assertEquals("1", params["ctl00\$cphMain\$grdReservationLunch\$ctl06\$drpFoodCount"])
+
+        // 2. Any other day in lunch that was already checked in the snapshot must retain chkReserve = on
+        val lunchSnapshots = currentMenu.tableRows.filter { it.mealType == MealType.LUNCH }
+        for (row in lunchSnapshots) {
+            if (row.rowControlId != "ctl06") {
+                if (row.isChecked) {
+                    assertEquals(
+                        "Previously checked day ${row.rowControlId} must still be checked",
+                        "on",
+                        params[row.chkReserveName]
+                    )
+                    assertEquals(
+                        "Previously selected food for ${row.rowControlId} must be preserved",
+                        row.drpFoodValue,
+                        params[row.drpFoodName]
+                    )
+                } else {
+                    assertFalse(
+                        "Unchecked day ${row.rowControlId} must NOT have chkReserve",
+                        params.containsKey(row.chkReserveName)
+                    )
+                }
+            }
+        }
+    }
 }
+

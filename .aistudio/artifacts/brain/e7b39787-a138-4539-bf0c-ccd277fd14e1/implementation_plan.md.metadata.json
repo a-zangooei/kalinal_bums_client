@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan for adding Lunch Food Reservation ('رزرو') and Cancellation ('لغو رزرو') to Kalinal Android Client based on HAR analysis, ASP.NET WebForms delta parsing, ViewState chaining, confirmation dialogs, and comprehensive unit tests.",
-  "updatedAt": "2026-11-06T11:52:45.510302088Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Root cause analysis and implementation plan to fix the reservation and change-meal bug by replacing synthetic row generation with an exact HTML form state snapshot, ensuring other days' reservations are never cancelled when changing or reserving a single day.",
+  "updatedAt":  "2026-11-07T10:00:11.510026235Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }

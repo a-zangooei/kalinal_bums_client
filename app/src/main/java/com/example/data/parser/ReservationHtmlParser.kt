@@ -6,6 +6,7 @@ import com.example.data.model.MealItem
 import com.example.data.model.MealType
 import com.example.data.model.ReservationStatus
 import com.example.data.model.SelfOption
+import com.example.data.model.TableRowSnapshot
 import com.example.data.model.WeeklyMenu
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -15,9 +16,14 @@ object ReservationHtmlParser {
 
     private val DAY_NAMES = listOf("شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه")
 
+    private data class ParsedTableResult(
+        val meals: List<MealItem>,
+        val snapshots: List<TableRowSnapshot>
+    )
+
     /**
      * Parses the HTML content of either the full Reservation.aspx page or the UpdatePanel1
-     * fragment into a clean WeeklyMenu object.
+     * fragment into a clean WeeklyMenu object, capturing exact TableRowSnapshots from the DOM.
      */
     fun parse(html: String, existingViewState: String = "", existingGenerator: String = ""): WeeklyMenu {
         val doc: Document = Jsoup.parse(html)
@@ -67,15 +73,17 @@ object ReservationHtmlParser {
             )
         }.toMutableList()
 
-        // 6. Parse meals for Breakfast, Lunch, Dinner
-        val breakfastMeals = parseTableMeals(doc.select("#cphMain_grdReservationBreakfast").first(), MealType.BREAKFAST, daysList)
-        val lunchMeals = parseTableMeals(doc.select("#cphMain_grdReservationLunch").first(), MealType.LUNCH, daysList)
-        val dinnerMeals = parseTableMeals(doc.select("#cphMain_grdReservationDinner").first(), MealType.DINNER, daysList)
+        // 6. Parse meals and raw snapshots for Breakfast, Lunch, Dinner
+        val breakfastResult = parseTableMeals(doc.select("#cphMain_grdReservationBreakfast").first(), MealType.BREAKFAST, daysList)
+        val lunchResult = parseTableMeals(doc.select("#cphMain_grdReservationLunch").first(), MealType.LUNCH, daysList)
+        val dinnerResult = parseTableMeals(doc.select("#cphMain_grdReservationDinner").first(), MealType.DINNER, daysList)
 
         // Merge meals into their corresponding days
-        populateDayMeals(daysList, breakfastMeals, MealType.BREAKFAST)
-        populateDayMeals(daysList, lunchMeals, MealType.LUNCH)
-        populateDayMeals(daysList, dinnerMeals, MealType.DINNER)
+        populateDayMeals(daysList, breakfastResult.meals, MealType.BREAKFAST)
+        populateDayMeals(daysList, lunchResult.meals, MealType.LUNCH)
+        populateDayMeals(daysList, dinnerResult.meals, MealType.DINNER)
+
+        val allTableRows = breakfastResult.snapshots + lunchResult.snapshots + dinnerResult.snapshots
 
         return WeeklyMenu(
             weekDateRange = weekDateText,
@@ -86,7 +94,8 @@ object ReservationHtmlParser {
             creditValueRials = creditRials,
             viewState = viewState,
             viewStateGenerator = viewStateGenerator,
-            eventValidation = eventValidation
+            eventValidation = eventValidation,
+            tableRows = allTableRows
         )
     }
 
@@ -94,11 +103,18 @@ object ReservationHtmlParser {
         table: Element?,
         mealType: MealType,
         daysList: MutableList<DayMenu>
-    ): List<MealItem> {
-        if (table == null) return emptyList()
+    ): ParsedTableResult {
+        if (table == null) return ParsedTableResult(emptyList(), emptyList())
         val items = mutableListOf<MealItem>()
+        val snapshots = mutableListOf<TableRowSnapshot>()
 
         val rows = table.select("tr").filter { !it.hasClass("HeaderStyle") && it.select("td").size >= 6 }
+
+        val mealTypeName = when (mealType) {
+            MealType.BREAKFAST -> "Breakfast"
+            MealType.LUNCH -> "Lunch"
+            MealType.DINNER -> "Dinner"
+        }
 
         for ((index, row) in rows.withIndex()) {
             val tds = row.select("td")
@@ -107,7 +123,6 @@ object ReservationHtmlParser {
             // Determine dayIndex and date from td[1] if present, otherwise by row index
             val td1Text = if (tds.size > 1) tds[1].text().trim() else ""
             val dayIndex = resolveDayIndex(td1Text, index)
-            val rowControlId = "ctl%02d".format(dayIndex + 2)
 
             // Extract Jalali date (e.g. 1405/08/20 from "چهارشنبه 1405/08/20")
             val dateJalali = extractJalaliDate(td1Text)
@@ -124,8 +139,18 @@ object ReservationHtmlParser {
             val isDisabled = chkBox == null || chkBox.hasAttr("disabled") || row.hasClass("aspNetDisabled")
             val isEditable = !isDisabled
 
+            // Extract exact control name & ctl number from HTML attributes
+            val chkBoxNameAttr = chkBox?.attr("name")?.takeIf { it.isNotEmpty() }
+            val ctlMatch = chkBoxNameAttr?.let { Regex("""\$(ctl\d+)\$""").find(it) }?.groupValues?.get(1)
+                ?: "ctl%02d".format(dayIndex + 2)
+
+            val finalChkName = chkBoxNameAttr ?: "ctl00\$cphMain\$grdReservation${mealTypeName}\$${ctlMatch}\$chkReserve"
+
             // td[2]: Dining Hall (سلف)
             val selfSelect = tds[2].select("select").first()
+            val selfName = selfSelect?.attr("name")?.takeIf { it.isNotEmpty() }
+                ?: "ctl00\$cphMain\$grdReservation${mealTypeName}\$${ctlMatch}\$drpSelf"
+
             val selfOptions = selfSelect?.select("option")?.mapNotNull { opt ->
                 val valId = opt.attr("value")
                 val optText = opt.text().trim()
@@ -144,6 +169,9 @@ object ReservationHtmlParser {
 
             // td[3]: Food selection (غذا)
             val foodSelect = tds[3].select("select").first()
+            val foodName = foodSelect?.attr("name")?.takeIf { it.isNotEmpty() }
+                ?: "ctl00\$cphMain\$grdReservation${mealTypeName}\$${ctlMatch}\$drpFood"
+
             val foodOptions = foodSelect?.select("option")?.mapNotNull { opt ->
                 val valId = opt.attr("value")
                 val rawText = opt.text().trim()
@@ -165,6 +193,9 @@ object ReservationHtmlParser {
 
             // td[4]: Count (تعداد)
             val countSelect = tds[4].select("select").first()
+            val countName = countSelect?.attr("name")?.takeIf { it.isNotEmpty() }
+                ?: "ctl00\$cphMain\$grdReservation${mealTypeName}\$${ctlMatch}\$drpFoodCount"
+
             val count = countSelect?.select("option[selected]")?.text()?.toIntOrNull() ?: if (isChecked) 1 else 0
 
             // td[5]: Calories (کالری)
@@ -190,7 +221,7 @@ object ReservationHtmlParser {
                     id = id,
                     mealType = mealType,
                     dayIndex = dayIndex,
-                    tableRowIndex = rowControlId,
+                    tableRowIndex = ctlMatch,
                     foodName = cleanFoodName,
                     diningHall = diningHall,
                     priceRials = priceRials,
@@ -206,9 +237,25 @@ object ReservationHtmlParser {
                     availableSelfOptions = selfOptions
                 )
             )
+
+            snapshots.add(
+                TableRowSnapshot(
+                    mealType = mealType,
+                    dayIndex = dayIndex,
+                    rowControlId = ctlMatch,
+                    chkReserveName = finalChkName,
+                    isChecked = isChecked,
+                    drpSelfName = selfName,
+                    drpSelfValue = if (selectedSelfId != "-1") selectedSelfId else "-1",
+                    drpFoodName = foodName,
+                    drpFoodValue = if (selectedFoodId != "-1") selectedFoodId else "-1",
+                    drpFoodCountName = countName,
+                    drpFoodCountValue = if (isChecked || count > 0) count.coerceAtLeast(1).toString() else "0"
+                )
+            )
         }
 
-        return items
+        return ParsedTableResult(items, snapshots)
     }
 
     private fun resolveDayIndex(td1Text: String, defaultIndex: Int): Int {
