@@ -6,7 +6,6 @@
 [![Latest Release](https://img.shields.io/github/v/release/a-zangooei/kalinal_byms_client?color=blue&logo=github&label=Release)](https://github.com/a-zangooei/kalinal_byms_client/releases/latest)
 [![Total Downloads](https://img.shields.io/github/downloads/a-zangooei/kalinal_byms_client/total?color=success&logo=android&label=Downloads)](https://github.com/a-zangooei/kalinal_byms_client/releases)
 [![Android CI](https://github.com/a-zangooei/kalinal_byms_client/actions/workflows/ci.yml/badge.svg)](https://github.com/a-zangooei/kalinal_byms_client/actions/workflows/ci.yml)
-[![Dependabot](https://img.shields.io/badge/Dependabot-Active-blue?logo=dependabot)](.github/dependabot.yml)
 [![Direct University Connection](https://img.shields.io/badge/Server-Direct%20to%20jeton.bums.ac.ir-success.svg)](#-امنیت-و-حفظ-حریم-خصوصی-تعهد-شفاف)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
