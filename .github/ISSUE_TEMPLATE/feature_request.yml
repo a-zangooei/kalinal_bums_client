@@ -1,0 +1,32 @@
+name: 💡 پیشنهاد قابلیت جدید (Feature Request)
+description: قابلیتی در ذهن دارید که تجربه استفاده از سامانه تغذیه را بهتر کند؟ مطرح کنید.
+title: "[پیشنهاد]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ایده‌ها و پیشنهادات شما به پیشرفت کالینان کمک می‌کند. لطفاً قابلیت پیشنهادی را شرح دهید.
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: شرح قابلیت پیشنهادی
+      description: مایلید چه قابلیتی به برنامه اضافه شود؟ این قابلیت چگونه کار خواهد کرد؟
+      placeholder: مثال: اضافه شدن یادآور خودکار (نوتیفیکیشن) برای رزرو غذای هفته آینده قبل از پایان مهلت چهارشنبه‌ها...
+    validations:
+      required: true
+  - type: textarea
+    id: problem-solution
+    attributes:
+      label: این قابلیت چه مشکلی را حل می‌کند؟
+      description: چرا این ویژگی برای دانشجویان مفید است؟
+      placeholder: دانشجویان زیادی به دلیل فراموشی مهلت رزرو غذا در روزهای آخر هفته جریمه می‌شوند...
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: راه‌حل‌های جایگزین یا ایده‌های طراحی
+      description: آیا نمونه‌ای در برنامه‌های دیگر دیده‌اید یا پیشنهادی برای ظاهر آن دارید؟
+    validations:
+      required: false

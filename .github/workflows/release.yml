@@ -1,0 +1,247 @@
+name: Automated Release & Signed Distribution
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip Unit tests before building (Not recommended)'
+        required: false
+        default: false
+        type: boolean
+      custom_release_tag:
+        description: 'Release Tag (leave empty if triggered from tag, e.g. v1.0.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: 🧪 Quality Verification
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Prepare Keystore & Secrets
+        run: |
+          touch .env
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          chmod +x gradlew
+
+      - name: Run Tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+  build-and-release:
+    name: 🔐 Build Signed Release & Publish Direct APKs
+    needs: [verify]
+    if: always() && (needs.verify.result == 'success' || inputs.skip_tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Validate Release Signing Secrets
+        run: |
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_KEYSTORE_BASE64'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RELEASE_STORE_PASSWORD }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_STORE_PASSWORD'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RELEASE_KEY_PASSWORD }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_KEY_PASSWORD'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Setup Ephemeral Release Keystore & Environment
+        run: |
+          touch .env
+          chmod +x gradlew
+          KEYSTORE_PATH="${{ runner.temp }}/kalinal-release.p12"
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+
+      - name: Determine Release Tag and Naming
+        run: |
+          if [ -n "${{ inputs.custom_release_tag }}" ]; then
+            TAG="${{ inputs.custom_release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            TAG="v1.0-${SHORT_SHA}"
+          fi
+
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          echo "Building official release direct APKs for tag: $TAG (commit: $SHORT_SHA)"
+
+      - name: Build Signed Universal APK and Android App Bundle
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/kalinal-release.p12
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'upload' }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          mkdir -p dist
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+
+          RAW_RELEASE_APK=$(find app/build -type f -name "*release.apk" | head -n 1)
+          if [ -z "$RAW_RELEASE_APK" ]; then
+            echo "::error::Release APK not found in build tree"
+            exit 1
+          fi
+
+          # 1. Main Direct Installable APK (No zip, direct tap-to-install on all phones)
+          PRIMARY_APK="dist/Kalinal-${RELEASE_TAG}-release.apk"
+          cp "$RAW_RELEASE_APK" "$PRIMARY_APK"
+
+          # 2. Universal Alias APK (for backward compatibility)
+          UNIVERSAL_APK="dist/Kalinal-${RELEASE_TAG}-Universal-release.apk"
+          cp "$RAW_RELEASE_APK" "$UNIVERSAL_APK"
+
+          # 3. Android App Bundle (for Google Play / stores)
+          AAB_FILE=$(find app/build -type f -name "*release.aab" | head -n 1)
+          if [ -z "$AAB_FILE" ]; then
+            echo "::error::Release App Bundle not found in build tree"
+            exit 1
+          fi
+          FINAL_AAB="dist/Kalinal-${RELEASE_TAG}-AppBundle.aab"
+          cp "$AAB_FILE" "$FINAL_AAB"
+
+          echo "PRIMARY_APK=$PRIMARY_APK" >> $GITHUB_ENV
+          echo "UNIVERSAL_APK=$UNIVERSAL_APK" >> $GITHUB_ENV
+          echo "FINAL_AAB=$FINAL_AAB" >> $GITHUB_ENV
+
+      - name: Mandatory Signature & Certificate Audit
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+
+          extract_apk_fingerprint() {
+            local target_apk="$1"
+            local raw_output
+            raw_output=$("$APKSIGNER" verify --print-certs "$target_apk" 2>&1)
+            local fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -i "digest" | sed -E 's/.*SHA-256.*digest:?[[:space:]]*//I' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
+            if ! echo "$fp" | grep -qE '^[0-9a-f]{64}$'; then
+              fp=$(echo "$raw_output" | grep -i "SHA-256" | grep -oE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}|[0-9a-fA-F]{64}' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]' | head -n 1)
+            fi
+            echo "$fp"
+          }
+
+          MASTER_FINGERPRINT=$(extract_apk_fingerprint "$PRIMARY_APK")
+          if [ -z "$MASTER_FINGERPRINT" ]; then
+            echo "::error::Failed to extract release signature from Release APK!"
+            exit 1
+          fi
+          echo "MASTER_FINGERPRINT=$MASTER_FINGERPRINT" >> $GITHUB_ENV
+          echo "Verified Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
+
+      - name: Generate Checksums & Release Metadata
+        run: |
+          cd dist
+          sha256sum *.apk *.aab 2>/dev/null > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat << EOF > dist/release-metadata.json
+          {
+            "appName": "Kalinal",
+            "applicationId": "com.aistudio.cullinan.vfkzrw",
+            "releaseTag": "$RELEASE_TAG",
+            "gitCommitSha": "${{ github.sha }}",
+            "buildTimestamp": "$BUILD_DATE",
+            "certificateSha256": "$MASTER_FINGERPRINT",
+            "signatureVerified": true,
+            "distributionFormat": "direct_apk"
+          }
+          EOF
+
+      - name: Secure Keystore Cleanup
+        if: always()
+        run: |
+          shred -u "${{ runner.temp }}/kalinal-release.p12" 2>/dev/null || rm -f "${{ runner.temp }}/kalinal-release.p12"
+          echo "Temporary release keystore securely destroyed."
+
+      - name: Publish Official GitHub Release (Direct APKs Only)
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: کالینان (Kalinal) نسخه ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.apk
+            dist/*.aab
+            dist/SHA256SUMS.txt
+            dist/release-metadata.json
+          body: |
+            ## 🍱 کالینان (Kalinal) - نسخه ${{ env.RELEASE_TAG }}
+            کلاینت مدرن، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
+
+            ---
+
+            ### 📲 دانلود مستقیم فایل نصبی (بدون نیاز به آنزیپ)
+            کلیه فایل‌ها به صورت مستقیم با پسوند **`.apk`** منتشر شده‌اند و با یک لمس روی تمامی گوشی‌ها و تبلت‌های اندرویدی نصب می‌شوند:
+
+            | فایل نصبی | توضیحات و سازگاری | وضعیت امضا |
+            |---|---|:---:|
+            | 📥 **[`Kalinal-${{ env.RELEASE_TAG }}-release.apk`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinal-${{ env.RELEASE_TAG }}-release.apk)** | **فایل اصلی نصب مستقیم** (سازگار با ۱۰۰٪ گوشی‌های سامسونگ، شیائومی، هواوی و...) | ✅ امضای رسمی و دائمی |
+            | 📥 **[`Kalinal-${{ env.RELEASE_TAG }}-AppBundle.aab`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinal-${{ env.RELEASE_TAG }}-AppBundle.aab)** | بسته استاندارد توزیع فروشگاهی (AAB) | ✅ امضای رسمی و دائمی |
+
+            ---
+
+            ### 🔒 راستی‌آزمایی و اصالت فایل‌ها (Digital Signature)
+            کلیه فایل‌ها با کلید دائمی ریلیز پروژه امضا و توسط ابزار رسمی اندروید `apksigner` تأیید شده‌اند.
+            - **شناسه کامیت (Git SHA):** `${{ github.sha }}`
+            - **اثرانگشت کلید امضا (SHA-256):**
+              `${{ env.MASTER_FINGERPRINT }}`
+
+            کدهای هش فایل‌ها در سند `SHA256SUMS.txt` ضمیمه شده است.
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'rc') }}
+
+      - name: Publish Release Step Summary
+        run: |
+          echo "## 🚀 انتشار مستقیم فایل‌های نصبی کالینان $RELEASE_TAG با موفقیت انجام شد!" >> $GITHUB_STEP_SUMMARY
+          echo "کلیه فایل‌ها به صورت مستقیم با فرمت APK منتشر شدند و هیچ فایل فشرده‌ای (ZIP) وجود ندارد." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **تگ نسخه:** \`$RELEASE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **فایل مستقیم:** \`Kalinal-$RELEASE_TAG-release.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **هش گواهی امضا:** \`$MASTER_FINGERPRINT\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **لینک ریلیزها:** [مشاهده صفحه Releases در گیت‌هاب](https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }})" >> $GITHUB_STEP_SUMMARY

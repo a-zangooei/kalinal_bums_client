@@ -1,0 +1,66 @@
+name: 🐛 گزارش خطا یا باگ (Bug Report)
+description: مشکلی در ورود به سامانه، رزرو یا لغو غذا، یا نمایش برنامه دارید؟ گزارش دهید.
+title: "[باگ]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        با تشکر از همکاری شما در بهبود برنامه کالینان! لطفاً فرم زیر را به دقت پر کنید تا مشکل سریع‌تر بررسی و رفع شود.
+  - type: dropdown
+    id: issue-category
+    attributes:
+      label: بخش مربوط به خطا
+      description: مشکل در کدام قسمت اپلیکیشن رخ داده است؟
+      options:
+        - "ورود به حساب کاربری (Login / Captcha)"
+        - "رزرو غذا یا تغییر غذا"
+        - "لغو رزرو غذا"
+        - "نمایش اعتبار یا مشخصات کاربر"
+        - "نمایش برنامه غذایی هفتگی"
+        - "کرش یا بسته شدن ناگهانی برنامه"
+        - "سایر موارد"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: شرح مشکل
+      description: دقیقاً چه خطایی رخ می‌دهد؟ چه پیامی نمایش داده می‌شود؟
+      placeholder: به عنوان مثال، بعد از انتخاب غذای چهارشنبه و زدن دکمه تایید، پیام خطا نمایش داده شد...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: مراحل بازتولید خطا
+      description: برای اینکه ما بتوانیم خطا را شبیه‌سازی کنیم، چه کارهایی باید انجام دهیم؟
+      value: |
+        ۱. وارد صفحه ... شدم.
+        ۲. روی گزینه ... کلیک کردم.
+        ۳. خطای ... رخ داد.
+    validations:
+      required: true
+  - type: input
+    id: device-info
+    attributes:
+      label: مشخصات دستگاه و نسخه اندروید
+      description: مدل گوشی و نسخه اندروید شما چیست؟
+      placeholder: مثال: Samsung Galaxy A54 - Android 14
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: نسخه اپلیکیشن کالینان
+      description: نسخه برنامه‌ای که نصب دارید چیست؟ (در بخش اطلاعات یا درباره برنامه)
+      placeholder: مثال: v1.0.0
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: اسکرین‌شات یا تصویر خطا
+      description: در صورت امکان تصویری از خطای رخ‌داده را اینجا بکشید و رها کنید (Drag & Drop).
+    validations:
+      required: false
