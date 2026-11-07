@@ -203,8 +203,55 @@ class ReservationLiveHarUnitTest {
                         params.containsKey(row.chkReserveName)
                     )
                 }
-            }
         }
     }
+
+    @Test
+    fun testBuildSaveMealBody_BreakfastAndDinner() {
+        val respText = loadEntryText(0)
+        val delta0 = DeltaParser.parse(respText)
+        val currentMenu = ReservationHtmlParser.parse(delta0.updatePanels["UpdatePanel1"]!!, delta0.hiddenFields["__VIEWSTATE"]!!)
+
+        val repository = MenuRepository()
+
+        // 1. Breakfast reservation payload test
+        val breakfastBody = repository.buildSaveMealBody(
+            currentMenu = currentMenu,
+            mealType = MealType.BREAKFAST,
+            targetDayIndex = 1, // Sunday (ctl03)
+            targetFoodId = "77112",
+            targetSelfId = "1",
+            isCancelling = false
+        )
+        val breakfastParams = (0 until breakfastBody.size).associate {
+            breakfastBody.name(it) to breakfastBody.value(it)
+        }
+        assertEquals("ctl00\$UpdatePanel1|ctl00\$cphMain\$btnSaveBreakfast", breakfastParams["ctl00\$ScriptManager"])
+        assertEquals("css3-tabstrip-0-0", breakfastParams["ctl00\$cphMain\$hdnSelectedTab"])
+        assertEquals("ذخیره صبحانه", breakfastParams["ctl00\$cphMain\$btnSaveBreakfast"])
+        assertEquals("on", breakfastParams["ctl00\$cphMain\$grdReservationBreakfast\$ctl03\$chkReserve"])
+        assertEquals("77112", breakfastParams["ctl00\$cphMain\$grdReservationBreakfast\$ctl03\$drpFood"])
+        assertEquals("1", breakfastParams["ctl00\$cphMain\$grdReservationBreakfast\$ctl03\$drpSelf"])
+
+        // 2. Dinner reservation payload test
+        val dinnerBody = repository.buildSaveMealBody(
+            currentMenu = currentMenu,
+            mealType = MealType.DINNER,
+            targetDayIndex = 2, // Monday (ctl04)
+            targetFoodId = "77334",
+            targetSelfId = "1",
+            isCancelling = false
+        )
+        val dinnerParams = (0 until dinnerBody.size).associate {
+            dinnerBody.name(it) to dinnerBody.value(it)
+        }
+        assertEquals("ctl00\$UpdatePanel1|ctl00\$cphMain\$btnSaveDinner", dinnerParams["ctl00\$ScriptManager"])
+        assertEquals("css3-tabstrip-0-2", dinnerParams["ctl00\$cphMain\$hdnSelectedTab"])
+        assertEquals("ذخیره شام", dinnerParams["ctl00\$cphMain\$btnSaveDinner"])
+        assertEquals("on", dinnerParams["ctl00\$cphMain\$grdReservationDinner\$ctl04\$chkReserve"])
+        assertEquals("77334", dinnerParams["ctl00\$cphMain\$grdReservationDinner\$ctl04\$drpFood"])
+        assertEquals("1", dinnerParams["ctl00\$cphMain\$grdReservationDinner\$ctl04\$drpSelf"])
+    }
 }
+
 

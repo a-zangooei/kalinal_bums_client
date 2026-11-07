@@ -83,7 +83,7 @@ class MenuViewModel(
         }
     }
 
-    fun reserveLunch(dayIndex: Int, foodId: String, selfId: String) {
+    fun reserveMeal(mealType: MealType, dayIndex: Int, foodId: String, selfId: String) {
         val current = _weeklyMenu.value ?: return
         if (_isMutating.value) return
 
@@ -92,8 +92,9 @@ class MenuViewModel(
             _processingDayIndex.value = dayIndex
             _errorMessage.value = null
 
-            val result = menuRepository.reserveLunch(
+            val result = menuRepository.reserveMeal(
                 currentMenu = current,
+                mealType = mealType,
                 targetDayIndex = dayIndex,
                 targetFoodId = foodId,
                 targetSelfId = selfId
@@ -108,7 +109,7 @@ class MenuViewModel(
                     _errorMessage.value = res.message
                 }
             }.onFailure { error ->
-                val msg = error.message ?: "خطا در ارسال درخواست رزرو"
+                val msg = error.message ?: "خطا در ارسال درخواست رزرو ${mealType.titlePersian}"
                 _errorMessage.value = msg
                 _userFeedback.value = Pair(msg, false)
             }
@@ -118,7 +119,7 @@ class MenuViewModel(
         }
     }
 
-    fun cancelLunch(dayIndex: Int) {
+    fun cancelMeal(mealType: MealType, dayIndex: Int) {
         val current = _weeklyMenu.value ?: return
         if (_isMutating.value) return
 
@@ -127,8 +128,9 @@ class MenuViewModel(
             _processingDayIndex.value = dayIndex
             _errorMessage.value = null
 
-            val result = menuRepository.cancelLunch(
+            val result = menuRepository.cancelMeal(
                 currentMenu = current,
+                mealType = mealType,
                 targetDayIndex = dayIndex
             )
 
@@ -141,7 +143,7 @@ class MenuViewModel(
                     _errorMessage.value = res.message
                 }
             }.onFailure { error ->
-                val msg = error.message ?: "خطا در ارسال درخواست لغو رزرو"
+                val msg = error.message ?: "خطا در ارسال درخواست لغو رزرو ${mealType.titlePersian}"
                 _errorMessage.value = msg
                 _userFeedback.value = Pair(msg, false)
             }
@@ -150,6 +152,12 @@ class MenuViewModel(
             _isMutating.value = false
         }
     }
+
+    fun reserveLunch(dayIndex: Int, foodId: String, selfId: String) =
+        reserveMeal(MealType.LUNCH, dayIndex, foodId, selfId)
+
+    fun cancelLunch(dayIndex: Int) =
+        cancelMeal(MealType.LUNCH, dayIndex)
 
     fun selectDay(index: Int) {
         _selectedDayIndex.value = index.coerceIn(0, 6)

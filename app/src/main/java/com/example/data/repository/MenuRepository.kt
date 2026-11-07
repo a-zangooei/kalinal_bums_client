@@ -110,16 +110,18 @@ class MenuRepository {
         }
     }
 
-    suspend fun reserveLunch(
+    suspend fun reserveMeal(
         currentMenu: WeeklyMenu,
+        mealType: MealType,
         targetDayIndex: Int,
         targetFoodId: String,
         targetSelfId: String
     ): Result<ReservationResult> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
-                val formBody = buildSaveLunchBody(
+                val formBody = buildSaveMealBody(
                     currentMenu = currentMenu,
+                    mealType = mealType,
                     targetDayIndex = targetDayIndex,
                     targetFoodId = targetFoodId,
                     targetSelfId = targetSelfId,
@@ -158,7 +160,7 @@ class MenuRepository {
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
                 val message = deltaResponse.toastMessage
-                    ?: if (isSuccess) "رزرو غذا با موفقیت انجام شد" else "خطا در پردازش رزرو توسط سرور سلف"
+                    ?: if (isSuccess) "رزرو ${mealType.titlePersian} با موفقیت انجام شد" else "خطا در پردازش رزرو توسط سرور سلف"
 
                 Result.success(
                     ReservationResult(
@@ -174,21 +176,23 @@ class MenuRepository {
         }
     }
 
-    suspend fun cancelLunch(
+    suspend fun cancelMeal(
         currentMenu: WeeklyMenu,
+        mealType: MealType,
         targetDayIndex: Int
     ): Result<ReservationResult> = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 val targetMeal = currentMenu.days.getOrNull(targetDayIndex)
-                    ?.meals?.get(MealType.LUNCH)?.firstOrNull()
+                    ?.meals?.get(mealType)?.firstOrNull()
 
                 val foodId = targetMeal?.selectedFoodId?.takeIf { it != "-1" }
                     ?: targetMeal?.availableFoodOptions?.firstOrNull()?.id ?: "-1"
                 val selfId = targetMeal?.selectedSelfId?.takeIf { it != "-1" } ?: "1"
 
-                val formBody = buildSaveLunchBody(
+                val formBody = buildSaveMealBody(
                     currentMenu = currentMenu,
+                    mealType = mealType,
                     targetDayIndex = targetDayIndex,
                     targetFoodId = foodId,
                     targetSelfId = selfId,
@@ -227,7 +231,7 @@ class MenuRepository {
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
                 val message = deltaResponse.toastMessage
-                    ?: if (isSuccess) "لغو رزرو غذا با موفقیت انجام شد" else "خطا در لغو رزرو توسط سرور سلف"
+                    ?: if (isSuccess) "لغو رزرو ${mealType.titlePersian} با موفقیت انجام شد" else "خطا در لغو رزرو توسط سرور سلف"
 
                 Result.success(
                     ReservationResult(
@@ -243,8 +247,46 @@ class MenuRepository {
         }
     }
 
+    suspend fun reserveLunch(
+        currentMenu: WeeklyMenu,
+        targetDayIndex: Int,
+        targetFoodId: String,
+        targetSelfId: String
+    ): Result<ReservationResult> = reserveMeal(
+        currentMenu = currentMenu,
+        mealType = MealType.LUNCH,
+        targetDayIndex = targetDayIndex,
+        targetFoodId = targetFoodId,
+        targetSelfId = targetSelfId
+    )
+
+    suspend fun cancelLunch(
+        currentMenu: WeeklyMenu,
+        targetDayIndex: Int
+    ): Result<ReservationResult> = cancelMeal(
+        currentMenu = currentMenu,
+        mealType = MealType.LUNCH,
+        targetDayIndex = targetDayIndex
+    )
+
     fun buildSaveLunchBody(
         currentMenu: WeeklyMenu,
+        targetDayIndex: Int,
+        targetFoodId: String,
+        targetSelfId: String,
+        isCancelling: Boolean
+    ): FormBody = buildSaveMealBody(
+        currentMenu = currentMenu,
+        mealType = MealType.LUNCH,
+        targetDayIndex = targetDayIndex,
+        targetFoodId = targetFoodId,
+        targetSelfId = targetSelfId,
+        isCancelling = isCancelling
+    )
+
+    fun buildSaveMealBody(
+        currentMenu: WeeklyMenu,
+        mealType: MealType,
         targetDayIndex: Int,
         targetFoodId: String,
         targetSelfId: String,
@@ -252,149 +294,117 @@ class MenuRepository {
     ): FormBody {
         val builder = FormBody.Builder()
 
-        // 1. ScriptManager & Tab Selection
-        builder.add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|ctl00\$cphMain\$btnSaveLunch")
-        builder.add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
+        val (btnId, btnValue, tabId) = when (mealType) {
+            MealType.BREAKFAST -> Triple("ctl00\$cphMain\$btnSaveBreakfast", "ذخیره صبحانه", "css3-tabstrip-0-0")
+            MealType.LUNCH -> Triple("ctl00\$cphMain\$btnSaveLunch", "ذخیره ناهار", "css3-tabstrip-0-1")
+            MealType.DINNER -> Triple("ctl00\$cphMain\$btnSaveDinner", "ذخیره شام", "css3-tabstrip-0-2")
+        }
 
-        val breakfastRows = currentMenu.tableRows.filter { it.mealType == MealType.BREAKFAST }
-        val lunchRows = currentMenu.tableRows.filter { it.mealType == MealType.LUNCH }
-        val dinnerRows = currentMenu.tableRows.filter { it.mealType == MealType.DINNER }
+        // 1. ScriptManager & Selected Tab
+        builder.add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$btnId")
+        builder.add("ctl00\$cphMain\$hdnSelectedTab", tabId)
 
-        // 2. Breakfast rows (from snapshot or fallback)
-        if (breakfastRows.isNotEmpty()) {
-            for (row in breakfastRows) {
-                if (row.isChecked) {
-                    builder.add(row.chkReserveName, "on")
-                    builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
-                    builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
-                    builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
-                } else {
-                    builder.add(row.drpSelfName, "-1")
-                    builder.add(row.drpFoodName, "-1")
-                    builder.add(row.drpFoodCountName, "0")
+        fun appendMealRows(type: MealType, mealTypeName: String) {
+            val rows = currentMenu.tableRows.filter { it.mealType == type }
+            val isTargetType = (type == mealType)
+
+            if (rows.isNotEmpty()) {
+                for (row in rows) {
+                    if (isTargetType && row.dayIndex == targetDayIndex) {
+                        val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
+                            targetSelfId
+                        } else {
+                            row.drpSelfValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "1"
+                        }
+
+                        val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
+                            targetFoodId
+                        } else {
+                            row.drpFoodValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "-1"
+                        }
+
+                        if (!isCancelling) {
+                            builder.add(row.chkReserveName, "on")
+                        }
+                        builder.add(row.drpSelfName, selfVal)
+                        builder.add(row.drpFoodName, foodVal)
+                        builder.add(row.drpFoodCountName, "1")
+                    } else {
+                        // Preserve existing state of other rows
+                        if (row.isChecked) {
+                            builder.add(row.chkReserveName, "on")
+                            builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
+                            builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
+                            builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
+                        } else {
+                            builder.add(row.drpSelfName, "-1")
+                            builder.add(row.drpFoodName, "-1")
+                            builder.add(row.drpFoodCountName, "0")
+                        }
+                    }
                 }
-            }
-        } else {
-            for (dayIdx in 0..6) {
-                val ctl = "ctl%02d".format(dayIdx + 2)
-                builder.add("ctl00\$cphMain\$grdReservationBreakfast\$$ctl\$drpSelf", "-1")
-                builder.add("ctl00\$cphMain\$grdReservationBreakfast\$$ctl\$drpFood", "-1")
-                builder.add("ctl00\$cphMain\$grdReservationBreakfast\$$ctl\$drpFoodCount", "0")
+            } else {
+                for (dayIdx in 0..6) {
+                    val ctl = "ctl%02d".format(dayIdx + 2)
+                    val meal = currentMenu.days.getOrNull(dayIdx)?.meals?.get(type)?.firstOrNull()
+
+                    if (isTargetType && dayIdx == targetDayIndex) {
+                        val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
+                            targetSelfId
+                        } else {
+                            meal?.selectedSelfId?.takeIf { it != "-1" } ?: "1"
+                        }
+
+                        val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
+                            targetFoodId
+                        } else {
+                            meal?.selectedFoodId?.takeIf { it != "-1" }
+                                ?: meal?.availableFoodOptions?.firstOrNull()?.id
+                                ?: "-1"
+                        }
+
+                        if (!isCancelling) {
+                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
+                        }
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", selfVal)
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", foodVal)
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "1")
+                    } else {
+                        if (meal != null && meal.status.isReserved) {
+                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
+                            builder.add(
+                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf",
+                                meal.selectedSelfId.takeIf { it != "-1" } ?: "1"
+                            )
+                            builder.add(
+                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood",
+                                meal.selectedFoodId.takeIf { it != "-1" } ?: "-1"
+                            )
+                            builder.add(
+                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount",
+                                meal.count.coerceAtLeast(1).toString()
+                            )
+                        } else {
+                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", "-1")
+                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", "-1")
+                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "0")
+                        }
+                    }
+                }
             }
         }
 
-        // 3. Active tab indicator
+        // 2. Breakfast rows
+        appendMealRows(MealType.BREAKFAST, "Breakfast")
+
+        // 3. Tab radio indicator
         builder.add("css3-tabstrip-0", "on")
 
-        // 4. Lunch rows (from snapshot or fallback)
-        if (lunchRows.isNotEmpty()) {
-            for (row in lunchRows) {
-                if (row.dayIndex == targetDayIndex) {
-                    val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
-                        targetSelfId
-                    } else {
-                        row.drpSelfValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "1"
-                    }
+        // 4. Lunch rows
+        appendMealRows(MealType.LUNCH, "Lunch")
 
-                    val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
-                        targetFoodId
-                    } else {
-                        row.drpFoodValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "-1"
-                    }
-
-                    if (!isCancelling) {
-                        builder.add(row.chkReserveName, "on")
-                    }
-                    builder.add(row.drpSelfName, selfVal)
-                    builder.add(row.drpFoodName, foodVal)
-                    builder.add(row.drpFoodCountName, "1")
-                } else {
-                    // PRESERVE OTHER DAYS EXACT STATE
-                    if (row.isChecked) {
-                        builder.add(row.chkReserveName, "on")
-                        builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
-                        builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
-                        builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
-                    } else {
-                        builder.add(row.drpSelfName, "-1")
-                        builder.add(row.drpFoodName, "-1")
-                        builder.add(row.drpFoodCountName, "0")
-                    }
-                }
-            }
-        } else {
-            // Fallback if snapshots not present
-            for (dayIdx in 0..6) {
-                val ctl = "ctl%02d".format(dayIdx + 2)
-                val meal = currentMenu.days.getOrNull(dayIdx)?.meals?.get(MealType.LUNCH)?.firstOrNull()
-
-                if (dayIdx == targetDayIndex) {
-                    val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
-                        targetSelfId
-                    } else {
-                        meal?.selectedSelfId?.takeIf { it != "-1" } ?: "1"
-                    }
-
-                    val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
-                        targetFoodId
-                    } else {
-                        meal?.selectedFoodId?.takeIf { it != "-1" }
-                            ?: meal?.availableFoodOptions?.firstOrNull()?.id
-                            ?: "-1"
-                    }
-
-                    if (!isCancelling) {
-                        builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$chkReserve", "on")
-                    }
-                    builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpSelf", selfVal)
-                    builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFood", foodVal)
-                    builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFoodCount", "1")
-                } else {
-                    if (meal != null && meal.status.isReserved) {
-                        builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$chkReserve", "on")
-                        builder.add(
-                            "ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpSelf",
-                            meal.selectedSelfId.takeIf { it != "-1" } ?: "1"
-                        )
-                        builder.add(
-                            "ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFood",
-                            meal.selectedFoodId.takeIf { it != "-1" } ?: "-1"
-                        )
-                        builder.add(
-                            "ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFoodCount",
-                            meal.count.coerceAtLeast(1).toString()
-                        )
-                    } else {
-                        builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpSelf", "-1")
-                        builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFood", "-1")
-                        builder.add("ctl00\$cphMain\$grdReservationLunch\$$ctl\$drpFoodCount", "0")
-                    }
-                }
-            }
-        }
-
-        // 5. Dinner rows (from snapshot or fallback)
-        if (dinnerRows.isNotEmpty()) {
-            for (row in dinnerRows) {
-                if (row.isChecked) {
-                    builder.add(row.chkReserveName, "on")
-                    builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
-                    builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
-                    builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
-                } else {
-                    builder.add(row.drpSelfName, "-1")
-                    builder.add(row.drpFoodName, "-1")
-                    builder.add(row.drpFoodCountName, "0")
-                }
-            }
-        } else {
-            for (dayIdx in 0..6) {
-                val ctl = "ctl%02d".format(dayIdx + 2)
-                builder.add("ctl00\$cphMain\$grdReservationDinner\$$ctl\$drpSelf", "-1")
-                builder.add("ctl00\$cphMain\$grdReservationDinner\$$ctl\$drpFood", "-1")
-                builder.add("ctl00\$cphMain\$grdReservationDinner\$$ctl\$drpFoodCount", "0")
-            }
-        }
+        // 5. Dinner rows
+        appendMealRows(MealType.DINNER, "Dinner")
 
         // 6. Fixed trailing fields
         builder.add("__EVENTTARGET", "")
@@ -404,7 +414,7 @@ class MenuRepository {
         builder.add("__VIEWSTATEGENERATOR", currentMenu.viewStateGenerator.ifEmpty { "3ED98A75" })
         builder.add("__VIEWSTATEENCRYPTED", "")
         builder.add("__ASYNCPOST", "true")
-        builder.add("ctl00\$cphMain\$btnSaveLunch", "ذخیره ناهار")
+        builder.add(btnId, btnValue)
 
         return builder.build()
     }
