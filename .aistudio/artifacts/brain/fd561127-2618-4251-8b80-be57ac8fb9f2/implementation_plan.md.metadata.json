@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for GitHub Secrets alias decoupling, in-app GitHub Release update checker with customizable changelog section, strict 'v*' tag release workflow, and automated Docs-to-Wiki synchronization pipeline.",
-  "updatedAt":  "2026-11-08T18:15:30.661147257Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

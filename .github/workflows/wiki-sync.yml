@@ -32,21 +32,32 @@ jobs:
 
       - name: Clone Wiki Repository & Sync Markdown Content
         env:
-          WIKI_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
+          WIKI_URL: https://x-access-token:${{ secrets.WIKI_SYNC_PAT || secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
         run: |
           WIKI_DIR="${{ runner.temp }}/wiki_repo"
           mkdir -p "$WIKI_DIR"
 
-          echo "Attempting to clone repository wiki..."
-          if git clone "$WIKI_URL" "$WIKI_DIR"; then
-            echo "Wiki repository cloned successfully."
-          else
-            echo "Wiki repository not found or not initialized. Initializing local git repository for wiki..."
-            cd "$WIKI_DIR"
-            git init -b master
-            git remote add origin "$WIKI_URL"
+          echo "Attempting to clone repository wiki from: https://github.com/${{ github.repository }}.wiki.git"
+          if ! git clone "$WIKI_URL" "$WIKI_DIR" 2>/dev/null; then
+            echo "::warning::مخزن ویکی گیت‌هاب هنوز ایجاد یا فعال نشده است!"
+            
+            cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ ویکی مخزن گیت‌هاب (GitHub Wiki) هنوز فعال نشده است
+
+          سیستم گیت‌هاب تا زمانی که **حداقل یک صفحه اولیه** در تب Wiki ساخته نشود، اجازه ارسال خودکار با Git را نمی‌دهد.
+
+          ### 🛠️ روش حل سریع (تنها ۱ دقیقه، یک‌بار برای همیشه):
+          1. در همین مخزن گیت‌هاب خود، به زبانه **Wiki** در بالای صفحه بروید:
+             👉 `https://github.com/${{ github.repository }}/wiki`
+          2. روی دکمه سبز رنگ **"Create the first page"** کلیک کنید.
+          3. عنوان صفحه را همان `Home` بگذارید و در پایین صفحه دکمه سبز **"Save Page"** را بزنید.
+          4. تمام! به محض ذخیره صفحه اول، مخزن ویکی در گیت‌هاب فعال می‌شود.
+          5. مجدداً به بخش **Actions -> Synchronize Docs to GitHub Wiki** بیایید و دکمه **Run workflow** را بزنید تا کل پوشه `/docs` خودکار در ویکی منتشر شود.
+          EOF
+            exit 1
           fi
 
+          echo "Wiki repository cloned successfully."
           cd "$GITHUB_WORKSPACE"
           echo "Copying documentation pages from docs/ to wiki..."
 
@@ -71,8 +82,11 @@ jobs:
 
           if git diff --staged --quiet; then
             echo "No changes detected in documentation. Wiki is already up to date."
+            echo "## ✅ ویکی گیت‌هاب به‌روز است و هیچ تغییری نیاز نبود." >> $GITHUB_STEP_SUMMARY
           else
             git commit -m "Auto-sync documentation from /docs (${{ github.sha }})"
-            git push origin master || git push origin main || git push origin HEAD:master --force
+            git push origin master || git push origin main || git push origin HEAD:master
             echo "Wiki synchronized successfully!"
+            echo "## 🚀 مستندات با موفقیت به ویکی گیت‌هاب منتقل شدند!" >> $GITHUB_STEP_SUMMARY
+            echo "می‌توانید مستندات را در [صفحه ویکی مخزن](https://github.com/${{ github.repository }}/wiki) مشاهده کنید." >> $GITHUB_STEP_SUMMARY
           fi

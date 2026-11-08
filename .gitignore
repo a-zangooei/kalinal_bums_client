@@ -1,18 +1,54 @@
+# ==========================================
+# Android & Gradle Build Artifacts
+# ==========================================
 *.iml
-.gradle
-.kotlin
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.gradle/
+.kotlin/
+/build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ==========================================
+# Keystores & Signing Secrets (NEVER COMMIT)
+# ==========================================
+*.jks
+*.keystore
+*.p12
+*.key
+*.pem
+*.pk8
+!debug.keystore.base64
+debug.keystore
+my-upload-key.jks
+kalinal-release-key.p12
+
+# ==========================================
+# Local Configuration & Environment Secrets
+# ==========================================
 local.properties
 .env
-debug.keystore
+.env.local
+.env.*.local
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.idea/
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# AI Studio & Container-specific Plumbing
+# ==========================================
+.aistudio/
+.build-outputs/
+metadata.json
+stdout.txt
+stderr.txt
+public/
+dist/
+EOF
