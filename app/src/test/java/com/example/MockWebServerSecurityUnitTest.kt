@@ -138,4 +138,42 @@ class MockWebServerSecurityUnitTest {
         com.example.data.network.CullinanHttpClient.setCompatibilityMode(false)
         assertFalse(com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value)
     }
+
+    @Test
+    fun testServerSideLogout302ResponseHandling() {
+        val serverUrl = mockWebServer.url("/Reservation/Reservation.aspx")
+
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(302)
+                .setHeader("Location", "/Login.aspx")
+                .setHeader("Set-Cookie", "ASP.NET_SessionId=; path=/; HttpOnly")
+        )
+
+        val request = Request.Builder()
+            .url(serverUrl)
+            .post(
+                okhttp3.FormBody.Builder()
+                    .add("__EVENTTARGET", "ctl00\$logout")
+                    .add("__VIEWSTATE", "SAMPLE_VIEWSTATE")
+                    .build()
+            )
+            .build()
+
+        val noRedirectClient = testClient.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+
+        val response = noRedirectClient.newCall(request).execute()
+
+        assertEquals(302, response.code)
+        val location = response.header("Location") ?: ""
+        assertTrue("Location header must redirect to Login.aspx", location.contains("Login.aspx"))
+
+        val recordedRequest = mockWebServer.takeRequest()
+        val recordedBody = recordedRequest.body.readUtf8()
+        assertTrue(recordedBody.contains("__EVENTTARGET=ctl00%24logout"))
+        assertTrue(recordedBody.contains("__VIEWSTATE=SAMPLE_VIEWSTATE"))
+    }
 }

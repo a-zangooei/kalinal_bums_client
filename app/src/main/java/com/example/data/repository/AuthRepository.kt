@@ -4,6 +4,8 @@ import com.example.data.crypto.RsaEncryptor
 import com.example.data.model.LoginPageState
 import com.example.data.model.UserSession
 import com.example.data.network.CullinanHttpClient
+import com.example.data.model.MealType
+import com.example.data.model.WeeklyMenu
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -133,6 +135,62 @@ class AuthRepository {
                     else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
                 }
                 Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logoutFromServer(currentMenu: WeeklyMenu?): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val formBuilder = FormBody.Builder()
+                .add("__EVENTTARGET", "ctl00\$logout")
+                .add("__EVENTARGUMENT", "")
+                .add("__LASTFOCUS", "")
+                .add("__VIEWSTATE", currentMenu?.viewState ?: "")
+                .add("__VIEWSTATEGENERATOR", currentMenu?.viewStateGenerator?.ifEmpty { "3ED98A75" } ?: "3ED98A75")
+                .add("__VIEWSTATEENCRYPTED", "")
+
+            if (currentMenu?.eventValidation?.isNotEmpty() == true) {
+                formBuilder.add("__EVENTVALIDATION", currentMenu.eventValidation)
+            }
+
+            formBuilder.add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
+            formBuilder.add("css3-tabstrip-0", "on")
+
+            // Replicate table row fields if present
+            currentMenu?.days?.forEachIndexed { dayIdx, day ->
+                day.meals[MealType.LUNCH]?.firstOrNull()?.let { meal ->
+                    val prefix = "ctl00\$cphMain\$grdReservationLunch\$ctl${String.format("%02d", dayIdx + 2)}"
+                    if (meal.status.isReserved) {
+                        formBuilder.add("$prefix\$chkReserve", "on")
+                    }
+                    if (meal.selectedSelfId.isNotEmpty() && meal.selectedSelfId != "-1") {
+                        formBuilder.add("$prefix\$drpSelf", meal.selectedSelfId)
+                    }
+                    if (meal.selectedFoodId.isNotEmpty() && meal.selectedFoodId != "-1") {
+                        formBuilder.add("$prefix\$drpFood", meal.selectedFoodId)
+                    }
+                }
+            }
+
+            val request = Request.Builder()
+                .url(CullinanHttpClient.RESERVATION_URL)
+                .post(formBuilder.build())
+                .header("Origin", CullinanHttpClient.BASE_URL)
+                .header("Referer", CullinanHttpClient.RESERVATION_URL)
+                .build()
+
+            val response = CullinanHttpClient.executeCallNoRedirect(request)
+            val location = response.header("Location") ?: ""
+            val isSuccess = (response.code in 300..399 && location.contains("Login.aspx", ignoreCase = true)) ||
+                    location.contains("Login.aspx", ignoreCase = true)
+
+            if (isSuccess) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception("سرور ریدایرکت خروج (302) صادر نکرد (کد: ${response.code})"))
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

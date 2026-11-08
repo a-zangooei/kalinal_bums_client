@@ -152,6 +152,36 @@ object CullinanHttpClient {
         _isCompatibilityModeActive.value = enabled
     }
 
+    /**
+     * Executes an HTTP request with automatic redirects disabled (e.g. for intercepting 302 Found on logout).
+     */
+    fun executeCallNoRedirect(request: Request): Response {
+        val baseClient = if (_isCompatibilityModeActive.value) fallbackClient else standardClient
+        val noRedirectClient = baseClient.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .build()
+
+        return try {
+            noRedirectClient.newCall(request).execute()
+        } catch (e: Exception) {
+            if (!_isCompatibilityModeActive.value && isSslHandshakeException(e)) {
+                _isCompatibilityModeActive.value = true
+                val fbClientNoRedirect = fallbackClient.newBuilder()
+                    .followRedirects(false)
+                    .followSslRedirects(false)
+                    .connectTimeout(6, TimeUnit.SECONDS)
+                    .readTimeout(6, TimeUnit.SECONDS)
+                    .build()
+                fbClientNoRedirect.newCall(request).execute()
+            } else {
+                throw e
+            }
+        }
+    }
+
     private fun isSslHandshakeException(e: Throwable): Boolean {
         var current: Throwable? = e
         while (current != null) {

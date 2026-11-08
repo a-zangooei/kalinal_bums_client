@@ -41,9 +41,13 @@ import com.example.ui.screens.MenuScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.CullinanTheme
 import com.example.ui.theme.TealPrimary
+import android.widget.Toast
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.data.repository.AuthRepository
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.MenuViewModel
 import com.example.ui.viewmodel.UpdateViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,8 +119,24 @@ fun KalinalApp(
             )
         }
     } else {
+        val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
+        val authRepo = remember { AuthRepository() }
+
         val handleLogout: () -> Unit = {
-            AppLogger.logAction("User logged out")
+            AppLogger.logAction("User initiated real server logout")
+            val currentMenu = menuViewModel.weeklyMenu.value
+
+            coroutineScope.launch {
+                val serverResult = authRepo.logoutFromServer(currentMenu)
+                if (serverResult.isSuccess) {
+                    Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            // Unconditional local purge:
             activeSession = null
             selectedBottomTab = 0
             com.example.data.network.CullinanHttpClient.cookieJar.clear()
