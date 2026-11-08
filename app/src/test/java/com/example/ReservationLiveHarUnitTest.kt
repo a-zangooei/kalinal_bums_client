@@ -16,6 +16,8 @@ class ReservationLiveHarUnitTest {
 
     private fun loadEntryText(index: Int): String {
         val candidates = listOf(
+            File("docs/05-samples-and-fixtures/har_entry${index}_resp.txt"),
+            File("../docs/05-samples-and-fixtures/har_entry${index}_resp.txt"),
             File("app/src/test/resources/har_entry${index}_resp.txt"),
             File("src/test/resources/har_entry${index}_resp.txt")
         )
