@@ -593,10 +593,10 @@ fun MenuScreen(
                                     ) { meal ->
                                         MealCard(
                                             meal = meal,
-                                            isProcessing = processingDayIndex == meal.dayIndex,
-                                            onReserveClick = { mealToReserve = it },
-                                            onCancelClick = { mealToCancel = it },
-                                            onChangeFoodClick = { mealToReserve = it }
+                                            isProcessing = isMutating && processingDayIndex == meal.dayIndex,
+                                            onReserveClick = { if (!isMutating) mealToReserve = it },
+                                            onCancelClick = { if (!isMutating) mealToCancel = it },
+                                            onChangeFoodClick = { if (!isMutating) mealToReserve = it }
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                     }

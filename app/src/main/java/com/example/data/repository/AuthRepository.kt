@@ -117,7 +117,7 @@ class AuthRepository {
                         isLoggedIn = true,
                         username = usernamePlain,
                         studentNumber = usernamePlain,
-                        nationalId = passwordPlain
+                        nationalId = ""
                     )
                 )
             } else {

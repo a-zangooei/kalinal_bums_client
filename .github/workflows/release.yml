@@ -127,11 +127,7 @@ jobs:
           PRIMARY_APK="dist/Kalinal-${RELEASE_TAG}-release.apk"
           cp "$RAW_RELEASE_APK" "$PRIMARY_APK"
 
-          # 2. Universal Alias APK (for backward compatibility)
-          UNIVERSAL_APK="dist/Kalinal-${RELEASE_TAG}-Universal-release.apk"
-          cp "$RAW_RELEASE_APK" "$UNIVERSAL_APK"
-
-          # 3. Android App Bundle (for Google Play / stores)
+          # 2. Android App Bundle (for Google Play / stores)
           AAB_FILE=$(find app/build -type f -name "*release.aab" | head -n 1)
           if [ -z "$AAB_FILE" ]; then
             echo "::error::Release App Bundle not found in build tree"
@@ -141,7 +137,6 @@ jobs:
           cp "$AAB_FILE" "$FINAL_AAB"
 
           echo "PRIMARY_APK=$PRIMARY_APK" >> $GITHUB_ENV
-          echo "UNIVERSAL_APK=$UNIVERSAL_APK" >> $GITHUB_ENV
           echo "FINAL_AAB=$FINAL_AAB" >> $GITHUB_ENV
 
       - name: Mandatory Signature & Certificate Audit

@@ -10,7 +10,7 @@
     </style>
 
     <div id="cphMain_titleBox" class="titleBox" style="display: none;">
-        <label id="cphMain_titleBoxValue">کاربر: علیرضا زنگویی - 4031122001510050</label>
+        <label id="cphMain_titleBoxValue">کاربر: دانشجوی نمونه - 4031000000000000</label>
         <div class="backIcon">
             <a href="../Profile/Profile.aspx?IsRedirect=True">
                 <img src="../Images/Icon/NextWeek.png" style="width: 22px; height: 22px;" title="برگشت به مشخصات افراد" />

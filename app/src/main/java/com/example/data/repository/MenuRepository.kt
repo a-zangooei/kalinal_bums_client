@@ -60,7 +60,7 @@ class MenuRepository {
                     WeekNavigationDirection.CURRENT -> "ctl00\$cphMain\$imgbtnCurrentWeek"
                 }
 
-                val formBody = FormBody.Builder()
+                val formBuilder = FormBody.Builder()
                     .add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$buttonName")
                     .add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
                     .add("__EVENTTARGET", "")
@@ -68,6 +68,12 @@ class MenuRepository {
                     .add("__VIEWSTATE", currentMenu.viewState)
                     .add("__VIEWSTATEGENERATOR", currentMenu.viewStateGenerator.ifEmpty { "3ED98A75" })
                     .add("__VIEWSTATEENCRYPTED", "")
+
+                if (currentMenu.eventValidation.isNotEmpty()) {
+                    formBuilder.add("__EVENTVALIDATION", currentMenu.eventValidation)
+                }
+
+                val formBody = formBuilder
                     .add("__ASYNCPOST", "true")
                     .add("$buttonName.x", "8")
                     .add("$buttonName.y", "29")
@@ -413,6 +419,9 @@ class MenuRepository {
         builder.add("__VIEWSTATE", currentMenu.viewState)
         builder.add("__VIEWSTATEGENERATOR", currentMenu.viewStateGenerator.ifEmpty { "3ED98A75" })
         builder.add("__VIEWSTATEENCRYPTED", "")
+        if (currentMenu.eventValidation.isNotEmpty()) {
+            builder.add("__EVENTVALIDATION", currentMenu.eventValidation)
+        }
         builder.add("__ASYNCPOST", "true")
         builder.add(btnId, btnValue)
 

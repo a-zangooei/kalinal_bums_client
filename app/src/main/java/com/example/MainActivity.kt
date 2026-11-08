@@ -48,15 +48,21 @@ fun KalinalApp() {
             modifier = Modifier.fillMaxSize()
         )
     } else {
-        BackHandler {
+        val handleLogout: () -> Unit = {
             activeSession = null
+            com.example.data.network.CullinanHttpClient.cookieJar.clear()
+            authViewModel.refreshCaptcha()
+        }
+
+        BackHandler {
+            handleLogout()
         }
 
         MenuScreen(
             userSession = session,
             viewModel = menuViewModel,
             onLogout = {
-                activeSession = null
+                handleLogout()
             },
             modifier = Modifier.fillMaxSize()
         )

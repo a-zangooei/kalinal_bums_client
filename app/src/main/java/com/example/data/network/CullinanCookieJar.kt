@@ -14,7 +14,7 @@ class CullinanCookieJar : CookieJar {
         val currentCookies = cookieStore.getOrPut(host) { mutableListOf() }
         synchronized(currentCookies) {
             for (newCookie in cookies) {
-                currentCookies.removeAll { it.name == newCookie.name }
+                currentCookies.removeAll { it.name == newCookie.name && it.path == newCookie.path }
                 currentCookies.add(newCookie)
             }
         }
@@ -26,7 +26,7 @@ class CullinanCookieJar : CookieJar {
         val now = System.currentTimeMillis()
         synchronized(cookies) {
             cookies.removeAll { it.expiresAt < now }
-            return cookies.toList()
+            return cookies.filter { it.matches(url) }
         }
     }
 

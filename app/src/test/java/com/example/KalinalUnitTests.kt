@@ -18,7 +18,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pAPzCnTcX4A3p9w+10PNY5ekRthWl/3mXAN
 
     @Test
     fun testRsaEncryptionWithKey() {
-        val plain = "4031122001510050"
+        val plain = "4031000000000000"
         val encrypted = RsaEncryptor.encryptWithPem(plain, TEST_PUBLIC_KEY)
         assertNotNull(encrypted)
         assertTrue("Encrypted output must be non-empty Base64", encrypted.isNotEmpty())
@@ -37,7 +37,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pAPzCnTcX4A3p9w+10PNY5ekRthWl/3mXAN
         val sampleHtml = """
             <label id="cphMain_lblWeekDate">1405/08/16  الی  1405/08/22</label>
             <label id="cphMain_lblCreditValue">اعتبار شما: 1,410,000- ریال</label>
-            <label id="cphMain_titleBoxValue">کاربر: علیرضا زنگویی - 4031122001510050</label>
+            <label id="cphMain_titleBoxValue">کاربر: دانشجوی نمونه - 4031000000000000</label>
             <input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="TEST_VIEW_STATE" />
             <table id="cphMain_grdReservationLunch">
                 <tr class="HeaderStyle"><th>روز</th><th>سلف</th><th>غذا</th><th>تعداد</th><th>کالری</th><th>مبلغ</th><th>وضعیت</th></tr>
@@ -56,8 +56,8 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pAPzCnTcX4A3p9w+10PNY5ekRthWl/3mXAN
 
         val weeklyMenu = ReservationHtmlParser.parse(sampleHtml)
         assertEquals("1405/08/16 الی 1405/08/22", weeklyMenu.weekDateRange)
-        assertEquals("علیرضا زنگویی", weeklyMenu.studentName)
-        assertEquals("4031122001510050", weeklyMenu.studentNumber)
+        assertEquals("دانشجوی نمونه", weeklyMenu.studentName)
+        assertEquals("4031000000000000", weeklyMenu.studentNumber)
         assertEquals(-1410000L, weeklyMenu.creditValueRials)
         assertEquals(7, weeklyMenu.days.size)
 
