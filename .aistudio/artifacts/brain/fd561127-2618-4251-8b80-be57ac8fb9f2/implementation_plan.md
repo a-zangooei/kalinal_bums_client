@@ -1,133 +1,137 @@
-# برنامه جامع ممیزی امنیتی و معماری کلاینت اندروید کالینان (Kalinal)
+# In-App Update Checker, Keystore Decoupling & Docs-to-Wiki Pipeline
 
-برنامه جامع ممیزی همه‌جانبه، مقاوم‌سازی امنیتی، رفع باگ‌های ارتباطی با سرور ASP.NET Web Forms، پیاده‌سازی ذخیره‌سازی رمزنگاری‌شده سخت‌افزاری و تدوین سناریوهای تست شبیه‌سازی شبکه (MockWebServer).
+Comprehensive architecture and implementation plan for adding dynamic in-app update notifications via the GitHub Releases API, removing hardcoded keystore aliases, enforcing strict `v*` tag conventions, and automatically synchronizing repository documentation to GitHub Wiki.
 
 ---
 
-## تصمیمات تأییدشده و جهت‌گیری‌های معماری (User Review & Critical Decisions)
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> این سند بر اساس پاسخ‌های تأییدشده کاربر به پرسش‌های شفاف‌سازی تدوین شده و در وضعیت **STRICT PLAN-ONLY MODE** قرار دارد. هیچ تغییری تا زمان تأیید نهایی روی کدهای منبع اعمال نخواهد شد.
-
-- **اولویت بررسی (بررسی همه‌جانبه):** ممیزی و پیاده‌سازی شامل هر ۴ فاز امنیت ارتباطی، پایگاه داده/حافظه، قابلیت اطمینان پروتکل ASP.NET، و بهینه‌سازی خط انتشار و حجم APK خواهد بود.
-- **ذخیره‌سازی اطلاعات ورود (EncryptedSharedPreferences + KeyStore):** استفاده از کلید سخت‌افزاری `MasterKeys` و الگوریتم AES-256 GCM جهت ذخیره توکن‌ها/گذرواژه با پاک‌سازی دیتای خام قبلی.
-- **تست‌های خودکار شبیه‌سازی (MockWebServer):** ایجاد مجموعه تست‌های JVM محلی برای اعتبارسنجی قطعی شبکه، خطاهای ۵۰۰، انقضای سشن، و جلوگیری از ثبت تکراری رزرو بدون ارسال درخواست واقعی به سرور دانشگاه.
-
----
-
-## ۱. اهداف، دامنه و مفاهیم بنیادین (Overview & Core Concept)
-
-- **هدف اصلی:** تبدیل کلاینت غیررسمی کالینان دانشگاه به یک اپلیکیشن امن با سطح تولید (Production-grade)، بدون نشت اطلاعات دانشجویی و با تضمین پایداری تراکنش‌های رزرواسیون غذا.
-- **مخاطبان هدف:** دانشجویان، کادر درمان و خوابگاهیان متصل به سامانه تغذیه دانشگاه علوم پزشکی بیرجند (`jeton.bums.ac.ir`).
-- **ارزش کلیدی:** حذف کامل ریسک حملات مرد میانی (MitM)، عدم ذخیره متن خام رمز عبور، مدیریت بی‌نقص چرخه حیات نشست (Session Lifecycle)، و قطع ارسال درخواست‌های تکراری و پرهزینه.
+> The following decisions were confirmed through interactive clarification:
+> - **In-App Update Check Trigger:** Both automatic check on app launch (silent background query with non-blocking dialog if update is available) AND manual "بررسی به‌روزرسانی" button in the TopAppBar / About dialog.
+> - **Customizable Release Notes:** In-app updater parses a dedicated markdown section header (e.g. `### 📝 تغییرات این نسخه` or `### 📢 پیام این نسخه`) from the GitHub Release body. You can edit this text directly in GitHub Web UI after release, and the app will instantly reflect your edits!
+> - **Keystore Alias Secret:** `RELEASE_KEY_ALIAS` is read strictly from GitHub Secrets and environment variables (`KEY_ALIAS`), removing the hardcoded fallback from `app/build.gradle.kts`.
+> - **Release Trigger Convention:** Strict `v*` prefix (e.g., `v1.0.0`) enforced across `.github/workflows/release.yml` and ignored in `.github/workflows/ci.yml`.
+> - **Documentation Sync:** Dedicated GitHub Actions workflow (`.github/workflows/wiki-sync.yml`) automatically synchronizes the `/docs` directory to GitHub Wiki whenever documentation is updated on `main`.
 
 ---
 
-## ۲. تجربه کاربری و بازخورد تعاملی (User Experience & Interactive Safeguards)
+### 1. Overview & Core Concept
 
-- **بازخورد قطعی عملیات رزرو:**
-  - قفل آنی دکمه‌ها در زمان پردازش (`enabled = !isProcessing`) جهت جلوگیری از دابل کلیک.
-  - نمایش نشانگر بارگذاری وضعیت در کارت غذا.
-- **مدیریت انقضای نشست (Session Expiration Handling):**
-  - در صورت ابطال سشن از طرف سرور، کاربر با یک پیام شفاف («نشست کاری منقضی شده است؛ لطفاً مجدداً وارد شوید») به صفحه ورود هدایت می‌شود.
-- **خروج امن از حساب (Clean Logout):**
-  - با لمس گزینه خروج یا زدن دکمه Back در صفحه اصلی، تمام کوکی‌ها، اطلاعات کپچا و کش منوی هفتگی از رم زدوده می‌شوند.
-
----
-
-## ۳. تصمیمات کلیدی محصول و بررسی گزینه‌ها (Key Product Decisions & Trade-Offs)
-
-- **تصمیم ۱: اعتبارسنجی اکید TLS و مسدودسازی Cleartext**
-  - *رویکرد انتخابی:* حذف هرگونه `TrustAllCerts` و `HostnameVerifier` کاذب و فعال‌سازی `network_security_config.xml`.
-  - *چرا:* جلوگیری مطلق از شنود ترافیک لاگین و کوکی‌های احراز هویت در شبکه‌های عمومی و خوابگاهی.
-- **تصمیم ۲: ذخیره‌سازی امن با EncryptedSharedPreferences**
-  - *رویکرد انتخابی:* استفاده از کلید رمزنگاری سخت‌افزاری AES-256 GCM با فال‌بک نرم‌افزاری ایمن برای محیط تست.
-  - *چرا:* امنیت داده‌های حساس در برابر استخراج فایل و ابزارهای پشتیبان‌گیری، همراه با پشتیبانی از تست‌های Robolectric.
-- **تصمیم ۳: افزودن MockWebServer به جای تست با سرور زنده**
-  - *رویکرد انتخابی:* شبیه‌سازی پاسخ‌های دلتای ASP.NET و کدهای خطای وب‌فرم بدون ریسک تغییر داده‌های واقعی سامانه سلف دانشگاه.
+1. **In-App Update System:**
+   - Queries GitHub's public REST endpoint: `https://api.github.com/repos/a-zangooei/kalinal_bums_client/releases/latest`.
+   - Compares the installed version (from `BuildConfig.VERSION_NAME` and `versionCode`) against the latest release tag.
+   - Extracts the direct `.apk` asset download URL (`browser_download_url`) and the Persian release notes snippet.
+   - Presents a clean Material 3 dialog with the version badge, customizable changelog, "دانلود و نصب مستقیم" button (launches Android browser or system download manager), and a "بعداً" dismiss button.
+2. **Keystore Alias Decoupling:**
+   - Modifies `app/build.gradle.kts` to read `keyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""` and fails gracefully if not provided during release builds.
+   - Enforces `RELEASE_KEY_ALIAS` validation in `release.yml`.
+3. **Docs-to-Wiki Synchronization:**
+   - Adds a lightweight workflow that clones `https://github.com/a-zangooei/kalinal_bums_client.wiki.git` using `GITHUB_TOKEN` with write permissions, copies markdown files from `/docs` (and flattens or creates home page navigation), and pushes changes automatically.
 
 ---
 
-## ۴. معماری فنی و جریان داده‌ها (Technical Architecture & Data Strategy)
+### 2. User Experience & Visual Design
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       UI Presentation                       │
-│     LoginScreen                 MenuScreen (5 Days View)    │
-│          │                                 │                │
-│          ▼                                 ▼                │
-│    AuthViewModel                     MenuViewModel          │
-└──────────┬─────────────────────────────────┬────────────────┘
-           │                                 │
-┌──────────▼─────────────────────────────────▼────────────────┐
-│                   Domain & Repository Layer                 │
-│  AuthRepository                     MenuRepository          │
-│   - RSA Encryptor                    - DeltaParser          │
-│   - Captcha Fetcher                  - WebForms PostBack    │
-│   - KeyStore / EncryptedPrefs        - __EVENTVALIDATION    │
-└──────────┬─────────────────────────────────┬────────────────┘
-           │                                 │
-┌──────────▼─────────────────────────────────▼────────────────┐
-│                     Network / Security Core                 │
-│  CullinanHttpClient                                         │
-│   ├── Strict TLS (Platform TrustStore + NetworkConfig)     │
-│   └── CullinanCookieJar (RFC 6265 Path & Host Matching)     │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTPS Only
-┌──────────────────────────▼──────────────────────────────────┐
-│              University Server / MockWebServer              │
-│       https://jeton.bums.ac.ir (ASP.NET Web Forms)          │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ 🔔 نسخه جدید کالینان در دسترس است!                   │
+│                                                        │
+│ نسخه فعلی: ۱.۰.۰   ◄──►   نسخه جدید: ۱.۰.۱ 🏷️          │
+│                                                        │
+│ ┌────────────────────────────────────────────────────┐ │
+│ │ 📝 تغییرات این نسخه (قابل ویرایش در گیت‌هاب):        │ │
+│ │ • فعال‌سازی رزرو صبحانه و شام                        │ │
+│ │ • حذف روزهای تعطیل پنجشنبه و جمعه                  │ │
+│ │ • ارتقای امنیت و رفع انقضای سشن                     │ │
+│ └────────────────────────────────────────────────────┘ │
+│                                                        │
+│  [ بعداً ]              [ 📥 دانلود مستقیم فایل نصبی ] │
+└────────────────────────────────────────────────────────┘
 ```
 
----
-
-## ۵. برنامه اولویت‌بندی‌شده اجرایی (Detailed Prioritized Plan)
-
-### فاز اول (P0) — الزامات حیاتی امنیتی (Security Must-Fix)
-1. **اصلاح TLS و مسدودسازی ترافیک ناامن:**
-   - حذف کامل TrustAllCerts و HostnameVerifier آزاد در `CullinanHttpClient.kt`.
-   - ایجاد `network_security_config.xml` و تنظیم `android:networkSecurityConfig` در `AndroidManifest.xml`.
-2. **رمزنگاری سخت‌افزاری اطلاعات ورود:**
-   - ارتقای `UserPreferences.kt` به `EncryptedSharedPreferences` با استفاده از `MasterKeys`.
-   - پیاده‌سازی متد انتقال و نابودی امن دیتای متن خام قبلی (`clear()`).
-3. **حذف فیلد گذرواژه از مدل‌های حافظه:**
-   - حذف انتساب پسورد به `nationalId` در `AuthRepository.kt` و مدل `UserSession`.
-   - پاک‌سازی فلو `_password` در `AuthViewModel` پس از لاگین موفق.
-4. **ایمن‌سازی پشتیبان‌گیری خودکار سیستم‌عامل:**
-   - استثنا کردن صریح فایل‌های تنظیمات در `backup_rules.xml` و `data_extraction_rules.xml`.
-5. **پاک‌سازی داده‌های واقعی هویتی از تست‌ها:**
-   - جایگزینی نام و کد ملی واقعی در `KalinalUnitTests.kt` و فایل‌های `har_entry*.txt` با مقادیر نمادین.
+- **Update Dialog (Compose):**
+  - Appears smoothly with entrance animation if an update is found on launch.
+  - Can also be summoned anytime by tapping **«درباره برنامه و به‌روزرسانی»** in the TopBar menu.
+  - Displays formatted changelog text, file size (if provided in release metadata), and single-tap download action.
 
 ---
 
-### فاز دوم (P1) — پایداری و سازگاری وب‌فرم‌های ASP.NET (Reliability Must-Fix)
-1. **ایزولاسیون و چرخه حیات نشست و کوکی:**
-   - پاک‌سازی سشن و کوکی‌ها در رویداد خروج با فراخوانی `CullinanHttpClient.cookieJar.clear()`.
-   - تطبیق استاندارد کوکی‌ها بر اساس مسیر و دامنه با `it.matches(url)` در `CullinanCookieJar.kt`.
-2. **سازگاری کامل با فرم‌های ASP.NET:**
-   - ارسال فیلد الزامی `__EVENTVALIDATION` در متدهای `navigateWeek` و `buildSaveMealBody`.
-3. **تشخیص خودکار انقضای نشست:**
-   - بررسی توکن `pageRedirect` به `Login.aspx` در `DeltaParser` و صدور خطای اختصاصی نشست.
-4. **محافظت در برابر کلیک مکرر (Double-Click):**
-   - غیرفعال‌سازی دکمه‌های ثبت و لغو هنگام فعال بودن `isMutating` در `MenuScreen.kt`.
+### 3. Technical Architecture & Data Strategy
+
+```
+┌─────────────────────────┐          ┌─────────────────────────┐
+│     MainActivity.kt     │          │    MenuScreen / TopBar  │
+│  (Launch Update Check)  │          │    (Manual Check Tap)   │
+└────────────┬────────────┘          └────────────┬────────────┘
+             │                                    │
+             ▼                                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│                   UpdateViewModel / Repository               │
+│  • Calls https://api.github.com/repos/.../releases/latest    │
+│  • Compares semantic version (v1.0.1 > v1.0.0)               │
+│  • Extracts APK asset URL & "### 📝 تغییرات" section         │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    UpdateDialog.kt (Compose)                 │
+│  • Shows release notes, version tag, and direct APK download │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### GitHub Release Template Specification:
+In `.github/workflows/release.yml`, the generated release body will always contain:
+```markdown
+### 📝 تغییرات این نسخه
+• به‌روزرسانی‌های امنیتی و رفع اشکالات سامانه تغذیه
+
+---
+### 📲 دانلود مستقیم فایل نصبی
+...
+```
+You can edit the lines under `### 📝 تغییرات این نسخه` at any time directly in the GitHub Release editor, and the app will parse and show your updated text to users!
 
 ---
 
-### فاز سوم (P2) — مهندسی بیلد و تست‌های شبیه‌سازی (Release & Mock Tests)
-1. **پیاده‌سازی تست‌های شبیه‌سازی شبکه با MockWebServer:**
-   - سناریوی ۱: خطای اشتباه بودن کد امنیتی (CAPTCHA) و تازه‌سازی خودکار.
-   - سناریوی ۲: انقضای نشست در هنگام تغییر هفته یا ثبت رزرو.
-   - سناریوی ۳: قطعی شبکه یا خطای ۵۰۰ سرور و جلوگیری از ثبت ناقص وضعیت.
-2. **اصلاح پایپ‌لاین انتشار (`release.yml`):**
-   - حذف انتشار فایل کپی و تکراری Universal APK.
-   - الزام ۱۰۰٪ به پاس شدن تست‌های واحد و عدم دور زدن تست‌ها.
+### 4. Implementation Steps (Execution Plan)
 
----
+1. **Keystore Secrets & Release Hardening:**
+   - Update `app/build.gradle.kts`:
+     ```kotlin
+     keyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
+     ```
+   - Update `.github/workflows/release.yml`:
+     - Validate `RELEASE_KEY_ALIAS` secret explicitly.
+     - Set `KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}`.
+     - Restrict trigger to `push: tags: ['v*']`.
+   - Update `.github/workflows/ci.yml`:
+     - Restrict `tags-ignore: ['v*']`.
 
-### فاز چهارم (P3) — بهینه‌سازی معماری و کاهش حجم APK (Optimization)
-1. **پاک‌سازی وابستگی‌های بی‌استفاده در `app/build.gradle.kts`:**
-   - کامنت کردن وابستگی‌های بدون استفاده Room Database (`room-runtime`, `room-ktx`, `room-compiler`).
-   - کامنت کردن کتابخانه‌های بدون استفاده Retrofit ،Moshi و Firebase AI.
-2. **فعال‌سازی قوانین ProGuard و Minification:**
-   - تنظیم قوانین سبک در `proguard-rules.pro` جهت مخدوش‌سازی نام کلاس‌های حساس و کاهش حجم.
+2. **In-App Update Engine:**
+   - Create `com.example.data.model.AppUpdateInfo`:
+     - `tagName: String`
+     - `versionName: String`
+     - `changelog: String`
+     - `downloadUrl: String`
+     - `publishedAt: String`
+     - `isUpdateAvailable: Boolean`
+   - Create `com.example.data.repository.UpdateRepository`:
+     - Queries GitHub Releases API using OkHttp.
+     - Parses JSON response with regex/JSON parser.
+     - Extracts custom changelog snippet after `### 📝 تغییرات این نسخه`.
+     - Compares versions cleanly.
+   - Create `com.example.ui.components.UpdateDialog`:
+     - Material 3 Dialog with Persian typography, changelog container, and download action.
+   - Wire update check into `MainActivity` (launch check) and TopBar menu (manual check).
+
+3. **Automated Docs-to-Wiki Workflow (`.github/workflows/wiki-sync.yml`):**
+   - Triggers on push to `main` when files in `docs/**` or `docs/README.md` change.
+   - Clones repository wiki: `https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git`.
+   - Syncs docs markdown files to root wiki pages with clean index.
+   - Commits and pushes automatically.
+
+4. **Verification & Testing:**
+   - Add unit tests for `UpdateRepository` version comparison and changelog section parser in `app/src/test/java/com/example/`.
+   - Run `gradle :app:testDebugUnitTest`.
+   - Run `compile_applet` to verify compilation.

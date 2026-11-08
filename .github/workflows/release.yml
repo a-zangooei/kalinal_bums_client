@@ -81,6 +81,10 @@ jobs:
             echo "::error::Missing repository secret 'RELEASE_KEY_PASSWORD'! Add it in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
+          if [ -z "${{ secrets.RELEASE_KEY_ALIAS }}" ]; then
+            echo "::error::Missing repository secret 'RELEASE_KEY_ALIAS'! Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
 
       - name: Setup Ephemeral Release Keystore & Environment
         run: |
@@ -115,7 +119,7 @@ jobs:
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/kalinal-release.p12
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'upload' }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           mkdir -p dist
@@ -214,6 +218,10 @@ jobs:
           body: |
             ## 🍱 کالینان (Kalinal) - نسخه ${{ env.RELEASE_TAG }}
             کلاینت مدرن، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
+
+            ### 📝 تغییرات این نسخه
+            • بهبود ارتباط با سرور و بهینه‌سازی فرآیند رزرو غذا
+            • ارتقای امنیت و رفع اشکالات نشست کاری
 
             ---
 

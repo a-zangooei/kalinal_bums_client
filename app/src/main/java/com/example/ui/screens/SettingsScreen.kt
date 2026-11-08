@@ -87,6 +87,7 @@ fun SettingsScreen(
     currentThemeMode: AppThemeMode,
     onThemeChanged: (AppThemeMode) -> Unit,
     onNavigateBack: (() -> Unit)? = null,
+    onCheckForUpdates: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -426,6 +427,29 @@ fun SettingsScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        if (onCheckForUpdates != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = onCheckForUpdates,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudQueue,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = TealPrimary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "بررسی به‌روزرسانی نسخه جدید",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TealPrimary
                                 )
                             }
                         }

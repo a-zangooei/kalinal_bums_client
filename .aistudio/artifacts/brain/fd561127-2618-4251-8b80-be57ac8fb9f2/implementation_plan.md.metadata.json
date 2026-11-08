@@ -1,6 +1,6 @@
 {
-  "summary":  "برنامه جامع اجرایی و ممیزی امنیتی، قابلیت اطمینان، وب‌فرم‌های ASP.NET، مهندسی انتشار و آزمون‌های شبیه‌سازی سرور کلاینت اندروید کالینان",
-  "updatedAt":  "2026-11-08T06:17:15.433467535Z",
+  "summary":  "Implementation plan for GitHub Secrets alias decoupling, in-app GitHub Release update checker with customizable changelog section, strict 'v*' tag release workflow, and automated Docs-to-Wiki synchronization pipeline.",
+  "updatedAt":  "2026-11-08T18:15:30.661147257Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

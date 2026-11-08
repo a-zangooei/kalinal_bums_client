@@ -31,7 +31,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.local.UserPreferences
 import com.example.data.logger.AppLogger
 import com.example.data.model.UserSession
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import com.example.ui.components.PersianRtlLayout
+import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.MenuScreen
 import com.example.ui.screens.SettingsScreen
@@ -39,6 +43,7 @@ import com.example.ui.theme.CullinanTheme
 import com.example.ui.theme.TealPrimary
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.MenuViewModel
+import com.example.ui.viewmodel.UpdateViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +81,10 @@ fun KalinalApp(
 
     val authViewModel: AuthViewModel = viewModel()
     val menuViewModel: MenuViewModel = viewModel()
+    val updateViewModel: UpdateViewModel = viewModel()
+
+    val updateInfo by updateViewModel.updateInfo.collectAsState()
+    val userMessage by updateViewModel.userMessage.collectAsState()
 
     val session = activeSession
     if (session == null) {
@@ -88,6 +97,7 @@ fun KalinalApp(
                 currentThemeMode = currentThemeMode,
                 onThemeChanged = onThemeChanged,
                 onNavigateBack = { isPreLoginSettingsOpen = false },
+                onCheckForUpdates = { updateViewModel.checkForUpdates(isManual = true) },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -196,6 +206,7 @@ fun KalinalApp(
                         currentThemeMode = currentThemeMode,
                         onThemeChanged = onThemeChanged,
                         onNavigateBack = { selectedBottomTab = 0 },
+                        onCheckForUpdates = { updateViewModel.checkForUpdates(isManual = true) },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
@@ -203,5 +214,39 @@ fun KalinalApp(
                 }
             }
         }
+    }
+
+    // Render In-App Update Dialog when a newer release is detected
+    updateInfo?.let { info ->
+        UpdateDialog(
+            updateInfo = info,
+            onDismiss = { updateViewModel.dismissUpdateDialog() }
+        )
+    }
+
+    // Render User Notification for Manual Check (e.g. app is up to date)
+    userMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { updateViewModel.dismissUserMessage() },
+            title = {
+                Text(
+                    text = "اطلاعیه به‌روزرسانی",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = msg,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { updateViewModel.dismissUserMessage() }) {
+                    Text("متوجه شدم", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
