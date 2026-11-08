@@ -120,4 +120,22 @@ class MockWebServerSecurityUnitTest {
         val receivedBytes = response.body?.bytes()
         assertTrue(receivedBytes != null && receivedBytes.contentEquals(sampleCaptchaBytes))
     }
+
+    @Test
+    fun testHttpClientCompatibilityModeToggleAndFallbackClient() {
+        val initialMode = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value
+        assertFalse(initialMode)
+
+        com.example.data.network.CullinanHttpClient.setCompatibilityMode(true)
+        assertTrue(com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value)
+
+        // Verify fallback client is initialized properly
+        val fallbackClient = com.example.data.network.CullinanHttpClient.fallbackClient
+        assertTrue(fallbackClient.followRedirects)
+        assertTrue(fallbackClient.followSslRedirects)
+
+        // Reset to default
+        com.example.data.network.CullinanHttpClient.setCompatibilityMode(false)
+        assertFalse(com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value)
+    }
 }

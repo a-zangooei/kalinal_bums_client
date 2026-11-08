@@ -19,7 +19,7 @@ class AuthRepository {
                 .get()
                 .build()
 
-            val response = CullinanHttpClient.client.newCall(request).execute()
+            val response = CullinanHttpClient.executeCall(request)
             if (!response.isSuccessful) {
                 return@withContext Result.failure(Exception("خطا در برقراری ارتباط با سرور دانشگاه (${response.code})"))
             }
@@ -102,7 +102,7 @@ class AuthRepository {
                 .header("Origin", CullinanHttpClient.BASE_URL)
                 .build()
 
-            val response = CullinanHttpClient.client.newCall(request).execute()
+            val response = CullinanHttpClient.executeCall(request)
             val finalUrl = response.request.url.toString()
             val bodyString = response.body?.string() ?: ""
 
@@ -148,7 +148,7 @@ class AuthRepository {
             .header("Referer", CullinanHttpClient.LOGIN_URL)
             .build()
 
-        val response = CullinanHttpClient.client.newCall(request).execute()
+        val response = CullinanHttpClient.executeCall(request)
         return if (response.isSuccessful) response.body?.bytes() else null
     }
 }

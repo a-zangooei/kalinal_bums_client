@@ -1,6 +1,6 @@
 {
-  "summary":  "GitHub Actions and CI/CD Audit & Architecture Improvement Plan for Kalinal Android Client. Covers release signing security, independent two-job CI pipeline (Test and Build), manual release flow, mock test strategy, and Gradle optimization for dual-core local hardware vs GitHub-hosted runners.",
-  "updatedAt":  "2026-11-08T08:20:46.784636196Z",
+  "summary":  "برنامه جامع عیب‌یابی و رفع خطای گواهی امنیتی SSL (Trust Anchor) در سامانه تغذیه دانشگاه با افزودن موتور سازگاری هوشمند، پشتیبانی از گواهی‌های کاربر و اعتبارسنجی خودکار.",
+  "updatedAt":  "2026-11-08T08:42:38.899610536Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

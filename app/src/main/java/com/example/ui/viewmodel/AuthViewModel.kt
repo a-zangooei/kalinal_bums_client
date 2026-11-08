@@ -45,6 +45,14 @@ class AuthViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    val isCompatibilityModeActive: StateFlow<Boolean> = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive
+
+    fun toggleCompatibilityMode() {
+        val current = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value
+        com.example.data.network.CullinanHttpClient.setCompatibilityMode(!current)
+        loadLoginPage()
+    }
+
     init {
         loadLoginPage()
     }

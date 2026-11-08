@@ -27,7 +27,7 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.BASE_URL)
                     .build()
 
-                val response = CullinanHttpClient.client.newCall(request).execute()
+                val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("خطا در دریافت جدول برنامه غذایی (${response.code})"))
                 }
@@ -90,7 +90,7 @@ class MenuRepository {
                     .header("Cache-Control", "no-cache")
                     .build()
 
-                val response = CullinanHttpClient.client.newCall(request).execute()
+                val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("خطا در جابه‌جایی هفته (${response.code})"))
                 }
@@ -150,7 +150,7 @@ class MenuRepository {
                     .header("Cache-Control", "no-cache")
                     .build()
 
-                val response = CullinanHttpClient.client.newCall(request).execute()
+                val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("خطا در ثبت رزرو غذا در سرور (${response.code})"))
                 }
@@ -226,7 +226,7 @@ class MenuRepository {
                     .header("Cache-Control", "no-cache")
                     .build()
 
-                val response = CullinanHttpClient.client.newCall(request).execute()
+                val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("خطا در لغو رزرو غذا در سرور (${response.code})"))
                 }

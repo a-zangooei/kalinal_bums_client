@@ -97,6 +97,7 @@ fun LoginScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isCaptchaRefreshing by viewModel.isCaptchaRefreshing.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val isCompatibilityModeActive by viewModel.isCompatibilityModeActive.collectAsState()
 
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -182,7 +183,7 @@ fun LoginScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "اتصال مستقیم به سامانه کالینان دانشگاه",
                                 fontSize = 13.sp,
@@ -194,6 +195,20 @@ fun LoginScreen(
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        if (isCompatibilityModeActive) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = TealPrimary.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "سازگار با SSL",
+                                    fontSize = 10.sp,
+                                    color = TealPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -209,23 +224,39 @@ fun LoginScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "خطا",
-                                tint = Color(0xFFC62828),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = errorMessage ?: "",
-                                color = Color(0xFFC62828),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "خطا",
+                                    tint = Color(0xFFC62828),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = errorMessage ?: "",
+                                    color = Color(0xFFC62828),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                androidx.compose.material3.TextButton(
+                                    onClick = { viewModel.loadLoginPage() }
+                                ) {
+                                    Text(
+                                        text = "تلاش مجدد اتصال",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFC62828),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -318,12 +349,23 @@ fun LoginScreen(
                                             .fillMaxSize()
                                             .padding(4.dp)
                                     )
-                                } else {
+                                } else if (isLoading || isCaptchaRefreshing) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(24.dp),
                                         strokeWidth = 2.dp,
                                         color = TealPrimary
                                     )
+                                } else {
+                                    androidx.compose.material3.TextButton(
+                                        onClick = { viewModel.refreshCaptcha() }
+                                    ) {
+                                        Text(
+                                            text = "بارگذاری مجدد کد",
+                                            fontSize = 11.sp,
+                                            color = TealPrimary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
 
