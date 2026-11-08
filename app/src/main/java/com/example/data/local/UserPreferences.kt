@@ -56,6 +56,21 @@ class UserPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_REMEMBER_ME, false)
         set(value) = prefs.edit().putBoolean(KEY_REMEMBER_ME, value).apply()
 
+    var themeMode: com.example.data.model.AppThemeMode
+        get() {
+            val raw = prefs.getString(KEY_THEME_MODE, com.example.data.model.AppThemeMode.SYSTEM.name)
+            return try {
+                com.example.data.model.AppThemeMode.valueOf(raw ?: com.example.data.model.AppThemeMode.SYSTEM.name)
+            } catch (_: Exception) {
+                com.example.data.model.AppThemeMode.SYSTEM
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_THEME_MODE, value.name).apply()
+
+    var isDeveloperModeUnlocked: Boolean
+        get() = prefs.getBoolean(KEY_DEV_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_DEV_MODE, value).apply()
+
     fun clearCredentials() {
         prefs.edit()
             .remove(KEY_USERNAME)
@@ -68,5 +83,7 @@ class UserPreferences(context: Context) {
         private const val KEY_USERNAME = "saved_username"
         private const val KEY_PASSWORD = "saved_password"
         private const val KEY_REMEMBER_ME = "remember_me"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_DEV_MODE = "dev_mode_unlocked"
     }
 }

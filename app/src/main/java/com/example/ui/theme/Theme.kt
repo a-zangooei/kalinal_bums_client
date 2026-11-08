@@ -43,7 +43,12 @@ private val DarkColorScheme = darkColorScheme(
 
 @Composable
 fun CullinanTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: com.example.data.model.AppThemeMode = com.example.data.model.AppThemeMode.SYSTEM,
+    darkTheme: Boolean = when (themeMode) {
+        com.example.data.model.AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+        com.example.data.model.AppThemeMode.LIGHT -> false
+        com.example.data.model.AppThemeMode.DARK -> true
+    },
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme

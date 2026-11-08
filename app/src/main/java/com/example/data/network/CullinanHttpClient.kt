@@ -86,6 +86,44 @@ object CullinanHttpClient {
                     .build()
                 chain.proceed(request)
             }
+            .addInterceptor { chain ->
+                val req = chain.request()
+                val url = req.url.toString()
+                val method = req.method
+                val headersMap = req.headers.names().associateWith { req.headers[it] ?: "" }
+
+                var bodyString: String? = null
+                val body = req.body
+                if (body != null) {
+                    try {
+                        val buffer = okio.Buffer()
+                        body.writeTo(buffer)
+                        bodyString = buffer.readUtf8()
+                    } catch (_: Exception) {
+                    }
+                }
+
+                com.example.data.logger.AppLogger.logHttpRequest(method, url, headersMap, bodyString)
+
+                val start = System.currentTimeMillis()
+                val response: Response
+                try {
+                    response = chain.proceed(req)
+                } catch (e: Exception) {
+                    com.example.data.logger.AppLogger.logError("HTTP", "$method $url failed (${e.javaClass.simpleName})", e)
+                    throw e
+                }
+                val duration = System.currentTimeMillis() - start
+
+                var preview: String? = null
+                try {
+                    preview = response.peekBody(1024).string()
+                } catch (_: Exception) {
+                }
+
+                com.example.data.logger.AppLogger.logHttpResponse(response.code, url, duration, preview)
+                response
+            }
     }
 
     /**

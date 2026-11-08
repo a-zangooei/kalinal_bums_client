@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WifiOff
@@ -87,6 +88,7 @@ import com.example.ui.viewmodel.AuthViewModel
 fun LoginScreen(
     viewModel: AuthViewModel,
     onLoginSuccess: (UserSession) -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val username by viewModel.username.collectAsState()
@@ -121,9 +123,32 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Top Row: Settings Icon
+                if (onOpenSettings != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = onOpenSettings,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "تنظیمات برنامه",
+                                tint = TealPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 // Header Logo & Branding
                 Box(
                     modifier = Modifier
