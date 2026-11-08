@@ -1,4 +1,4 @@
-name: Automated Release & Signed Distribution
+name: Official Release & Signed Distribution
 
 on:
   push:
@@ -6,13 +6,8 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
-      skip_tests:
-        description: 'Skip Unit tests before building (Not recommended)'
-        required: false
-        default: false
-        type: boolean
       custom_release_tag:
-        description: 'Release Tag (leave empty if triggered from tag, e.g. v1.0.0)'
+        description: 'Release Tag (e.g. v1.0.0, or leave empty if triggered from git tag)'
         required: false
         default: ''
 
@@ -25,9 +20,10 @@ concurrency:
 
 jobs:
   verify:
-    name: 🧪 Quality Verification
+    name: 🧪 Mandatory Quality Verification
     runs-on: ubuntu-latest
-    if: ${{ !inputs.skip_tests }}
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -53,13 +49,16 @@ jobs:
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
   build-and-release:
-    name: 🔐 Build Signed Release & Publish Direct APKs
+    name: 🔐 Build Signed Release & Publish Standalone Direct APK
     needs: [verify]
-    if: always() && (needs.verify.result == 'success' || inputs.skip_tests)
     runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -91,7 +90,7 @@ jobs:
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
-      - name: Determine Release Tag and Naming
+      - name: Determine Release Tag, VersionCode and Naming
         run: |
           if [ -n "${{ inputs.custom_release_tag }}" ]; then
             TAG="${{ inputs.custom_release_tag }}"
@@ -102,12 +101,17 @@ jobs:
             TAG="v1.0-${SHORT_SHA}"
           fi
 
+          VERSION_CODE=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+          CLEAN_VERSION=$(echo "$TAG" | sed 's/^v//')
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
-          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
-          echo "Building official release direct APKs for tag: $TAG (commit: $SHORT_SHA)"
 
-      - name: Build Signed Universal APK and Android App Bundle
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          echo "Building official release direct APKs for tag: $TAG (versionCode: $VERSION_CODE, commit: $SHORT_SHA)"
+
+      - name: Build Signed Standalone Direct APK and Android App Bundle
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/kalinal-release.p12
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -115,7 +119,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           mkdir -p dist
-          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease bundleRelease -PversionCode=${{ env.VERSION_CODE }} -PversionName=${{ env.CLEAN_VERSION }} --no-daemon --stacktrace
 
           RAW_RELEASE_APK=$(find app/build -type f -name "*release.apk" | head -n 1)
           if [ -z "$RAW_RELEASE_APK" ]; then
@@ -123,11 +127,11 @@ jobs:
             exit 1
           fi
 
-          # 1. Main Direct Installable APK (No zip, direct tap-to-install on all phones)
+          # 1. Main Standalone Direct Installable APK (Direct tap-to-install, no zip archive)
           PRIMARY_APK="dist/Kalinal-${RELEASE_TAG}-release.apk"
           cp "$RAW_RELEASE_APK" "$PRIMARY_APK"
 
-          # 2. Android App Bundle (for Google Play / stores)
+          # 2. Android App Bundle (for Google Play / app stores)
           AAB_FILE=$(find app/build -type f -name "*release.aab" | head -n 1)
           if [ -z "$AAB_FILE" ]; then
             echo "::error::Release App Bundle not found in build tree"
@@ -179,6 +183,8 @@ jobs:
             "appName": "Kalinal",
             "applicationId": "com.aistudio.cullinan.vfkzrw",
             "releaseTag": "$RELEASE_TAG",
+            "versionCode": $VERSION_CODE,
+            "versionName": "$CLEAN_VERSION",
             "gitCommitSha": "${{ github.sha }}",
             "buildTimestamp": "$BUILD_DATE",
             "certificateSha256": "$MASTER_FINGERPRINT",
@@ -193,7 +199,7 @@ jobs:
           shred -u "${{ runner.temp }}/kalinal-release.p12" 2>/dev/null || rm -f "${{ runner.temp }}/kalinal-release.p12"
           echo "Temporary release keystore securely destroyed."
 
-      - name: Publish Official GitHub Release (Direct APKs Only)
+      - name: Publish Official GitHub Release (Standalone Direct APKs Only)
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -224,6 +230,7 @@ jobs:
             ### 🔒 راستی‌آزمایی و اصالت فایل‌ها (Digital Signature)
             کلیه فایل‌ها با کلید دائمی ریلیز پروژه امضا و توسط ابزار رسمی اندروید `apksigner` تأیید شده‌اند.
             - **شناسه کامیت (Git SHA):** `${{ github.sha }}`
+            - **کد نسخه (versionCode):** `${{ env.VERSION_CODE }}`
             - **اثرانگشت کلید امضا (SHA-256):**
               `${{ env.MASTER_FINGERPRINT }}`
 
@@ -237,6 +244,7 @@ jobs:
           echo "کلیه فایل‌ها به صورت مستقیم با فرمت APK منتشر شدند و هیچ فایل فشرده‌ای (ZIP) وجود ندارد." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **تگ نسخه:** \`$RELEASE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **کد نسخه (VersionCode):** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
           echo "- **فایل مستقیم:** \`Kalinal-$RELEASE_TAG-release.apk\`" >> $GITHUB_STEP_SUMMARY
           echo "- **هش گواهی امضا:** \`$MASTER_FINGERPRINT\`" >> $GITHUB_STEP_SUMMARY
           echo "- **لینک ریلیزها:** [مشاهده صفحه Releases در گیت‌هاب](https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }})" >> $GITHUB_STEP_SUMMARY

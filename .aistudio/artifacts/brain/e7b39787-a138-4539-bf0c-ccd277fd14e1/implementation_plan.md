@@ -1,42 +1,131 @@
-# برنامه رفع کلیه هشدارها و خطاهای جانبی بیلد و تست (Clean Build & Zero Warnings)
+# طرح جامع ارتقا و ممیزی معماری GitHub Actions و CI/CD پروژه کالینان (Kalinal)
 
-این طرح برطرف‌سازی تمامی هشدارها، استثناهای پس‌زمینه و موارد ثبت‌شده در گزارش‌های تست و بیلد را هدف‌گذاری کرده است تا فرآیند کامپایل و اجرای تست‌ها کاملاً تمیز، سریع و بدون هیچ‌گونه لاگ خطا باشد.
+این سند حاوی نتایج ارزیابی فنی عمیق، تحلیل مخاطرات، و طرح معماری نوین خط لوله CI/CD مخزن `kalinal_bums_client` است. این طرح با تفکیک کامل جاب‌های تست و کامپایل، ارتقای امنیت کلیدهای امضا، تضمین سازگاری به‌روزرسانی (Update Compatibility) و بهینه‌سازی عملکرد گریدل برای سیستم‌های با منابع محدود توسعه‌دهنده تدوین شده است.
 
----
+## تصمیمات تاییدشده توسط کاربر (Confirmed User Decisions)
 
-## ۱. موارد شناسایی‌شده و راه‌حل‌ها
+> [!IMPORTANT]
+> تصمیمات کلیدی زیر در فاز بررسی اولیه بر اساس نیازهای پروژه تثبیت گردیدند و مبنای این سند هستند:
 
-### الف) رفع خطای AWT در KSP روی سیستم‌های بدون نمایشگر (Headless JVM)
-- **علت:** موتور KSP (پلاگین پردازش کدهای Room و Moshi) در پس‌زمینه از کامپوننت‌های IntelliJ استفاده می‌کند که سعی در ایجاد صف رویدادهای گرافیکی AWT دارند. در سرورهای لینوکسی و محیط CI که نمایشگر ندارند، این مورد منجر به `Exception in thread "AWT-EventQueue-0" java.lang.NullPointerException` در لاگ می‌شود.
-- **راه‌حل:** افزودن پارامترهای `-Djava.awt.headless=true` و `-Dsun.java2d.renderer=sun.java2d.marlin.MarlinRenderingEngine` به `org.gradle.jvmargs` در فایل `gradle.properties`.
-
-### ب) رفع هشدار منسوخ‌شدن در کامپوز (`Modifier.menuAnchor()`)
-- **علت:** در نسخه جدید Material 3 (Compose 1.3+) متد `menuAnchor()` بدون پارامتر منسوخ شده و هشدار کامپایلر Kotlin تولید می‌کند:
-  `w: ... 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.`
-- **راه‌حل:** در فایل `app/src/main/java/com/example/ui/screens/MenuScreen.kt` (خط ۸۲۰) از `Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)` استفاده خواهد شد.
-
-### ج) رفع هشدار فقدان `google-services.json`
-- **علت:** پلاگین Google Services به دنبال پیکربندی فایربیس می‌گردد و در صورت نبود آن پیام طولانی:
-  `File google-services.json is missing. The Google Services Plugin cannot function without it...` را در ابتدای تسک‌ها چاپ می‌کند.
-- **راه‌حل:** قرار دادن یک فایل پایه و تمیز `app/google-services.json` با شناسه پکیج پروژه (`com.aistudio.cullinan.vfkzrw`) تا پلاگین به صورت بی‌صدا و بدون صدور هشدار اجرا شود.
-
-### د) رفع هشدار `Unable to strip the following libraries` در تولید APK
-- **علت:** ابزار بسته‌بندی NDK تلاش می‌کند نمادهای دیباگ کتابخانه‌های پیش‌کامپایل‌شده (`libandroidx.graphics.path.so` و `libdatastore_shared_counter.so`) را حذف کند و چون از قبل استریپ شده‌اند هشدار صادر می‌کند.
-- **راه‌حل:** افزودن پیکربندی `packaging.jniLibs.keepDebugSymbols` در `app/build.gradle.kts` برای نادیده گرفتن استریپ این دو کتابخانه.
-
-### ه) پاکسازی مورد تست ردشده (Skipped: 1) در گزارش HTML آزمون‌ها
-- **علت:** تست `ExampleRobolectricTest` دارای انوتیشن `@Ignore` بود که باعث نمایش ۱ تست ردشده در گزارش تست‌های گیت‌هاب می‌شد.
-- **راه‌حل:** تبدیل تست به یک آزمون واحد استاندارد تمیز JVM جهت اعتبارسنجی منابع نام برنامه، به طوری که تمامی تست‌ها (۱۰ از ۱۰) سبز و بدون هیچ مورد Skipped پاس شوند.
+- **شیوه تریگر فرآیند انتشار (Release Trigger):** پیاده‌سازی سازوکار دوگانه (Dual Trigger)؛ شامل اجرای دستی هدفمند از طریق `workflow_dispatch` (با تعیین نسخه/تگ) و همچنین انتشار رسمی خودکار هنگام ارسال تگ نسخه گیت (`push: tags: ['v*']`).
+- **مدیریت کد نسخه (versionCode Strategy):** محاسبه و تزریق پویای `versionCode` بر مبنای شمارنده متوالی کامیت‌های گیت (`git rev-list --count HEAD`) یا شناسه توالی بیلد جهت جلوگیری از خطای `INSTALL_FAILED_VERSION_DOWNGRADE` و تضمین آپدیت بدون دردسر روی دستگاه‌های کاربران.
+- **مدت زمان نگهداری آرتیفکت‌های دیباگ CI:** تنظیم روی **۵ تا ۷ روز** جهت بهینه‌سازی سهمیه دیسک (GitHub Storage Quota) و دسترسی سریع به بیلد تستی هر کامیت.
 
 ---
 
-## ۲. گام‌های پیاده‌سازی و راستی‌آزمایی
+## ۱. تحلیل و ممیزی جامع وضع موجود (Audit Findings)
 
-1. **به‌روزرسانی `gradle.properties`**: اعمال تنظیمات headless JVM.
-2. **به‌روزرسانی `MenuScreen.kt`**: جایگزینی `menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)`.
-3. **ایجاد `app/google-services.json`**: با اطلاعات استاندارد اپ برای آرام‌سازی پلاگین Google Services.
-4. **به‌روزرسانی `app/build.gradle.kts`**: افزودن تنظیمات packaging برای کتابخانه‌های نیتیو.
-5. **اصلاح تست منابع در `ExampleRobolectricTest.kt`**: اطمینان از پاس شدن ۱۰۰٪ تمام تست‌ها با ۰ مورد Skipped.
-6. **اجرای تست و بیلد مجدد**:
-   - اجرای `gradle :app:testDebugUnitTest` و اعتبارسنجی ۰ خطا و ۰ مورد Skipped.
-   - اجرای `compile_applet` و اطمینان از بیلد بدون هشدار.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       ممیزی وضعیت خط لوله و پیکربندی گریدل                 │
+├───────────────────────┬────────────┬────────────────────────────────────────┤
+│ بخش مورد بررسی        │ سطح مخاطره │ وضعیت فعلی و شرح آسیب‌پذیری            │
+├───────────────────────┼────────────┼────────────────────────────────────────┤
+│ خواندن KEY_ALIAS      │ CRITICAL   │ در Gradle هاردکد شده و متغیر محیطی نادیده گرفته می‌شود.│
+│ ثبات versionCode      │ CRITICAL   │ روی عدد ۱ هاردکد شده؛ انتشار آپدیت مسدود می‌شود.       │
+│ تک‌جاب بودن CI فعلی   │ HIGH       │ تست و بیلد در یک جاب ادغام شده و شکست تست مانع بیلد است.│
+│ آپشن skip_tests ریلیز │ HIGH       │ امکان دور زدن تست‌ها و انتشار نسخه معیوب وجود دارد.   │
+│ فشار گریدل روی سخت‌افزار│ MEDIUM     │ تنظیمات JVM برای سلرون دو هسته‌ای و ۸ گیگ رم سنگین است.│
+│ گستره دسترسی Actions  │ LOW        │ مجوزها در سطح گردش‌کار محدود (least-privilege) نشده‌اند. │
+└───────────────────────┴────────────┴────────────────────────────────────────┘
+```
+
+---
+
+## ۲. معماری پیشنهادی خطوط لوله GitHub Actions
+
+گردش‌کارهای مخزن در دو فایل مجزا، صریح و بدون تداخل بازطراحی می‌شوند:
+
+```
+                  ┌──────────────────────────────────────────────┐
+                  │              Git Commit / Push               │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                         ┌───────────────┴───────────────┐
+                         ▼                               ▼
+            ┌─────────────────────────┐     ┌─────────────────────────┐
+            │   Job 1: test           │     │   Job 2: build          │
+            │   (اجرای مستقل)          │     │   (اجرای مستقل)          │
+            ├─────────────────────────┤     ├─────────────────────────┤
+            │ • Checkout              │     │ • Checkout              │
+            │ • Setup JDK 21          │     │ • Setup JDK 21          │
+            │ • Gradle Cache          │     │ • Gradle Cache          │
+            │ • ./gradlew testDebug...│     │ • ./gradlew assembleDeb...│
+            │ • تولید گزارش تست       │     │ • راستی‌آزمایی وجود APK │
+            │ • آپلود گزارش حتی در شکست│    │ • نام‌گذاری معنایی پویا   │
+            │ • خروجی: وضعیت تست      │     │ • آپلود آرتیفکت ۵ روزه  │
+            └─────────────────────────┘     └─────────────────────────┘
+```
+
+### الف) گردش‌کار خودکار تست و کامپایل (`.github/workflows/ci.yml`)
+- **رویداد تریگر:** `push` و `pull_request` روی تمام شاخه‌ها (با فیلتر خروج تگ‌های `v*`).
+- **جاب‌های کاملاً مستقل:**
+  1. `test`: اجرای تست‌های واحد ایزوله، پارس گزارش XML، انتشار جدول شفاف در `$GITHUB_STEP_SUMMARY` و آرشیو نتایج آزمون. بدون هیچ‌گونه وابستگی به کلیدهای امضا.
+  2. `build`: کامپایل موازی و مستقل `assembleDebug`، راستی‌آزمایی ایجاد فایل APK، نام‌گذاری معنایی (`Kalinal-v1.0-debug-[branch]-[sha].apk`)، و آپلود آرتیفکت با انقضای ۷ روزه.
+  - این دو جاب **فاقد دستور `needs`** خواهند بود؛ شکست تست مانع کامپایل بیلد نمی‌شود و شکست بیلد تست را متوقف نمی‌کند.
+
+### ب) گردش‌کار انتشار رسمی و امضا (`.github/workflows/release.yml`)
+- **رویداد تریگر:** اجرای دستی (`workflow_dispatch`) همراه با ورودی تگ نسخه، یا پوش تگ نسخه گیت (`push: tags: ['v*']`).
+- **رویه انتشار:**
+  1. اجرای اجباری آزمون‌های کیفیت (بدون کلید بای‌پس `skip_tests`).
+  2. اعتبارسنجی حضور سکرت‌های مخزن (`RELEASE_KEYSTORE_BASE64`، `RELEASE_STORE_PASSWORD`، `RELEASE_KEY_PASSWORD`).
+  3. بازسازی ایزوله کلید در `$RUNNER_TEMP` با دسترسی `chmod 600`.
+  4. بیلد همزمان فایل نصبی مستقیم (`assembleRelease`) و بسته توزیع فروشگاهی (`bundleRelease`).
+  5. ممیزی و بازرسی امضا با `apksigner verify --print-certs`.
+  6. تخریب قطعی و امن کلید از دیسک رانر با ابزار `shred`.
+  7. انتشار ریلیز رسمی در گیت‌هاب شامل فایل‌های مستقیم `.apk` و `.aab` و چکسام `SHA256SUMS.txt`.
+
+---
+
+## ۳. اصلاحات گریدل و سازگاری به‌روزرسانی (Gradle & Signing)
+
+### ۱. اصلاح خواندن `KEY_ALIAS` در `app/build.gradle.kts`:
+```kotlin
+signingConfigs {
+    create("release") {
+        val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+        storeFile = file(keystorePath)
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload" // رفع هاردکدینگ
+        keyPassword = System.getenv("KEY_PASSWORD")
+    }
+}
+```
+
+### ۲. تزریق متوالی `versionCode` جهت تضمین آپدیت:
+در `app/build.gradle.kts` به جای عدد ثابت `1`:
+```kotlin
+val buildVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull()
+    ?: System.getenv("VERSION_CODE")?.toIntOrNull()
+    ?: 1
+
+defaultConfig {
+    applicationId = "com.aistudio.cullinan.vfkzrw"
+    versionCode = buildVersionCode
+    versionName = project.findProperty("versionName")?.toString() ?: "1.0"
+}
+```
+
+---
+
+## ۴. تفکیک تنظیمات سیستم ضعیف لوکال و سرور قدرتمند ابری
+
+پیکربندی `gradle.properties` پروژه برای سیستم دو هسته‌ای توسعه‌دهنده بهینه می‌شود و رانر ابری GitHub Actions از طریق متغیر محیطی `GRADLE_OPTS` از ظرفیت کامل ۴ هسته و رم بالا بهره‌مند می‌گردد:
+
+- **سیستم لوکال (Celeron G4900 + 8GB RAM):**
+  - رم اختصاصی گریدل: `-Xmx2048m` (جلوگیری از اشغال رم و سوآپ شدید ویندوز)
+  - تعداد ورکرها: `org.gradle.workers.max=2` (مطابق با ۲ هسته واقعی پردازنده بدون Thread Thrashing)
+  - فعال نگه داشتن Configuration Cache و Non-transitive R class
+- **محیط GitHub Actions (سرور ابری با ۴ هسته و ۱۶ گیگابایت رم):**
+  - تزریق متغیر در رانر: `GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"`
+
+---
+
+## ۵. راهبرد جامع آزمون‌های واحد (Mock-based Test Strategy)
+
+پروژه به هیچ عنوان نباید در تست‌های CI با سرور واقعی دانشگاه (`jeton.bums.ac.ir`) ارتباط برقرار کند.
+پوشش آزمون‌ها در حوزه‌های زیر با ماک کامل (`MockWebServer` و دیتاست‌های آفلاین) تکمیل خواهد شد:
+1. آزمون ورود موفق و ناموفق، اعتبارسنجی کپچا و هندلینگ رمزنگاری RSA PKCS#1 v1.5.
+2. آزمون چرخه کوکی‌ها و تشخیص قطعی انقضای نشست (Session Expiry) بر اساس پاسخ‌های Delta.
+3. آزمون مقاومت در برابر خطاهای HTML سرور (۵۰۰، ۴۰۳ و صفحات بدون UpdatePanel).
+4. آزمون سازوکار همزمانی (Concurrency & Mutex) در لایه مخزن و ویومدل جهت مهار کلیک‌های مکرر رزرو/لغو.
