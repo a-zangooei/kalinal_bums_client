@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Cullinan"
+rootProject.name = "Kalinan"
 
 include(":app")

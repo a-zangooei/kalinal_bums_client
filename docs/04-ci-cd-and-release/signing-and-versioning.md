@@ -50,8 +50,9 @@ VERSION_CODE=$(git rev-list --count HEAD 2>/dev/null || echo 1)
   - `RELEASE_STORE_PASSWORD`
   - `RELEASE_KEY_ALIAS` (مقدار پیش‌فرض: `upload`)
   - `RELEASE_KEY_PASSWORD`
-- در `app/build.gradle.kts`، نام مستعار کلید مستقیماً از متغیر محیطی خوانده می‌شود:
+- در `app/build.gradle.kts`، نام مستعار کلید مستقیماً از متغیرهای محیطی بدون هاردکد خوانده می‌شود:
   ```kotlin
-  keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+  val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS")
+  keyAlias = envKeyAlias ?: "upload"
   ```
-- بدین ترتیب هویت انتشار پایدار مانده و نسخه‌های رسمی همواره قابلیت ارتقای مستقیم روی گوشی کاربران را دارند.
+- بدین ترتیب هویت انتشار پایدار مانده، کلید و الیاس از سکرت‌های امن گیت‌هاب تأمین شده و نسخه‌های رسمی همواره قابلیت ارتقای مستقیم روی گوشی کاربران را دارند.

@@ -184,8 +184,8 @@ jobs:
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           cat << EOF > dist/release-metadata.json
           {
-            "appName": "Kalinal",
-            "applicationId": "com.aistudio.cullinan.vfkzrw",
+            "appName": "Kalinan",
+            "applicationId": "ir.ac.bums.jeton.client",
             "releaseTag": "$RELEASE_TAG",
             "versionCode": $VERSION_CODE,
             "versionName": "$CLEAN_VERSION",
