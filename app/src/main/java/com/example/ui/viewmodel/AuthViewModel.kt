@@ -138,7 +138,9 @@ class AuthViewModel(
                     userPrefs.savedPassword = pass
                 } else {
                     userPrefs.clearCredentials()
+                    _password.value = ""
                 }
+                _captchaInput.value = ""
                 onSuccess(session)
             }.onFailure { error ->
                 _errorMessage.value = error.message ?: "ورود به سامانه با خطا مواجه شد"

@@ -36,6 +36,7 @@ class MenuRepository {
                 val menu = ReservationHtmlParser.parse(html)
                 Result.success(menu)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Result.failure(e)
             }
         }
@@ -97,6 +98,10 @@ class MenuRepository {
                 val deltaText = response.body?.string() ?: ""
                 val deltaResponse = DeltaParser.parse(deltaText)
 
+                if (deltaResponse.isSessionExpired) {
+                    return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
                     ?: return@withContext Result.failure(Exception("پاسخ سرور شامل محتوای جدول هفته نبود"))
 
@@ -111,6 +116,7 @@ class MenuRepository {
 
                 Result.success(Pair(updatedMenu, newOffset))
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Result.failure(e)
             }
         }
@@ -152,6 +158,10 @@ class MenuRepository {
                 val deltaText = response.body?.string() ?: ""
                 val deltaResponse = DeltaParser.parse(deltaText)
 
+                if (deltaResponse.isSessionExpired) {
+                    return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
                     ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
 
@@ -177,6 +187,7 @@ class MenuRepository {
                     )
                 )
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Result.failure(e)
             }
         }
@@ -223,6 +234,10 @@ class MenuRepository {
                 val deltaText = response.body?.string() ?: ""
                 val deltaResponse = DeltaParser.parse(deltaText)
 
+                if (deltaResponse.isSessionExpired) {
+                    return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
                     ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
 
@@ -248,6 +263,7 @@ class MenuRepository {
                     )
                 )
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Result.failure(e)
             }
         }

@@ -16,7 +16,8 @@ data class DeltaResponse(
     val rawTokens: List<DeltaToken> = emptyList(),
     val toastType: String? = null,
     val toastMessage: String? = null,
-    val toastTitle: String? = null
+    val toastTitle: String? = null,
+    val isSessionExpired: Boolean = false
 )
 
 object DeltaParser {
@@ -124,6 +125,9 @@ object DeltaParser {
             }
         }
 
+        val isSessionExpired = redirectUrl?.contains("Login.aspx", ignoreCase = true) == true ||
+            (updatePanels.isEmpty() && (deltaText.contains("Login.aspx") || deltaText.contains("txtUsernamePlain")))
+
         return DeltaResponse(
             updatePanels = updatePanels,
             hiddenFields = hiddenFields,
@@ -133,7 +137,8 @@ object DeltaParser {
             rawTokens = rawTokens,
             toastType = extractedToastType,
             toastMessage = extractedToastMessage,
-            toastTitle = extractedToastTitle
+            toastTitle = extractedToastTitle,
+            isSessionExpired = isSessionExpired
         )
     }
 }

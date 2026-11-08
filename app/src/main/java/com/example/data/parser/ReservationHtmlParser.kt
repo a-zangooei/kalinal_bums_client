@@ -30,7 +30,7 @@ object ReservationHtmlParser {
 
         // 1. Week Date Range
         val weekDateText = doc.select("#cphMain_lblWeekDate").text().trim()
-            .ifEmpty { "1405/08/16 الی 1405/08/22" }
+            .ifEmpty { "برنامه غذایی هفتگی" }
 
         // 2. Credit Info (cphMain_lblCreditValue or lblUserCreditPrice)
         var rawCreditText = doc.select("#cphMain_lblCreditValue").text().trim()

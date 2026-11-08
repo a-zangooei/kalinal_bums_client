@@ -44,6 +44,7 @@ class AuthRepository {
                 )
             )
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }
@@ -57,6 +58,7 @@ class AuthRepository {
                 Result.failure(Exception("دریافت تصویر کد امنیتی از سرور ناموفق بود"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }
@@ -133,6 +135,7 @@ class AuthRepository {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }
