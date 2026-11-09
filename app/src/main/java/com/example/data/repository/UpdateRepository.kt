@@ -18,7 +18,7 @@ class UpdateRepository(
 
     companion object {
         const val GITHUB_OWNER = "a-zangooei"
-        const val GITHUB_REPO = "kalinal_bums_client"
+        const val GITHUB_REPO = "kalinan_bums_client"
         const val RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
         const val FALLBACK_RELEASE_WEB_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
     }
@@ -30,7 +30,7 @@ class UpdateRepository(
             val request = Request.Builder()
                 .url(RELEASES_API_URL)
                 .header("Accept", "application/vnd.github.v3+json")
-                .header("User-Agent", "Kalinal-Android-Client")
+                .header("User-Agent", "Kalinan-Android-Client")
                 .get()
                 .build()
 

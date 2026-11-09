@@ -8,7 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class KalinalUnitTests {
+class KalinanUnitTests {
 
     companion object {
         private const val TEST_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----

@@ -17,8 +17,8 @@
 
 ```bash
 # ۱. کلون کردن مخزن
-git clone https://github.com/a-zangooei/kalinal_bums_client.git
-cd kalinal_bums_client
+git clone https://github.com/a-zangooei/kalinan_bums_client.git
+cd kalinan_bums_client
 
 # ۲. ایجاد فایل محیطی اولیه
 touch .env

@@ -22,7 +22,7 @@ captures/
 !debug.keystore.base64
 debug.keystore
 my-upload-key.jks
-kalinal-release-key.p12
+kalinan-release-key.p12
 
 # ==========================================
 # Local Configuration & Environment Secrets

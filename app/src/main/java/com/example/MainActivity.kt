@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
             var currentThemeMode by remember { mutableStateOf(userPrefs.themeMode) }
 
             CullinanTheme(themeMode = currentThemeMode) {
-                KalinalApp(
+                KalinanApp(
                     currentThemeMode = currentThemeMode,
                     onThemeChanged = { newTheme ->
                         currentThemeMode = newTheme
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun KalinalApp(
+fun KalinanApp(
     currentThemeMode: com.example.data.model.AppThemeMode,
     onThemeChanged: (com.example.data.model.AppThemeMode) -> Unit
 ) {

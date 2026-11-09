@@ -1,4 +1,4 @@
-# راهنمای جامع پایپ‌لاین بیلد، امضای ریلیز، آپدیت درون‌برنامه‌ای و ویکی (Kalinal)
+# راهنمای جامع پایپ‌لاین بیلد، امضای ریلیز، آپدیت درون‌برنامه‌ای و ویکی (Kalinan)
 
 این سند مراحل تولید کلید اختصاصی امضای ریلیز، تنظیم سکرت‌های مخزن گیت‌هاب، نحوه انتشار ریلیزها، سازوکار اطلاع‌رسانی نسخه جدید در داخل برنامه و همگام‌سازی خودکار مستندات با ویکی گیت‌هاب را شرح می‌دهد.
 
@@ -14,33 +14,33 @@ PowerShell را باز کرده و دستور زیر را اجرا کنید:
 ```powershell
 # ساخت فایل کلید با فرمت PKCS12 و اعتبار ۲۵ سال (۱۰۰۰۰ روز)
 keytool -genkeypair -v `
-  -keystore kalinal-release-key.p12 `
+  -keystore kalinan-release-key.p12 `
   -storetype PKCS12 `
   -alias upload `
   -keyalg RSA `
   -keysize 2048 `
   -validity 10000 `
-  -dname "CN=Kalinal Mobile, OU=Release, O=Kalinal, L=Birjand, ST=South Khorasan, C=IR"
+  -dname "CN=Kalinan Mobile, OU=Release, O=Kalinan, L=Birjand, ST=South Khorasan, C=IR"
 ```
 
 - از شما یک رمز عبور پرسیده می‌شود (مثلاً `MySecretPass123`). این رمز را در جایی امن یادداشت کنید.
-- فایلی به نام `kalinal-release-key.p12` در همان مسیر ایجاد می‌شود.
+- فایلی به نام `kalinan-release-key.p12` در همان مسیر ایجاد می‌شود.
 
 ### گام ۲: تبدیل به Base64 و کپی در کلیپ‌بورد
 دستور زیر را در همان پنجره PowerShell اجرا کنید تا محتوای کلید به فرمت Base64 تبدیل شده و مستقیماً در حافظه کپی شود:
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("kalinal-release-key.p12")) | Set-Clipboard
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("kalinan-release-key.p12")) | Set-Clipboard
 Write-Host "کلید با موفقیت به فرمت Base64 تبدیل و در کلیپ‌بورد ذخیره شد!"
 ```
 
-⚠️ **نکته امنیتی بسیار مهم:** فایل `kalinal-release-key.p12` را در جایی امن نگهداری کنید و **هرگز** آن را داخل گیت کامیت نکنید.
+⚠️ **نکته امنیتی بسیار مهم:** فایل `kalinan-release-key.p12` را در جایی امن نگهداری کنید و **هرگز** آن را داخل گیت کامیت نکنید.
 
 ---
 
 ## ۲. تنظیم سکرت‌های گیت‌هاب (GitHub Repository Secrets)
 
-وارد صفحه مخزن خود در گیت‌هاب شوید (`github.com/a-zangooei/kalinal_bums_client`):
+وارد صفحه مخزن خود در گیت‌هاب شوید (`github.com/a-zangooei/kalinan_bums_client`):
 1. به مسیر **Settings** -> **Secrets and variables** -> **Actions** بروید.
 2. روی دکمه سبز رنگ **New repository secret** کلیک کرده و ۴ مقدار زیر را اضافه کنید:
 
@@ -64,7 +64,7 @@ git push origin v1.0.1
 
 به محض ارسال تگ:
 1. آزمون‌های واحد خودکار اجرا می‌شوند.
-2. فایل‌های نصبی `Kalinal-v1.0.1-release.apk` و `Kalinal-v1.0.1-AppBundle.aab` با کلید رسمی شما امضا می‌شوند.
+2. فایل‌های نصبی `Kalinan-v1.0.1-release.apk` و `Kalinan-v1.0.1-AppBundle.aab` با کلید رسمی شما امضا می‌شوند.
 3. اثرانگشت SHA-256 استخراج و تأیید می‌شود.
 4. صفحه ریلیز در گیت‌هاب با متن استاندارد و فایل‌های مستقیم نصبی منتشر می‌شود.
 

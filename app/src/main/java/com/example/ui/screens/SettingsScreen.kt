@@ -383,7 +383,7 @@ fun SettingsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "کالینان (Kalinal)",
+                            text = "کالینان (Kalinan)",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = TealPrimary
@@ -643,7 +643,7 @@ private fun shareLogs(context: Context) {
     val sendIntent = Intent().apply {
         action = Intent.ACTION_SEND
         putExtra(Intent.EXTRA_TITLE, "لاگ‌های عیب‌یابی سامانه کالینان")
-        putExtra(Intent.EXTRA_SUBJECT, "Kalinal Diagnostic Logs")
+        putExtra(Intent.EXTRA_SUBJECT, "Kalinan Diagnostic Logs")
         putExtra(Intent.EXTRA_TEXT, fullText)
         type = "text/plain"
     }

@@ -1,5 +1,5 @@
-name: Auto Workflow
-run-name: "Auto Workflow commit ${{ github.sha }} (#${{ github.run_number }})"
+name: CI Workflow
+run-name: 'CI - ${{ github.ref_name }} (#${{ github.run_number }})'
 
 on:
   push:
@@ -13,18 +13,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # =========================================================================
-  # Job 1: Quality & Unit Tests (First Line of Defense)
-  # =========================================================================
   test:
-    name: 🧪 Automated Quality & Unit Tests
+    name: Quality & Unit Tests
     runs-on: ubuntu-latest
     env:
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"
@@ -47,7 +44,7 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Parse & Generate Dynamic Test Report Summary
+      - name: Parse & Generate Test Report Summary
         if: always()
         run: python3 scripts/parse_test_results.py
 
@@ -59,13 +56,12 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
 
-  # =========================================================================
-  # Job 2: Build Application APK (Runs only after Tests Pass)
-  # =========================================================================
   build:
-    name: 📦 Build Application APK
+    name: Build Application APK
     needs: [test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"
     steps:
@@ -122,7 +118,7 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           CLEAN_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
 
-          FINAL_APK_NAME="Kalinal-build-${BUILD_NUMBER}-debug-${CLEAN_BRANCH}-${SHORT_SHA}.apk"
+          FINAL_APK_NAME="Kalinan-build-${BUILD_NUMBER}-debug-${CLEAN_BRANCH}-${SHORT_SHA}.apk"
           cp "$RAW_APK" "dist/${FINAL_APK_NAME}"
 
           CHECKSUM=$(sha256sum "dist/${FINAL_APK_NAME}" | awk '{print $1}')
@@ -136,6 +132,22 @@ jobs:
 
           echo "Artifact prepared: dist/${FINAL_APK_NAME} (Size: $FILE_SIZE, SHA-256: $CHECKSUM)"
 
+      - name: Publish Direct Unzipped APK to Rolling Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: debug-build
+          name: "آخرین بیلد دیباگ (Debug Build)"
+          files: dist/*.apk
+          body: |
+            آخرین فایل نصبی مستقیم دیباگ (بدون زیپ)
+            - **شاخه:** `${{ github.ref_name }}`
+            - **شناسه کامیت:** `${{ env.SHORT_SHA }}`
+            - **شماره بیلد:** `#${{ env.BUILD_NUMBER }}`
+          prerelease: true
+          make_latest: false
+
       - name: Upload Dynamic APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -147,26 +159,24 @@ jobs:
       - name: Publish Build Step Summary
         if: always()
         run: |
-          echo "## 📦 مشخصات بیلد خودکار اپلیکیشن (Automated Build Summary)" >> $GITHUB_STEP_SUMMARY
-          echo "فایل نصبی اندروید به صورت پویا با موفقیت تولید شد:" >> $GITHUB_STEP_SUMMARY
+          echo "## مشخصات بیلد خودکار اپلیکیشن" >> $GITHUB_STEP_SUMMARY
+          echo "فایل نصبی اندروید با موفقیت تولید شد:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| مشخصه | مقدار |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| **نام فایل نصبی** | \`$FINAL_APK_NAME\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **شماره بیلد (Build)** | \`#$BUILD_NUMBER\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **شناسه کامیت (Git SHA)** | \`$SHORT_SHA\` (\`${{ github.sha }}\`) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **شماره بیلد** | \`#$BUILD_NUMBER\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **شناسه کامیت (Git SHA)** | \`$SHORT_SHA\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **شاخه مخزن (Branch)** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **حجم فایل** | \`$FILE_SIZE\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **هش اعتبارسنجی (SHA-256)** | \`$CHECKSUM\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **نوع امضا** | 🛡️ کلید ثابت و یکپارچه دیباگ (امضای دائمی و سازگار با آپدیت‌ها) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **نوع امضا** | کلید ثابت دیباگ (امضای دائمی و سازگار با آپدیت‌ها) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📥 **دانلود فایل نصبی:** از بخش **Artifacts** در بالای صفحه اجرای این اکشن قابل دریافت است." >> $GITHUB_STEP_SUMMARY
+          echo "📥 **[دانلود مستقیم و بدون زیپ فایل APK](https://github.com/${{ github.repository }}/releases/download/debug-build/$FINAL_APK_NAME)**" >> $GITHUB_STEP_SUMMARY
+          echo "همچنین فایل نصبی در بخش **Artifacts** بالای این صفحه در دسترس است." >> $GITHUB_STEP_SUMMARY
 
-  # =========================================================================
-  # Job 3: GitHub Wiki Synchronization (Runs independently)
-  # =========================================================================
   wiki-sync:
-    name: 📚 Sync Documentation to GitHub Wiki
+    name: Sync Documentation to Wiki
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -189,7 +199,7 @@ jobs:
           echo "Attempting to clone repository wiki from: https://github.com/${{ github.repository }}.wiki.git"
           if ! git clone "$WIKI_URL" "$WIKI_DIR" 2>/dev/null; then
             echo "::warning::مخزن ویکی هنوز در گیت‌هاب ایجاد نشده است. برای فعال‌سازی به تب Wiki در مخزن بروید و یک صفحه اولیه ذخیره کنید."
-            echo "## ⚠️ ویکی مخزن گیت‌هاب (GitHub Wiki) هنوز فعال نشده است" >> $GITHUB_STEP_SUMMARY
+            echo "## ویکی مخزن گیت‌هاب (GitHub Wiki) هنوز فعال نشده است" >> $GITHUB_STEP_SUMMARY
             echo "برای فعال‌سازی خودکار ویکی:" >> $GITHUB_STEP_SUMMARY
             echo "1. به زبانه **Wiki** در مخزن گیت‌هاب بروید (\`https://github.com/${{ github.repository }}/wiki\`)." >> $GITHUB_STEP_SUMMARY
             echo "2. روی **Create the first page** کلیک کرده و دکمه **Save Page** را بزنید." >> $GITHUB_STEP_SUMMARY
@@ -216,13 +226,14 @@ jobs:
           cd "$WIKI_DIR"
           git add .
 
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           if git diff --staged --quiet; then
             echo "No changes detected in documentation. Wiki is already up to date."
-            echo "## ✅ ویکی گیت‌هاب به‌روز است و هیچ تغییری نیاز نبود." >> $GITHUB_STEP_SUMMARY
+            echo "## ویکی گیت‌هاب به‌روز است و هیچ تغییری نیاز نبود." >> $GITHUB_STEP_SUMMARY
           else
-            git commit -m "Auto-sync documentation from /docs (${{ github.sha }})"
+            git commit -m "Auto-sync documentation from /docs (${SHORT_SHA})"
             git push origin master || git push origin main || git push origin HEAD:master
             echo "Wiki synchronized successfully!"
-            echo "## 🚀 مستندات با موفقیت به ویکی گیت‌هاب منتقل شدند!" >> $GITHUB_STEP_SUMMARY
+            echo "## مستندات با موفقیت به ویکی گیت‌هاب منتقل شدند" >> $GITHUB_STEP_SUMMARY
             echo "می‌توانید مستندات را در [صفحه ویکی مخزن](https://github.com/${{ github.repository }}/wiki) مشاهده کنید." >> $GITHUB_STEP_SUMMARY
           fi

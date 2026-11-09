@@ -1,4 +1,5 @@
-name: Official Release & Signed Distribution
+name: Release & Distribution
+run-name: 'Release ${{ inputs.custom_release_tag || github.ref_name }}'
 
 on:
   push:
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   verify:
-    name: 🧪 Mandatory Quality Verification
+    name: Quality Verification
     runs-on: ubuntu-latest
     env:
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=4"
@@ -35,7 +36,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Prepare Persistent Canonical Keystore & Environment
+      - name: Prepare Debug Keystore
         run: |
           touch .env
           if [ -f "debug.keystore.base64" ]; then
@@ -44,9 +45,6 @@ jobs:
           elif [ -n "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" ]; then
             echo "Loading keystore from GitHub Secret DEBUG_KEYSTORE_BASE64..."
             echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > debug.keystore
-          else
-            echo "Restoring canonical project debug keystore from embedded signature..."
-            echo "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" | base64 -d > debug.keystore
           fi
           chmod +x gradlew
 
@@ -54,7 +52,7 @@ jobs:
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
   build-and-release:
-    name: 🔐 Build Signed Release & Publish Standalone Direct APK
+    name: Build & Release
     needs: [verify]
     runs-on: ubuntu-latest
     env:
@@ -72,7 +70,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Validate Release Signing Secrets
+      - name: Validate Release Secrets
         run: |
           if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
             echo "::error::Missing repository secret 'RELEASE_KEYSTORE_BASE64'! Add it in Settings -> Secrets and variables -> Actions."
@@ -91,15 +89,15 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Ephemeral Release Keystore & Environment
+      - name: Setup Release Keystore
         run: |
           touch .env
           chmod +x gradlew
-          KEYSTORE_PATH="${{ runner.temp }}/kalinal-release.p12"
+          KEYSTORE_PATH="${{ runner.temp }}/kalinan-release.p12"
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
-      - name: Determine Release Tag, VersionCode and Naming
+      - name: Determine Release Version
         run: |
           if [ -n "${{ inputs.custom_release_tag }}" ]; then
             TAG="${{ inputs.custom_release_tag }}"
@@ -118,11 +116,11 @@ jobs:
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
           echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
           echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
-          echo "Building official release direct APKs for tag: $TAG (versionCode: $VERSION_CODE, commit: $SHORT_SHA)"
+          echo "Building release artifacts for tag: $TAG (versionCode: $VERSION_CODE, commit: $SHORT_SHA)"
 
-      - name: Build Signed Standalone Direct APK and Android App Bundle
+      - name: Build Release Artifacts
         env:
-          KEYSTORE_PATH: ${{ runner.temp }}/kalinal-release.p12
+          KEYSTORE_PATH: ${{ runner.temp }}/kalinan-release.p12
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
@@ -136,23 +134,21 @@ jobs:
             exit 1
           fi
 
-          # 1. Main Standalone Direct Installable APK (Direct tap-to-install, no zip archive)
-          PRIMARY_APK="dist/Kalinal-${RELEASE_TAG}-release.apk"
+          PRIMARY_APK="dist/Kalinan-${RELEASE_TAG}-release.apk"
           cp "$RAW_RELEASE_APK" "$PRIMARY_APK"
 
-          # 2. Android App Bundle (for Google Play / app stores)
           AAB_FILE=$(find app/build -type f -name "*release.aab" | head -n 1)
           if [ -z "$AAB_FILE" ]; then
             echo "::error::Release App Bundle not found in build tree"
             exit 1
           fi
-          FINAL_AAB="dist/Kalinal-${RELEASE_TAG}-AppBundle.aab"
+          FINAL_AAB="dist/Kalinan-${RELEASE_TAG}-AppBundle.aab"
           cp "$AAB_FILE" "$FINAL_AAB"
 
           echo "PRIMARY_APK=$PRIMARY_APK" >> $GITHUB_ENV
           echo "FINAL_AAB=$FINAL_AAB" >> $GITHUB_ENV
 
-      - name: Mandatory Signature & Certificate Audit
+      - name: Verify Signature
         run: |
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
           if [ -z "$APKSIGNER" ]; then
@@ -177,9 +173,9 @@ jobs:
             exit 1
           fi
           echo "MASTER_FINGERPRINT=$MASTER_FINGERPRINT" >> $GITHUB_ENV
-          echo "Verified Master Release Certificate SHA-256: $MASTER_FINGERPRINT"
+          echo "Release Certificate SHA-256: $MASTER_FINGERPRINT"
 
-      - name: Generate Checksums & Release Metadata
+      - name: Generate Release Metadata
         run: |
           cd dist
           sha256sum *.apk *.aab 2>/dev/null > SHA256SUMS.txt
@@ -202,62 +198,55 @@ jobs:
           }
           EOF
 
-      - name: Secure Keystore Cleanup
+      - name: Clean Up Keystore
         if: always()
         run: |
-          shred -u "${{ runner.temp }}/kalinal-release.p12" 2>/dev/null || rm -f "${{ runner.temp }}/kalinal-release.p12"
-          echo "Temporary release keystore securely destroyed."
+          shred -u "${{ runner.temp }}/kalinan-release.p12" 2>/dev/null || rm -f "${{ runner.temp }}/kalinan-release.p12"
 
-      - name: Publish Official GitHub Release (Standalone Direct APKs Only)
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: کالینان (Kalinal) نسخه ${{ env.RELEASE_TAG }}
+          name: کالینان - نسخه ${{ env.RELEASE_TAG }}
           files: |
             dist/*.apk
             dist/*.aab
             dist/SHA256SUMS.txt
             dist/release-metadata.json
           body: |
-            ## 🍱 کالینان (Kalinal) - نسخه ${{ env.RELEASE_TAG }}
-            کلاینت مدرن، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
+            ## کالینان - نسخه ${{ env.RELEASE_TAG }}
+            کلاینت سامانه تغذیه دانشگاه علوم پزشکی بیرجند
 
             ### 📝 تغییرات این نسخه
-            • بهبود ارتباط با سرور و بهینه‌سازی فرآیند رزرو غذا
-            • ارتقای امنیت و رفع اشکالات نشست کاری
+            • بهبود عملکرد و ارتباط با سرور
+            • ارتقای امنیت و رفع مشکلات گزارش‌شده
 
             ---
 
-            ### 📲 دانلود مستقیم فایل نصبی (بدون نیاز به آنزیپ)
-            کلیه فایل‌ها به صورت مستقیم با پسوند **`.apk`** منتشر شده‌اند و با یک لمس روی تمامی گوشی‌ها و تبلت‌های اندرویدی نصب می‌شوند:
-
-            | فایل نصبی | توضیحات و سازگاری | وضعیت امضا |
-            |---|---|:---:|
-            | 📥 **[`Kalinal-${{ env.RELEASE_TAG }}-release.apk`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinal-${{ env.RELEASE_TAG }}-release.apk)** | **فایل اصلی نصب مستقیم** (سازگار با ۱۰۰٪ گوشی‌های سامسونگ، شیائومی، هواوی و...) | ✅ امضای رسمی و دائمی |
-            | 📥 **[`Kalinal-${{ env.RELEASE_TAG }}-AppBundle.aab`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinal-${{ env.RELEASE_TAG }}-AppBundle.aab)** | بسته استاندارد توزیع فروشگاهی (AAB) | ✅ امضای رسمی و دائمی |
+            ### 📥 دریافت فایل‌های نصبی
+            | فایل | توضیحات |
+            |---|---|
+            | [`Kalinan-${{ env.RELEASE_TAG }}-release.apk`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinan-${{ env.RELEASE_TAG }}-release.apk) | فایل نصبی اصلی (APK) |
+            | [`Kalinan-${{ env.RELEASE_TAG }}-AppBundle.aab`](https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Kalinan-${{ env.RELEASE_TAG }}-AppBundle.aab) | بسته توزیع فروشگاهی (AAB) |
 
             ---
 
-            ### 🔒 راستی‌آزمایی و اصالت فایل‌ها (Digital Signature)
-            کلیه فایل‌ها با کلید دائمی ریلیز پروژه امضا و توسط ابزار رسمی اندروید `apksigner` تأیید شده‌اند.
-            - **شناسه کامیت (Git SHA):** `${{ github.sha }}`
-            - **کد نسخه (versionCode):** `${{ env.VERSION_CODE }}`
+            ### 🔒 اطلاعات فنی و امضا
+            - **شناسه کامیت:** `${{ github.sha }}`
+            - **کد نسخه:** `${{ env.VERSION_CODE }}`
             - **اثرانگشت کلید امضا (SHA-256):**
               `${{ env.MASTER_FINGERPRINT }}`
-
-            کدهای هش فایل‌ها در سند `SHA256SUMS.txt` ضمیمه شده است.
           draft: false
           prerelease: ${{ contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'rc') }}
 
-      - name: Publish Release Step Summary
+      - name: Output Step Summary
         run: |
-          echo "## 🚀 انتشار مستقیم فایل‌های نصبی کالینان $RELEASE_TAG با موفقیت انجام شد!" >> $GITHUB_STEP_SUMMARY
-          echo "کلیه فایل‌ها به صورت مستقیم با فرمت APK منتشر شدند و هیچ فایل فشرده‌ای (ZIP) وجود ندارد." >> $GITHUB_STEP_SUMMARY
+          echo "## انتشار نسخه $RELEASE_TAG انجام شد" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **تگ نسخه:** \`$RELEASE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "- **کد نسخه (VersionCode):** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **فایل مستقیم:** \`Kalinal-$RELEASE_TAG-release.apk\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **هش گواهی امضا:** \`$MASTER_FINGERPRINT\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **لینک ریلیزها:** [مشاهده صفحه Releases در گیت‌هاب](https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **فایل نصبی:** \`Kalinan-$RELEASE_TAG-release.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **اثرانگشت کلید امضا:** \`$MASTER_FINGERPRINT\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **صفحه انتشار:** [Releases](https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }})" >> $GITHUB_STEP_SUMMARY

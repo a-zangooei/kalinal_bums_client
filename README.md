@@ -1,17 +1,17 @@
 <div align="center">
 
-# 🍱 کالینان (Kalinal)
+# 🍱 کالینان (Kalinan)
 ### کلاینت اندرویدی مدرن، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
 
-[![Latest Release](https://img.shields.io/github/v/release/a-zangooei/kalinal_byms_client?color=blue&logo=github&label=Release)](https://github.com/a-zangooei/kalinal_byms_client/releases/latest)
-[![Total Downloads](https://img.shields.io/github/downloads/a-zangooei/kalinal_byms_client/total?color=success&logo=android&label=Downloads)](https://github.com/a-zangooei/kalinal_byms_client/releases)
-[![Android CI](https://github.com/a-zangooei/kalinal_byms_client/actions/workflows/ci.yml/badge.svg)](https://github.com/a-zangooei/kalinal_byms_client/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/a-zangooei/kalinan_bums_client?color=blue&logo=github&label=Release)](https://github.com/a-zangooei/kalinan_bums_client/releases/latest)
+[![Total Downloads](https://img.shields.io/github/downloads/a-zangooei/kalinan_bums_client/total?color=success&logo=android&label=Downloads)](https://github.com/a-zangooei/kalinan_bums_client/releases)
+[![Android CI](https://github.com/a-zangooei/kalinan_bums_client/actions/workflows/ci.yml/badge.svg)](https://github.com/a-zangooei/kalinan_bums_client/actions/workflows/ci.yml)
 [![Direct University Connection](https://img.shields.io/badge/Server-Direct%20to%20jeton.bums.ac.ir-success.svg)](#-امنیت-و-حفظ-حریم-خصوصی-تعهد-شفاف)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 <br/>
 
-<a href="https://github.com/a-zangooei/kalinal_byms_client/releases/latest">
+<a href="https://github.com/a-zangooei/kalinan_bums_client/releases/latest">
   <img src="https://img.shields.io/badge/📥_دانلود_مستقیم_آخرین_نسخه_رسمی_(APK)-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download Latest APK" height="42" />
 </a>
 
@@ -19,7 +19,7 @@
 
 | 🌟 نسخه رسمی و پایدار (پیشنهادی همه دانشجویان) | 🛠️ بیلد آزمایشی آخرین کامیت (توسعه‌دهندگان) |
 |:---:|:---:|
-| [**دانلود آخرین نسخه پایدار از Releases**](https://github.com/a-zangooei/kalinal_byms_client/releases/latest) | [**دریافت فایل نصبی کامیت‌ها از Actions**](https://github.com/a-zangooei/kalinal_byms_client/actions/workflows/ci.yml) |
+| [**دانلود آخرین نسخه پایدار از Releases**](https://github.com/a-zangooei/kalinan_bums_client/releases/latest) | [**دریافت فایل نصبی کامیت‌ها از Actions**](https://github.com/a-zangooei/kalinan_bums_client/actions/workflows/ci.yml) |
 
 </div>
 
@@ -73,12 +73,12 @@
 ## 📥 دانلود و راهنمای نصب
 
 ### دریافت فایل نصبی:
-به بخش **[Releases (جدیدترین نسخه)](https://github.com/a-zangooei/kalinal_byms_client/releases/latest)** مراجعه کرده و فایل نصبی را دانلود کنید:
+به بخش **[Releases (جدیدترین نسخه)](https://github.com/a-zangooei/kalinan_bums_client/releases/latest)** مراجعه کرده و فایل نصبی را دانلود کنید:
 
 | نام فایل | فرمت | مناسب برای |
 |---|:---:|---|
-| **`Kalinal-vX.X-release.apk`** | `.apk` مستقیم | **پیشنهادی (نصب با یک لمس):** سازگار با ۱۰۰٪ مدل‌های گوشی و تبلت‌ها بدون نیاز به استخراج |
-| **`Kalinal-vX.X-AppBundle.aab`** | `.aab` | فرمت رسمی باندل برنامه برای گوگل‌پلی و سایر استورها |
+| **`Kalinan-vX.X-release.apk`** | `.apk` مستقیم | **پیشنهادی (نصب با یک لمس):** سازگار با ۱۰۰٪ مدل‌های گوشی و تبلت‌ها بدون نیاز به استخراج |
+| **`Kalinan-vX.X-AppBundle.aab`** | `.aab` | فرمت رسمی باندل برنامه برای گوگل‌پلی و سایر استورها |
 
 > 💡 **نکته درباره پیام Google Play Protect:**  
 > از آنجا که این برنامه مستقیماً از گیت‌هاب (Sideload) نصب می‌شود و هنوز در فروشگاه رسمی گوگل‌پلی منتشر نشده است، سیستم‌عامل اندروید ممکن است پیام هشدار استاندارد نصب برنامه‌های ناشناس را نمایش دهد. این پیام به دلیل عدم انتشار از مجرای پلی‌استور است؛ با انتخاب گزینه «Install anyway / نصب به هر حال» برنامه با موفقیت نصب خواهد شد. سورس‌کد به صورت کامل در دسترس شماست و جای هیچ‌گونه نگرانی نیست.
@@ -117,8 +117,8 @@
 
 ```bash
 # ۱. کلون مخزن
-git clone https://github.com/a-zangooei/kalinal_byms_client.git
-cd kalinal_byms_client
+git clone https://github.com/a-zangooei/kalinan_bums_client.git
+cd kalinan_bums_client
 
 # ۲. اجرای تست‌های واحد (شامل تست‌های کامل پکت‌های واقعی HAR)
 ./gradlew testDebugUnitTest
@@ -133,8 +133,8 @@ cd kalinal_byms_client
 ## 🤝 مشارکت و گزارش مشکلات
 
 از هرگونه مشارکت، گزارش باگ یا پیشنهاد ویژگی جدید صمیمانه استقبال می‌شود!
-- برای گزارش مشکل در ورود یا رزرو، لطفاً از بخش **[Issues / گزارش باگ](https://github.com/a-zangooei/kalinal_byms_client/issues/new?template=bug_report.yml)** فرم مربوطه را پر کنید.
-- برای مطرح کردن ایده‌های جدید، از فرم **[پیشنهاد قابلیت جدید](https://github.com/a-zangooei/kalinal_byms_client/issues/new?template=feature_request.yml)** استفاده فرمایید.
+- برای گزارش مشکل در ورود یا رزرو، لطفاً از بخش **[Issues / گزارش باگ](https://github.com/a-zangooei/kalinan_bums_client/issues/new?template=bug_report.yml)** فرم مربوطه را پر کنید.
+- برای مطرح کردن ایده‌های جدید، از فرم **[پیشنهاد قابلیت جدید](https://github.com/a-zangooei/kalinan_bums_client/issues/new?template=feature_request.yml)** استفاده فرمایید.
 - جهت مشارکت در توسعه کد، ارسال **Pull Request** همواره مورد استقبال است.
 
 ---

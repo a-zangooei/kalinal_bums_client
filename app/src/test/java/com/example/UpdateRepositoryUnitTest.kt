@@ -33,7 +33,7 @@ class UpdateRepositoryUnitTest {
     @Test
     fun testExtractChangelogSnippetWithPersianHeader() {
         val sampleReleaseBody = """
-            ## 🍱 کالینان (Kalinal) - نسخه v1.0.1
+            ## 🍱 کالینان (Kalinan) - نسخه v1.0.1
             کلاینت مدرن، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
 
             ### 📝 تغییرات این نسخه
