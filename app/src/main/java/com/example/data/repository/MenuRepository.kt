@@ -36,6 +36,7 @@ class MenuRepository {
                     .url(CullinanHttpClient.RESERVATION_URL)
                     .get()
                     .header("Referer", CullinanHttpClient.BASE_URL)
+                    .tag(com.example.data.logger.LogContext::class.java, com.example.data.logger.LogContext(flowId, "FetchInitialMenu"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
@@ -45,7 +46,44 @@ class MenuRepository {
                 }
 
                 val html = response.body?.string() ?: ""
-                val menu = ReservationHtmlParser.parse(html)
+                val classification = com.example.data.parser.PageClassifier.classify(html, response.code, response.request.url.toString())
+
+                if (classification.pageType == com.example.data.parser.PageClassifier.TYPE_LOGIN) {
+                    com.example.data.logger.AppLogger.log(
+                        com.example.data.logger.LogEntry(
+                            timestamp = "",
+                            level = com.example.data.logger.LogLevel.WARN,
+                            component = "MenuRepository",
+                            operation = "SessionExpired",
+                            flowId = flowId,
+                            errorCategory = "SESSION_EXPIRED",
+                            message = "Reservation page returned login form (session expired)"
+                        )
+                    )
+                    return@withContext Result.failure(Exception("نشست کاری شما منقضی شده است. لطفاً مجدداً وارد شوید."))
+                }
+
+                if (classification.pageType == com.example.data.parser.PageClassifier.TYPE_NOTICE) {
+                    com.example.data.logger.AppLogger.log(
+                        com.example.data.logger.LogEntry(
+                            timestamp = "",
+                            level = com.example.data.logger.LogLevel.WARN,
+                            component = "MenuRepository",
+                            operation = "MandatoryNoticeDetected",
+                            flowId = flowId,
+                            notice = com.example.data.logger.NoticeDiagnostics(
+                                isNoticeDetected = true,
+                                noticeType = classification.noticeType,
+                                isAcknowledged = false,
+                                actionUrl = classification.noticeActionUrl
+                            ),
+                            message = "Mandatory notice intercepted; not an empty menu"
+                        )
+                    )
+                    return@withContext Result.failure(Exception("یک اطلاعیه مهم در سامانه وجود دارد که باید تایید شود."))
+                }
+
+                val menu = ReservationHtmlParser.parse(html, flowId = flowId)
                 com.example.data.logger.AppLogger.log(
                     com.example.data.logger.LogEntry(
                         timestamp = "",
@@ -71,6 +109,7 @@ class MenuRepository {
         currentOffset: Int
     ): Result<Pair<WeeklyMenu, Int>> = withContext(Dispatchers.IO) {
         mutex.withLock {
+            val flowId = com.example.data.logger.AppLogger.generateFlowId("nav_week")
             val newOffset = when (direction) {
                 WeekNavigationDirection.PREVIOUS -> currentOffset - 1
                 WeekNavigationDirection.NEXT -> currentOffset + 1
@@ -111,10 +150,12 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(com.example.data.logger.LogContext::class.java, com.example.data.logger.LogContext(flowId, "NavigateWeek"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Navigate week failed HTTP ${response.code}", flowId = flowId)
                     return@withContext Result.failure(Exception("خطا در جابه‌جایی هفته (${response.code})"))
                 }
 
@@ -152,6 +193,7 @@ class MenuRepository {
         targetFoodId: String,
         targetSelfId: String
     ): Result<ReservationResult> = withContext(Dispatchers.IO) {
+        val flowId = com.example.data.logger.AppLogger.generateFlowId("reserve")
         mutex.withLock {
             try {
                 val formBody = buildSaveMealBody(
@@ -171,6 +213,7 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(com.example.data.logger.LogContext::class.java, com.example.data.logger.LogContext(flowId, "ReserveMeal"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
@@ -221,6 +264,7 @@ class MenuRepository {
         mealType: MealType,
         targetDayIndex: Int
     ): Result<ReservationResult> = withContext(Dispatchers.IO) {
+        val flowId = com.example.data.logger.AppLogger.generateFlowId("cancel")
         mutex.withLock {
             try {
                 val targetMeal = currentMenu.days.getOrNull(targetDayIndex)
@@ -247,6 +291,7 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(com.example.data.logger.LogContext::class.java, com.example.data.logger.LogContext(flowId, "CancelMeal"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)

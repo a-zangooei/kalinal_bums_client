@@ -19,31 +19,38 @@ class CullinanCookieJar : CookieJar {
         val host = url.host
         val currentCookies = cookieStore.getOrPut(host) { mutableListOf() }
         var sessionFp: String? = null
+        var hasSession = false
 
         synchronized(currentCookies) {
             for (newCookie in cookies) {
                 currentCookies.removeAll { it.name == newCookie.name && it.path == newCookie.path }
                 currentCookies.add(newCookie)
                 if (newCookie.name == "ASP.NET_SessionId") {
+                    hasSession = true
                     sessionFp = LogSanitizer.computeFingerprint(newCookie.value)
                 }
             }
         }
 
-        AppLogger.log(
-            LogEntry(
-                timestamp = "",
-                level = LogLevel.DEBUG,
-                component = "CookieJar",
-                operation = "SaveCookies",
-                cookies = CookieDiagnostics(
-                    action = "SAVE_RESPONSE",
-                    cookieCount = currentCookies.size,
-                    sessionFingerprint = sessionFp ?: getSessionFingerprint(host)
-                ),
-                message = "Saved ${cookies.size} cookies for host $host"
+        try {
+            AppLogger.log(
+                LogEntry(
+                    timestamp = "",
+                    level = LogLevel.DEBUG,
+                    component = "CookieJar",
+                    operation = "SaveCookies",
+                    cookies = CookieDiagnostics(
+                        action = "SAVE_RESPONSE",
+                        cookieCount = currentCookies.size,
+                        hasSessionCookie = hasSession || getSessionFingerprint(host) != "NONE",
+                        sessionFingerprint = sessionFp ?: getSessionFingerprint(host)
+                    ),
+                    message = "Saved ${cookies.size} cookies for host $host"
+                )
             )
-        )
+        } catch (_: Exception) {
+            // Failure isolation
+        }
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
@@ -51,10 +58,37 @@ class CullinanCookieJar : CookieJar {
         val cookies = cookieStore[host] ?: return emptyList()
         val now = System.currentTimeMillis()
         val validCookies: List<Cookie>
+        var expiredCount = 0
 
         synchronized(cookies) {
+            val countBefore = cookies.size
             cookies.removeAll { it.expiresAt < now }
+            expiredCount = countBefore - cookies.size
             validCookies = cookies.filter { it.matches(url) }
+        }
+
+        val sessionFp = getSessionFingerprint(host)
+        val hasSession = sessionFp != "NONE"
+
+        try {
+            AppLogger.log(
+                LogEntry(
+                    timestamp = "",
+                    level = LogLevel.DEBUG,
+                    component = "CookieJar",
+                    operation = "LoadCookies",
+                    cookies = CookieDiagnostics(
+                        action = "LOAD_REQUEST",
+                        cookieCount = validCookies.size,
+                        hasSessionCookie = hasSession,
+                        sessionFingerprint = sessionFp,
+                        expiredRemovedCount = expiredCount
+                    ),
+                    message = "Loaded ${validCookies.size} cookies for ${url.encodedPath} (expired pruned: $expiredCount)"
+                )
+            )
+        } catch (_: Exception) {
+            // Failure isolation
         }
 
         return validCookies
@@ -63,20 +97,26 @@ class CullinanCookieJar : CookieJar {
     fun clear() {
         val countBefore = cookieStore.values.sumOf { it.size }
         cookieStore.clear()
-        AppLogger.log(
-            LogEntry(
-                timestamp = "",
-                level = LogLevel.INFO,
-                component = "CookieJar",
-                operation = "ClearCookies",
-                cookies = CookieDiagnostics(
-                    action = "CLEAR_ALL",
-                    cookieCount = 0,
-                    sessionFingerprint = "PURGED"
-                ),
-                message = "Purged all cookies (cleared $countBefore cookies)"
+        try {
+            AppLogger.log(
+                LogEntry(
+                    timestamp = "",
+                    level = LogLevel.INFO,
+                    component = "CookieJar",
+                    operation = "ClearCookies",
+                    cookies = CookieDiagnostics(
+                        action = "CLEAR_ALL",
+                        cookieCount = 0,
+                        hasSessionCookie = false,
+                        sessionFingerprint = "PURGED",
+                        expiredRemovedCount = 0
+                    ),
+                    message = "Purged all cookies (cleared $countBefore cookies)"
+                )
             )
-        )
+        } catch (_: Exception) {
+            // Failure isolation
+        }
     }
 
     fun getCookieValue(host: String, cookieName: String): String? {
