@@ -144,16 +144,38 @@ class AuthRepository {
 
     suspend fun logoutFromServer(currentMenu: WeeklyMenu?): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
+            var viewState = currentMenu?.viewState ?: ""
+            var viewStateGen = currentMenu?.viewStateGenerator?.ifEmpty { "3ED98A75" } ?: "3ED98A75"
+            var eventVal = currentMenu?.eventValidation ?: ""
+
+            // If viewState is missing, fetch current page HTML to extract latest ViewState
+            if (viewState.isBlank()) {
+                val getReq = Request.Builder()
+                    .url(CullinanHttpClient.RESERVATION_URL)
+                    .get()
+                    .header("Referer", CullinanHttpClient.BASE_URL)
+                    .build()
+                val getResp = CullinanHttpClient.executeCall(getReq)
+                if (getResp.isSuccessful) {
+                    val html = getResp.body?.string() ?: ""
+                    val doc = Jsoup.parse(html)
+                    viewState = doc.select("input[name=__VIEWSTATE]").`val`()
+                    val gen = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`()
+                    if (gen.isNotBlank()) viewStateGen = gen
+                    eventVal = doc.select("input[name=__EVENTVALIDATION]").`val`()
+                }
+            }
+
             val formBuilder = FormBody.Builder()
                 .add("__EVENTTARGET", "ctl00\$logout")
                 .add("__EVENTARGUMENT", "")
                 .add("__LASTFOCUS", "")
-                .add("__VIEWSTATE", currentMenu?.viewState ?: "")
-                .add("__VIEWSTATEGENERATOR", currentMenu?.viewStateGenerator?.ifEmpty { "3ED98A75" } ?: "3ED98A75")
+                .add("__VIEWSTATE", viewState)
+                .add("__VIEWSTATEGENERATOR", viewStateGen)
                 .add("__VIEWSTATEENCRYPTED", "")
 
-            if (currentMenu?.eventValidation?.isNotEmpty() == true) {
-                formBuilder.add("__EVENTVALIDATION", currentMenu.eventValidation)
+            if (eventVal.isNotEmpty()) {
+                formBuilder.add("__EVENTVALIDATION", eventVal)
             }
 
             formBuilder.add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
@@ -184,13 +206,18 @@ class AuthRepository {
 
             val response = CullinanHttpClient.executeCallNoRedirect(request)
             val location = response.header("Location") ?: ""
-            val isSuccess = (response.code in 300..399 && location.contains("Login.aspx", ignoreCase = true)) ||
-                    location.contains("Login.aspx", ignoreCase = true)
+            val bodyString = response.body?.string() ?: ""
+            val finalUrl = response.request.url.toString()
+
+            val isSuccess = response.code == 302 ||
+                    location.contains("Login", ignoreCase = true) ||
+                    finalUrl.contains("Login", ignoreCase = true) ||
+                    bodyString.contains("txtUsername", ignoreCase = true)
 
             if (isSuccess) {
                 Result.success(true)
             } else {
-                Result.failure(Exception("سرور ریدایرکت خروج (302) صادر نکرد (کد: ${response.code})"))
+                Result.failure(Exception("سرور ریدایرکت خروج صادر نکرد (کد: ${response.code})"))
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

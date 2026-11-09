@@ -119,28 +119,40 @@ fun KalinalApp(
             )
         }
     } else {
+        var isLoggingOut by remember { mutableStateOf(false) }
         val coroutineScope = rememberCoroutineScope()
         val context = LocalContext.current
         val authRepo = remember { AuthRepository() }
 
         val handleLogout: () -> Unit = {
-            AppLogger.logAction("User initiated real server logout")
-            val currentMenu = menuViewModel.weeklyMenu.value
+            if (!isLoggingOut) {
+                isLoggingOut = true
+                AppLogger.logAction("User initiated real server logout")
+                val currentMenu = menuViewModel.weeklyMenu.value
 
-            coroutineScope.launch {
-                val serverResult = authRepo.logoutFromServer(currentMenu)
-                if (serverResult.isSuccess) {
-                    Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                coroutineScope.launch {
+                    try {
+                        val serverResult = authRepo.logoutFromServer(currentMenu)
+                        if (serverResult.isSuccess) {
+                            Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        AppLogger.logError("Logout", "Logout request failed", e)
+                        Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                    } finally {
+                        // 1. Purge active local session state
+                        activeSession = null
+                        selectedBottomTab = 0
+                        // 2. Clear local cookies AFTER server request completed
+                        com.example.data.network.CullinanHttpClient.cookieJar.clear()
+                        // 3. Fetch a fresh Login.aspx page (fresh ViewState, fresh RSA Pem key, and fresh Captcha)
+                        authViewModel.loadLoginPage()
+                        isLoggingOut = false
+                    }
                 }
             }
-
-            // Unconditional local purge:
-            activeSession = null
-            selectedBottomTab = 0
-            com.example.data.network.CullinanHttpClient.cookieJar.clear()
-            authViewModel.refreshCaptcha()
         }
 
         BackHandler {
@@ -218,6 +230,7 @@ fun KalinalApp(
                         userSession = session,
                         viewModel = menuViewModel,
                         onLogout = handleLogout,
+                        isLoggingOut = isLoggingOut,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)

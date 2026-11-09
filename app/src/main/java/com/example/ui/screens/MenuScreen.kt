@@ -113,6 +113,7 @@ fun MenuScreen(
     userSession: UserSession,
     viewModel: MenuViewModel,
     onLogout: () -> Unit,
+    isLoggingOut: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val weeklyMenu by viewModel.weeklyMenu.collectAsState()
@@ -191,13 +192,22 @@ fun MenuScreen(
                         }
                         IconButton(
                             onClick = onLogout,
+                            enabled = !isLoggingOut,
                             modifier = Modifier.testTag("logout_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Default.ExitToApp,
-                                contentDescription = "خروج از حساب",
-                                tint = Color.White
-                            )
+                            if (isLoggingOut) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Default.ExitToApp,
+                                    contentDescription = "خروج از حساب",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
