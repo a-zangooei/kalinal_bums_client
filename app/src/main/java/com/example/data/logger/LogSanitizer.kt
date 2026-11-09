@@ -46,6 +46,8 @@ object LogSanitizer {
             .replace(Regex("keyId=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "keyId=***")
             // Mask accordianActiveIndex Cookie
             .replace(Regex("accordianActiveIndex=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "accordianActiveIndex=***")
+            // Mask Security & Auth Tokens / Tickets in query strings (negative lookbehind ensures ASP.NET_SessionId is untouched)
+            .replace(Regex("(?<![a-zA-Z0-9_.])(token|ticket|auth|code|secret|sessionId)=([^&;\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_TOKEN]")
             // Mask Bearer & Basic auth tokens
             .replace(Regex("Authorization[:=]\\s*(Bearer|Basic)\\s+[^\\s]+", RegexOption.IGNORE_CASE), "Authorization=[REDACTED_AUTH]")
             // Truncate Public Key PEM in form body
@@ -81,6 +83,10 @@ object LogSanitizer {
             ),
             aspnet = entry.aspnet?.copy(
                 eventTarget = entry.aspnet.eventTarget?.let { sanitizeText(it) }
+            ),
+            notice = entry.notice?.copy(
+                actionUrl = entry.notice.actionUrl?.let { sanitizeText(it) },
+                noticeType = entry.notice.noticeType?.let { sanitizeText(it) }
             )
         )
     }

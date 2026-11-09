@@ -142,4 +142,15 @@ class LoggingIntegrationTest {
         assertFalse("Export text must not contain raw session secrets", text.contains("session_secret_token_12345"))
         assertFalse("Export JSONL must not contain raw session secrets", jsonl.contains("session_secret_token_12345"))
     }
+
+    @Test
+    fun testPageClassificationNoticeAndLoginTypes() {
+        val noticeHtml = "<div class='noticeBox'><span id='cphMain_lblNotice'>اطلاعیه سلف</span></div>"
+        val loginHtml = "<form><input name='txtUsernamePlain' type='text'/><input name='btnLogin' type='submit'/></form>"
+        val errorHtml = "<html><h1>Server Error in '/' Application.</h1></html>"
+
+        assertEquals(PageClassifier.TYPE_NOTICE, PageClassifier.classify(noticeHtml).pageType)
+        assertEquals(PageClassifier.TYPE_LOGIN, PageClassifier.classify(loginHtml).pageType)
+        assertEquals(PageClassifier.TYPE_ERROR, PageClassifier.classify(errorHtml).pageType)
+    }
 }

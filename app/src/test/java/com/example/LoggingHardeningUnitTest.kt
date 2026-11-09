@@ -8,6 +8,8 @@ import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
 import com.example.data.logger.LogSanitizer
 import com.example.data.logger.NoticeDiagnostics
+import com.example.data.logger.ParserDiagnostics
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -54,11 +56,16 @@ class LoggingHardeningUnitTest {
             operation = "LoginAttempt",
             message = "Attempt for studentNumber=9912345",
             errorCategory = "AuthFailed_pass=TopSecret999",
-            exceptionMessage = "Database error for username=admin99 pass=SecretP@ss",
+            exceptionMessage = "Database error for username=admin99 pass=SecretP@ss token=secret_token_abc",
             http = HttpDiagnostics(
                 method = "POST",
-                url = "https://jeton.bums.ac.ir/Login.aspx?txtUsername=9912345&txtPassword=MyPass",
+                url = "https://jeton.bums.ac.ir/Login.aspx?txtUsername=9912345&txtPassword=MyPass&ticket=ticket_secret_xyz",
                 finalUrl = "https://jeton.bums.ac.ir/Login.aspx?token=123"
+            ),
+            notice = NoticeDiagnostics(
+                isNoticeDetected = true,
+                noticeType = "NOTICE_TYPE",
+                actionUrl = "https://jeton.bums.ac.ir/Accept.aspx?sessionId=session_12345&studentNumber=9912345"
             )
         )
 
@@ -66,7 +73,13 @@ class LoggingHardeningUnitTest {
         assertFalse("Message username must be masked", sanitized.message.contains("9912345"))
         assertFalse("ErrorCategory pass must be masked", sanitized.errorCategory!!.contains("TopSecret999"))
         assertFalse("Exception pass must be masked", sanitized.exceptionMessage!!.contains("SecretP@ss"))
+        assertFalse("Exception token must be masked", sanitized.exceptionMessage!!.contains("secret_token_abc"))
         assertFalse("HTTP URL pass must be masked", sanitized.http!!.url.contains("MyPass"))
+        assertFalse("HTTP URL ticket must be masked", sanitized.http!!.url.contains("ticket_secret_xyz"))
+        assertFalse("Notice actionUrl sessionId must be masked", sanitized.notice!!.actionUrl!!.contains("session_12345"))
+        assertFalse("Notice actionUrl studentNumber must be masked", sanitized.notice!!.actionUrl!!.contains("9912345"))
+        assertTrue("Notice actionUrl redacted token marker", sanitized.notice!!.actionUrl!!.contains("[REDACTED_TOKEN]"))
+        assertTrue("Notice actionUrl redacted user marker", sanitized.notice!!.actionUrl!!.contains("[REDACTED_USER]"))
     }
 
     @Test
@@ -77,20 +90,84 @@ class LoggingHardeningUnitTest {
             level = LogLevel.WARN,
             component = "TestComp",
             operation = "JsonlControlChars",
+            flowId = "flow_12345",
+            requestId = "req_67890",
+            durationMs = 245,
+            errorCategory = "PARSER_FAILURE",
+            http = HttpDiagnostics(
+                method = "POST",
+                url = "https://jeton.bums.ac.ir/Reservation.aspx",
+                statusCode = 200,
+                isCompatibilitySsl = true
+            ),
+            aspnet = AspNetDiagnostics(
+                viewStateLength = 1500,
+                viewStateFingerprint = "abcd1234ef567890",
+                hasEventValidation = true,
+                eventTarget = "ctl00\$cphMain\$btnSave"
+            ),
+            cookies = CookieDiagnostics(
+                action = "SAVE_RESPONSE",
+                cookieCount = 3,
+                hasSessionCookie = true,
+                sessionFingerprint = "1234567890abcdef"
+            ),
+            parser = ParserDiagnostics(
+                pageType = "RESERVATION",
+                htmlLength = 45000,
+                tablesFound = 3,
+                parsedMealsCount = 14
+            ),
+            notice = NoticeDiagnostics(
+                isNoticeDetected = false,
+                isAcknowledged = false
+            ),
             message = trickyMessage
         )
 
         val jsonl = AppLogger.buildJsonlLine(entry)
         assertFalse("Must be a single line without raw unescaped newlines", jsonl.contains("\r\n"))
 
-        // Verify exact JSON string escaping without relying on stubbed Android SDK JSONObject
-        assertTrue("JSONL must contain comp field", jsonl.contains("\"comp\":\"TestComp\""))
-        assertTrue("JSONL must contain escaped newline", jsonl.contains("\\nLine 2"))
-        assertTrue("JSONL must contain escaped tab", jsonl.contains("\\tTabbed"))
-        assertTrue("JSONL must contain escaped quotes", jsonl.contains("\\\"Quoted text\\\""))
-        assertTrue("JSONL must contain escaped backslash", jsonl.contains("\\\\Backslash\\\\"))
-        assertTrue("JSONL must contain Unicode Persian text intact", jsonl.contains("فارسی"))
-        assertFalse("JSONL must not contain raw unescaped newline in payload", jsonl.contains("\nLine 2"))
+        // Real JSONObject parser validation
+        val json = JSONObject(jsonl)
+        assertEquals("TestComp", json.getString("comp"))
+        assertEquals("JsonlControlChars", json.getString("op"))
+        assertEquals("flow_12345", json.getString("flowId"))
+        assertEquals("req_67890", json.getString("reqId"))
+        assertEquals(245, json.getInt("durMs"))
+        assertEquals(trickyMessage, json.getString("msg"))
+
+        // Verify nested HTTP object
+        val httpObj = json.getJSONObject("http")
+        assertEquals("POST", httpObj.getString("method"))
+        assertEquals("https://jeton.bums.ac.ir/Reservation.aspx", httpObj.getString("url"))
+        assertEquals(200, httpObj.getInt("status"))
+        assertTrue(httpObj.getBoolean("sslFallback"))
+
+        // Verify nested ASP.NET object
+        val aspObj = json.getJSONObject("aspnet")
+        assertEquals(1500, aspObj.getInt("vsLen"))
+        assertEquals("abcd1234ef567890", aspObj.getString("vsFp"))
+        assertTrue(aspObj.getBoolean("hasEv"))
+        assertEquals("ctl00\$cphMain\$btnSave", aspObj.getString("target"))
+
+        // Verify nested cookies object
+        val cookiesObj = json.getJSONObject("cookies")
+        assertEquals("SAVE_RESPONSE", cookiesObj.getString("act"))
+        assertEquals(3, cookiesObj.getInt("cnt"))
+        assertTrue(cookiesObj.getBoolean("hasSession"))
+        assertEquals("1234567890abcdef", cookiesObj.getString("sessionFp"))
+
+        // Verify nested parser object
+        val parserObj = json.getJSONObject("parser")
+        assertEquals("RESERVATION", parserObj.getString("pageType"))
+        assertEquals(45000, parserObj.getInt("htmlLen"))
+        assertEquals(14, parserObj.getInt("meals"))
+
+        // Verify nested notice object
+        val noticeObj = json.getJSONObject("notice")
+        assertFalse(noticeObj.getBoolean("detected"))
+        assertFalse(noticeObj.getBoolean("ack"))
     }
 
     @Test

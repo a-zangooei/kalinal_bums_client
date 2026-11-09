@@ -1,11 +1,13 @@
 package com.example.data.repository
 
+import com.example.data.logger.LogContext
 import com.example.data.model.MealType
 import com.example.data.model.ReservationResult
 import com.example.data.model.WeekNavigationDirection
 import com.example.data.model.WeeklyMenu
 import com.example.data.network.CullinanHttpClient
 import com.example.data.parser.DeltaParser
+import com.example.data.parser.PageClassifier
 import com.example.data.parser.ReservationHtmlParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -36,6 +38,7 @@ class MenuRepository {
                     .url(CullinanHttpClient.RESERVATION_URL)
                     .get()
                     .header("Referer", CullinanHttpClient.BASE_URL)
+                    .tag(LogContext::class.java, LogContext(flowId, "FetchInitialMenu"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
@@ -45,7 +48,39 @@ class MenuRepository {
                 }
 
                 val html = response.body?.string() ?: ""
-                val menu = ReservationHtmlParser.parse(html)
+                val classification = PageClassifier.classify(html, response.code, response.request.url.toString())
+
+                if (classification.pageType != PageClassifier.TYPE_RESERVATION) {
+                    com.example.data.logger.AppLogger.log(
+                        com.example.data.logger.LogEntry(
+                            timestamp = "",
+                            level = com.example.data.logger.LogLevel.WARN,
+                            component = "MenuRepository",
+                            operation = "InitialMenuPageBlocked",
+                            flowId = flowId,
+                            errorCategory = "NON_RESERVATION_PAGE_${classification.pageType}",
+                            parser = com.example.data.logger.ParserDiagnostics(
+                                pageType = classification.pageType,
+                                htmlLength = html.length
+                            ),
+                            notice = com.example.data.logger.NoticeDiagnostics(
+                                isNoticeDetected = classification.pageType == PageClassifier.TYPE_NOTICE,
+                                noticeType = classification.noticeType,
+                                actionUrl = classification.noticeActionUrl
+                            ),
+                            message = "Initial menu response classified as ${classification.pageType} (evidence: ${classification.evidence.joinToString()})"
+                        )
+                    )
+
+                    val failureMsg = when (classification.pageType) {
+                        PageClassifier.TYPE_NOTICE -> "اطلاعیه در سامانه تغذیه دانشگاه فعال است و دسترسی به جدول رزرو مسدود می‌باشد"
+                        PageClassifier.TYPE_LOGIN -> "نشست کاری در سامانه دانشگاه منقضی شده است. لطفاً مجدداً وارد شوید"
+                        else -> "پاسخ سرور دانشگاه نامعتبر بوده یا با خطا مواجه شد"
+                    }
+                    return@withContext Result.failure(Exception(failureMsg))
+                }
+
+                val menu = ReservationHtmlParser.parse(html, flowId = flowId)
                 com.example.data.logger.AppLogger.log(
                     com.example.data.logger.LogEntry(
                         timestamp = "",
@@ -122,6 +157,7 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(LogContext::class.java, LogContext(flowId, "NavigateWeek"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
@@ -207,6 +243,7 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(LogContext::class.java, LogContext(flowId, "ReserveMeal"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
@@ -232,7 +269,8 @@ class MenuRepository {
                 val updatedMenu = ReservationHtmlParser.parse(
                     html = updatePanelHtml,
                     existingViewState = newViewState,
-                    existingGenerator = newGenerator
+                    existingGenerator = newGenerator,
+                    flowId = flowId
                 )
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
@@ -271,6 +309,17 @@ class MenuRepository {
         mealType: MealType,
         targetDayIndex: Int
     ): Result<ReservationResult> = withContext(Dispatchers.IO) {
+        val flowId = com.example.data.logger.AppLogger.generateFlowId("cancel")
+        com.example.data.logger.AppLogger.log(
+            com.example.data.logger.LogEntry(
+                timestamp = "",
+                level = com.example.data.logger.LogLevel.INFO,
+                component = "MenuRepository",
+                operation = "CancelMeal",
+                flowId = flowId,
+                message = "Cancelling meal ${mealType.name} on day $targetDayIndex"
+            )
+        )
         mutex.withLock {
             try {
                 val targetMeal = currentMenu.days.getOrNull(targetDayIndex)
@@ -297,10 +346,12 @@ class MenuRepository {
                     .header("Referer", CullinanHttpClient.RESERVATION_URL)
                     .header("Origin", CullinanHttpClient.BASE_URL)
                     .header("Cache-Control", "no-cache")
+                    .tag(LogContext::class.java, LogContext(flowId, "CancelMeal"))
                     .build()
 
                 val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Cancel meal HTTP failure ${response.code}", flowId = flowId)
                     return@withContext Result.failure(Exception("خطا در لغو رزرو غذا در سرور (${response.code})"))
                 }
 
@@ -308,6 +359,7 @@ class MenuRepository {
                 val deltaResponse = DeltaParser.parse(deltaText)
 
                 if (deltaResponse.isSessionExpired) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during meal cancellation", flowId = flowId)
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
@@ -320,12 +372,24 @@ class MenuRepository {
                 val updatedMenu = ReservationHtmlParser.parse(
                     html = updatePanelHtml,
                     existingViewState = newViewState,
-                    existingGenerator = newGenerator
+                    existingGenerator = newGenerator,
+                    flowId = flowId
                 )
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
                 val message = deltaResponse.toastMessage
                     ?: if (isSuccess) "لغو رزرو ${mealType.titlePersian} با موفقیت انجام شد" else "خطا در لغو رزرو توسط سرور سلف"
+
+                com.example.data.logger.AppLogger.log(
+                    com.example.data.logger.LogEntry(
+                        timestamp = "",
+                        level = if (isSuccess) com.example.data.logger.LogLevel.INFO else com.example.data.logger.LogLevel.WARN,
+                        component = "MenuRepository",
+                        operation = "CancelMealCompleted",
+                        flowId = flowId,
+                        message = "Cancel meal completed: success=$isSuccess msg=$message"
+                    )
+                )
 
                 Result.success(
                     ReservationResult(
@@ -337,6 +401,7 @@ class MenuRepository {
                 )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                com.example.data.logger.AppLogger.logError("MenuRepository", "Cancel meal exception: ${e.message}", e, flowId = flowId)
                 Result.failure(e)
             }
         }
