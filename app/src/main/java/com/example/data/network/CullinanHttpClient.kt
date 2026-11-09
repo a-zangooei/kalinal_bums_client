@@ -1,6 +1,12 @@
 package com.example.data.network
 
 import android.util.Log
+import com.example.data.logger.AppLogger
+import com.example.data.logger.AspNetDiagnostics
+import com.example.data.logger.HttpDiagnostics
+import com.example.data.logger.LogEntry
+import com.example.data.logger.LogLevel
+import com.example.data.logger.LogSanitizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,9 +71,6 @@ object CullinanHttpClient {
         }
     }
 
-    /**
-     * Dynamically points to the active client based on whether compatibility mode was triggered.
-     */
     val client: OkHttpClient
         get() = if (_isCompatibilityModeActive.value) fallbackClient else standardClient
 
@@ -90,7 +93,7 @@ object CullinanHttpClient {
                 val req = chain.request()
                 val url = req.url.toString()
                 val method = req.method
-                val headersMap = req.headers.names().associateWith { req.headers[it] ?: "" }
+                val reqId = AppLogger.generateRequestId()
 
                 var bodyString: String? = null
                 val body = req.body
@@ -103,14 +106,53 @@ object CullinanHttpClient {
                     }
                 }
 
-                com.example.data.logger.AppLogger.logHttpRequest(method, url, headersMap, bodyString)
+                // Extract ASP.NET WebForms field diagnostics from request body
+                val aspNetDiag = extractAspNetDiagnosticsFromBody(bodyString)
+
+                AppLogger.log(
+                    LogEntry(
+                        timestamp = "",
+                        level = LogLevel.DEBUG,
+                        component = "HTTP",
+                        operation = "Request",
+                        requestId = reqId,
+                        http = HttpDiagnostics(
+                            method = method,
+                            url = url,
+                            contentType = req.body?.contentType()?.toString(),
+                            contentLength = req.body?.contentLength(),
+                            isCompatibilitySsl = _isCompatibilityModeActive.value
+                        ),
+                        aspnet = aspNetDiag,
+                        message = "HTTP $method $url"
+                    )
+                )
 
                 val start = System.currentTimeMillis()
                 val response: Response
                 try {
                     response = chain.proceed(req)
                 } catch (e: Exception) {
-                    com.example.data.logger.AppLogger.logError("HTTP", "$method $url failed (${e.javaClass.simpleName})", e)
+                    val cat = classifyNetworkingFailure(e)
+                    AppLogger.log(
+                        LogEntry(
+                            timestamp = "",
+                            level = LogLevel.ERROR,
+                            component = "HTTP",
+                            operation = "Failure",
+                            requestId = reqId,
+                            durationMs = System.currentTimeMillis() - start,
+                            http = HttpDiagnostics(
+                                method = method,
+                                url = url,
+                                isCompatibilitySsl = _isCompatibilityModeActive.value
+                            ),
+                            errorCategory = cat,
+                            exceptionType = e.javaClass.simpleName,
+                            exceptionMessage = e.message,
+                            message = "HTTP $method $url failed with $cat: ${e.message}"
+                        )
+                    )
                     throw e
                 }
                 val duration = System.currentTimeMillis() - start
@@ -121,15 +163,32 @@ object CullinanHttpClient {
                 } catch (_: Exception) {
                 }
 
-                com.example.data.logger.AppLogger.logHttpResponse(response.code, url, duration, preview)
+                val respLogLevel = if (response.isSuccessful) LogLevel.DEBUG else LogLevel.WARN
+
+                AppLogger.log(
+                    LogEntry(
+                        timestamp = "",
+                        level = respLogLevel,
+                        component = "HTTP",
+                        operation = "Response",
+                        requestId = reqId,
+                        durationMs = duration,
+                        http = HttpDiagnostics(
+                            method = method,
+                            url = url,
+                            statusCode = response.code,
+                            contentType = response.body?.contentType()?.toString(),
+                            contentLength = response.body?.contentLength(),
+                            finalUrl = response.request.url.toString(),
+                            isCompatibilitySsl = _isCompatibilityModeActive.value
+                        ),
+                        message = "HTTP ${response.code} (${duration}ms) - $url"
+                    )
+                )
                 response
             }
     }
 
-    /**
-     * Executes an HTTP request with automatic, seamless fallback to University Intranet SSL Compatibility Mode
-     * if the platform TrustManager fails due to incomplete certificate chain (Trust anchor not found).
-     */
     fun executeCall(request: Request): Response {
         if (_isCompatibilityModeActive.value) {
             return fallbackClient.newCall(request).execute()
@@ -152,9 +211,6 @@ object CullinanHttpClient {
         _isCompatibilityModeActive.value = enabled
     }
 
-    /**
-     * Executes an HTTP request with automatic redirects disabled (e.g. for intercepting 302 Found on logout).
-     */
     fun executeCallNoRedirect(request: Request): Response {
         val baseClient = if (_isCompatibilityModeActive.value) fallbackClient else standardClient
         val noRedirectClient = baseClient.newBuilder()
@@ -180,6 +236,66 @@ object CullinanHttpClient {
                 throw e
             }
         }
+    }
+
+    private fun extractAspNetDiagnosticsFromBody(bodyString: String?): AspNetDiagnostics? {
+        if (bodyString.isNullOrBlank()) return null
+        var vsLen: Int? = null
+        var vsFp: String? = null
+        var vsGen: String? = null
+        var hasEv = false
+        var evLen: Int? = null
+        var target: String? = null
+
+        val pairs = bodyString.split("&")
+        for (pair in pairs) {
+            val parts = pair.split("=")
+            if (parts.size == 2) {
+                val key = java.net.URLDecoder.decode(parts[0], "UTF-8")
+                val value = java.net.URLDecoder.decode(parts[1], "UTF-8")
+
+                when (key) {
+                    "__VIEWSTATE" -> {
+                        vsLen = value.length
+                        vsFp = LogSanitizer.computeFingerprint(value)
+                    }
+                    "__VIEWSTATEGENERATOR" -> vsGen = value
+                    "__EVENTVALIDATION" -> {
+                        hasEv = true
+                        evLen = value.length
+                    }
+                    "__EVENTTARGET" -> if (value.isNotBlank()) target = value
+                }
+            }
+        }
+
+        if (vsLen == null && !hasEv && target == null) return null
+
+        return AspNetDiagnostics(
+            viewStateLength = vsLen,
+            viewStateFingerprint = vsFp,
+            viewStateGenerator = vsGen,
+            hasEventValidation = hasEv,
+            eventValidationLength = evLen,
+            eventTarget = target,
+            formFieldCount = pairs.size
+        )
+    }
+
+    private fun classifyNetworkingFailure(e: Throwable): String {
+        var curr: Throwable? = e
+        while (curr != null) {
+            val name = curr.javaClass.name
+            val msg = curr.message ?: ""
+
+            if (curr is java.net.UnknownHostException) return "DNS_RESOLUTION_FAILED"
+            if (curr is java.net.ConnectException) return "CONNECTION_FAILED"
+            if (curr is java.net.SocketTimeoutException) return "SOCKET_TIMEOUT"
+            if (isSslHandshakeException(curr)) return "TLS_HANDSHAKE_FAILED"
+            if (name.contains("SocketException")) return "CONNECTION_RESET"
+            curr = curr.cause
+        }
+        return "NETWORK_ERROR"
     }
 
     private fun isSslHandshakeException(e: Throwable): Boolean {

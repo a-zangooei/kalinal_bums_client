@@ -19,6 +19,17 @@ class MenuRepository {
     private val mutex = Mutex()
 
     suspend fun fetchInitialMenu(): Result<WeeklyMenu> = withContext(Dispatchers.IO) {
+        val flowId = com.example.data.logger.AppLogger.generateFlowId("menu")
+        com.example.data.logger.AppLogger.log(
+            com.example.data.logger.LogEntry(
+                timestamp = "",
+                level = com.example.data.logger.LogLevel.INFO,
+                component = "MenuRepository",
+                operation = "FetchInitialMenu",
+                flowId = flowId,
+                message = "Initiated initial menu fetch"
+            )
+        )
         mutex.withLock {
             try {
                 val request = Request.Builder()
@@ -29,14 +40,26 @@ class MenuRepository {
 
                 val response = CullinanHttpClient.executeCall(request)
                 if (!response.isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Initial menu fetch failed HTTP ${response.code}", flowId = flowId)
                     return@withContext Result.failure(Exception("خطا در دریافت جدول برنامه غذایی (${response.code})"))
                 }
 
                 val html = response.body?.string() ?: ""
                 val menu = ReservationHtmlParser.parse(html)
+                com.example.data.logger.AppLogger.log(
+                    com.example.data.logger.LogEntry(
+                        timestamp = "",
+                        level = com.example.data.logger.LogLevel.INFO,
+                        component = "MenuRepository",
+                        operation = "FetchInitialMenuSuccess",
+                        flowId = flowId,
+                        message = "Successfully loaded menu range: ${menu.weekDateRange}"
+                    )
+                )
                 Result.success(menu)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                com.example.data.logger.AppLogger.logError("MenuRepository", "Initial menu fetch exception: ${e.message}", e, flowId = flowId)
                 Result.failure(e)
             }
         }

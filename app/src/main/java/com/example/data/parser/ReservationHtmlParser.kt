@@ -84,6 +84,38 @@ object ReservationHtmlParser {
         populateDayMeals(daysList, dinnerResult.meals, MealType.DINNER)
 
         val allTableRows = breakfastResult.snapshots + lunchResult.snapshots + dinnerResult.snapshots
+        val totalMealsCount = daysList.sumOf { day -> day.meals.values.sumOf { it.size } }
+
+        val pageType = when {
+            doc.select("#cphMain_lblNotice, #btnAcceptNotice, .noticeBox").isNotEmpty() -> "NOTICE"
+            doc.select("input[name=txtUsernamePlain], input[name=btnLogin]").isNotEmpty() -> "LOGIN"
+            doc.select("#cphMain_grdReservationLunch, #cphMain_lblWeekDate").isNotEmpty() -> "RESERVATION"
+            else -> "UNKNOWN"
+        }
+
+        com.example.data.logger.AppLogger.log(
+            com.example.data.logger.LogEntry(
+                timestamp = "",
+                level = com.example.data.logger.LogLevel.DEBUG,
+                component = "Parser",
+                operation = "ParseWeeklyMenu",
+                parser = com.example.data.logger.ParserDiagnostics(
+                    pageType = pageType,
+                    htmlLength = html.length,
+                    tablesFound = (if (breakfastResult.meals.isNotEmpty()) 1 else 0) +
+                            (if (lunchResult.meals.isNotEmpty()) 1 else 0) +
+                            (if (dinnerResult.meals.isNotEmpty()) 1 else 0),
+                    parsedMealsCount = totalMealsCount,
+                    skippedRowsCount = 0,
+                    isMenuEmpty = totalMealsCount == 0
+                ),
+                notice = com.example.data.logger.NoticeDiagnostics(
+                    isNoticeDetected = pageType == "NOTICE",
+                    noticeType = if (pageType == "NOTICE") "MANDATORY_NOTICE" else null
+                ),
+                message = "Parsed $pageType HTML (len: ${html.length}, meals: $totalMealsCount, credit: $creditText)"
+            )
+        )
 
         return WeeklyMenu(
             weekDateRange = weekDateText,

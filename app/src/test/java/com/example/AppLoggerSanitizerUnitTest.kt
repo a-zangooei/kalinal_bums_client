@@ -32,6 +32,6 @@ class AppLoggerSanitizerUnitTest {
         val sanitized = AppLogger.sanitize(hugeViewState)
 
         assertFalse("Giant viewstate blob must not bloat logs", sanitized.contains("A".repeat(50)))
-        assertTrue("Must include length indicator", sanitized.contains("VIEWSTATE_LENGTH_200"))
+        assertTrue("Must include length indicator", sanitized.contains("VIEWSTATE_LEN_200"))
     }
 }

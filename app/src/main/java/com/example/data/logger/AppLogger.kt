@@ -14,6 +14,7 @@ import java.io.RandomAccessFile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 object AppLogger {
 
@@ -23,7 +24,8 @@ object AppLogger {
     private const val MAX_MEMORY_ENTRIES = 150
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var logFile: File? = null
+    private var logTextFile: File? = null
+    private var logJsonFile: File? = null
 
     private val lock = Any()
     private val memoryLogList = mutableListOf<String>()
@@ -31,26 +33,42 @@ object AppLogger {
     private val _recentLogs = MutableStateFlow<List<String>>(emptyList())
     val recentLogs: StateFlow<List<String>> = _recentLogs.asStateFlow()
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+
+    var currentMinLogLevel: LogLevel = LogLevel.DEBUG
 
     fun init(context: Context) {
         synchronized(lock) {
-            if (logFile == null) {
+            if (logTextFile == null) {
                 val logDir = File(context.filesDir, "logs")
                 if (!logDir.exists()) {
                     logDir.mkdirs()
                 }
-                logFile = File(logDir, "cullinan_events.log")
-                if (!logFile!!.exists()) {
-                    logFile!!.createNewFile()
+                logTextFile = File(logDir, "cullinan_events.log")
+                if (!logTextFile!!.exists()) {
+                    logTextFile!!.createNewFile()
                 }
+
+                logJsonFile = File(logDir, "cullinan_events.jsonl")
+                if (!logJsonFile!!.exists()) {
+                    logJsonFile!!.createNewFile()
+                }
+
                 loadInitialMemoryLogs()
             }
         }
     }
 
+    fun generateFlowId(prefix: String = "flw"): String {
+        return "${prefix}_${UUID.randomUUID().toString().take(8)}"
+    }
+
+    fun generateRequestId(): String {
+        return "req_${UUID.randomUUID().toString().take(8)}"
+    }
+
     private fun loadInitialMemoryLogs() {
-        val file = logFile ?: return
+        val file = logTextFile ?: return
         if (!file.exists()) return
         try {
             val lines = file.readLines()
@@ -63,68 +81,37 @@ object AppLogger {
         }
     }
 
-    fun logAction(action: String, details: String = "") {
+    fun log(entry: LogEntry) {
+        if (entry.level.ordinal < currentMinLogLevel.ordinal) return
+
         val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
-        val msg = if (details.isNotBlank()) "[$timestamp] [ACTION] $action - $details" else "[$timestamp] [ACTION] $action"
-        appendLog(msg)
-    }
+        val cleanEntry = entry.copy(
+            timestamp = timestamp,
+            message = LogSanitizer.sanitizeText(entry.message)
+        )
 
-    fun logHttpRequest(method: String, url: String, headers: Map<String, String>, bodyString: String?) {
-        val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
-        val cleanUrl = sanitize(url)
-        val cleanHeaders = sanitizeHeaders(headers)
-        val cleanBody = bodyString?.let { sanitize(it) } ?: ""
+        val humanReadableText = buildHumanReadableLine(cleanEntry)
+        val jsonlLine = buildJsonlLine(cleanEntry)
 
-        val sb = StringBuilder()
-        sb.append("[$timestamp] [HTTP REQ] $method $cleanUrl\n")
-        if (cleanHeaders.isNotBlank()) {
-            sb.append("  Headers: $cleanHeaders\n")
-        }
-        if (cleanBody.isNotBlank()) {
-            val preview = if (cleanBody.length > 500) cleanBody.take(500) + "... [truncated ${cleanBody.length} chars]" else cleanBody
-            sb.append("  Body: $preview\n")
-        }
-        appendLog(sb.toString().trimEnd())
-    }
-
-    fun logHttpResponse(code: Int, url: String, durationMs: Long, bodyPreview: String? = null) {
-        val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
-        val cleanUrl = sanitize(url)
-        val statusEmoji = if (code in 200..299) "SUCCESS" else if (code in 300..399) "REDIRECT" else "ERROR"
-
-        val sb = StringBuilder()
-        sb.append("[$timestamp] [HTTP RESP] $code $statusEmoji ($durationMs ms) - $cleanUrl\n")
-        if (!bodyPreview.isNullOrBlank()) {
-            val sanitizedPreview = sanitize(bodyPreview)
-            val preview = if (sanitizedPreview.length > 400) sanitizedPreview.take(400) + "... [truncated]" else sanitizedPreview
-            sb.append("  Preview: $preview\n")
-        }
-        appendLog(sb.toString().trimEnd())
-    }
-
-    fun logError(tag: String, message: String, throwable: Throwable? = null) {
-        val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
-        val errStr = throwable?.let { ": ${it.javaClass.simpleName} - ${it.message}" } ?: ""
-        appendLog("[$timestamp] [ERROR] [$tag] $message$errStr")
-    }
-
-    private fun appendLog(line: String) {
-        // Update memory list immediately on main thread / stateflow
         synchronized(lock) {
-            memoryLogList.add(line)
+            memoryLogList.add(humanReadableText)
             if (memoryLogList.size > MAX_MEMORY_ENTRIES) {
                 memoryLogList.removeAt(0)
             }
             _recentLogs.value = memoryLogList.toList()
         }
 
-        // Persist to disk asynchronously
         scope.launch {
             synchronized(lock) {
-                val file = logFile ?: return@synchronized
                 try {
-                    file.appendText("$line\n\n", Charsets.UTF_8)
-                    checkAndPruneFile(file)
+                    logTextFile?.let { file ->
+                        file.appendText("$humanReadableText\n\n", Charsets.UTF_8)
+                        checkAndPruneFile(file)
+                    }
+                    logJsonFile?.let { file ->
+                        file.appendText("$jsonlLine\n", Charsets.UTF_8)
+                        checkAndPruneFile(file)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to write log to disk", e)
                 }
@@ -132,25 +119,143 @@ object AppLogger {
         }
     }
 
+    fun logAction(action: String, details: String = "", flowId: String? = null) {
+        log(
+            LogEntry(
+                timestamp = "",
+                level = LogLevel.INFO,
+                component = "UI",
+                operation = action,
+                flowId = flowId,
+                message = details.ifBlank { action }
+            )
+        )
+    }
+
+    fun logError(tag: String, message: String, throwable: Throwable? = null, flowId: String? = null) {
+        log(
+            LogEntry(
+                timestamp = "",
+                level = LogLevel.ERROR,
+                component = tag,
+                operation = "Error",
+                flowId = flowId,
+                message = message,
+                exceptionType = throwable?.javaClass?.simpleName,
+                exceptionMessage = throwable?.message
+            )
+        )
+    }
+
+    private fun buildHumanReadableLine(e: LogEntry): String {
+        val flowStr = e.flowId?.let { " [$it]" } ?: ""
+        val reqStr = e.requestId?.let { " [$it]" } ?: ""
+        val durStr = e.durationMs?.let { " (${it}ms)" } ?: ""
+
+        val sb = StringBuilder()
+        sb.append("[${e.timestamp}] [${e.level}] [${e.component}]${flowStr}${reqStr}: ${e.message}${durStr}")
+
+        e.http?.let { h ->
+            sb.append("\n  HTTP: ${h.method} ${LogSanitizer.sanitizeText(h.url)}")
+            h.statusCode?.let { sb.append(" -> $it") }
+            if (h.isCompatibilitySsl) sb.append(" (SSL Fallback)")
+        }
+
+        e.aspnet?.let { a ->
+            sb.append("\n  ASP.NET: ViewState len=${a.viewStateLength ?: 0} (fp=${a.viewStateFingerprint ?: "N/A"})")
+            if (a.hasEventValidation) sb.append(" EV_len=${a.eventValidationLength ?: 0}")
+            a.eventTarget?.let { sb.append(" Target=$it") }
+        }
+
+        e.cookies?.let { c ->
+            sb.append("\n  Cookies: Action=${c.action} Count=${c.cookieCount} SessionFP=${c.sessionFingerprint ?: "NONE"}")
+        }
+
+        e.parser?.let { p ->
+            sb.append("\n  Parser: Type=${p.pageType} HTML_len=${p.htmlLength} Meals=${p.parsedMealsCount} Tables=${p.tablesFound}")
+        }
+
+        e.exceptionType?.let {
+            sb.append("\n  Exception: $it - ${e.exceptionMessage ?: ""}")
+        }
+
+        return sb.toString()
+    }
+
+    private fun buildJsonlLine(e: LogEntry): String {
+        // Escape special chars for manual clean JSON serialization without heavy DI
+        fun escape(s: String?) = s?.replace("\\", "\\\\")?.replace("\"", "\\\"")?.replace("\n", "\\n")?.replace("\r", "\\r") ?: ""
+
+        val sb = StringBuilder()
+        sb.append("{")
+        sb.append("\"ts\":\"${e.timestamp}\",")
+        sb.append("\"lvl\":\"${e.level}\",")
+        sb.append("\"comp\":\"${escape(e.component)}\",")
+        sb.append("\"op\":\"${escape(e.operation)}\",")
+        if (e.flowId != null) sb.append("\"flowId\":\"${escape(e.flowId)}\",")
+        if (e.requestId != null) sb.append("\"reqId\":\"${escape(e.requestId)}\",")
+        if (e.durationMs != null) sb.append("\"durMs\":${e.durationMs},")
+
+        e.http?.let { h ->
+            sb.append("\"http\":{")
+            sb.append("\"method\":\"${h.method}\",")
+            sb.append("\"url\":\"${escape(LogSanitizer.sanitizeText(h.url))}\"")
+            if (h.statusCode != null) sb.append(",\"status\":${h.statusCode}")
+            if (h.isCompatibilitySsl) sb.append(",\"sslFallback\":true")
+            sb.append("},")
+        }
+
+        e.aspnet?.let { a ->
+            sb.append("\"aspnet\":{")
+            sb.append("\"vsLen\":${a.viewStateLength ?: 0}")
+            if (a.viewStateFingerprint != null) sb.append(",\"vsFp\":\"${a.viewStateFingerprint}\"")
+            if (a.hasEventValidation) sb.append(",\"hasEv\":true")
+            if (a.eventTarget != null) sb.append(",\"target\":\"${escape(a.eventTarget)}\"")
+            sb.append("},")
+        }
+
+        e.cookies?.let { c ->
+            sb.append("\"cookies\":{")
+            sb.append("\"act\":\"${c.action}\",")
+            sb.append("\"cnt\":${c.cookieCount}")
+            if (c.sessionFingerprint != null) sb.append(",\"sessionFp\":\"${c.sessionFingerprint}\"")
+            sb.append("},")
+        }
+
+        e.parser?.let { p ->
+            sb.append("\"parser\":{")
+            sb.append("\"pageType\":\"${p.pageType}\",")
+            sb.append("\"htmlLen\":${p.htmlLength},")
+            sb.append("\"meals\":${p.parsedMealsCount},")
+            sb.append("\"tables\":${p.tablesFound}")
+            sb.append("},")
+        }
+
+        sb.append("\"msg\":\"${escape(e.message)}\"")
+        if (e.exceptionType != null) {
+            sb.append(",\"exType\":\"${escape(e.exceptionType)}\",\"exMsg\":\"${escape(e.exceptionMessage)}\"")
+        }
+        sb.append("}")
+        return sb.toString()
+    }
+
     private fun checkAndPruneFile(file: File) {
         if (!file.exists()) return
         val currentSize = file.length()
         if (currentSize > MAX_LOG_SIZE_BYTES) {
             try {
-                // Prune oldest half of the file
                 val skipBytes = currentSize - PRUNE_TARGET_BYTES
                 val raf = RandomAccessFile(file, "r")
                 raf.seek(skipBytes)
-                // Read until newline to start on clean record boundary
                 raf.readLine()
                 val remainingBytes = ByteArray((currentSize - raf.filePointer).toInt())
                 raf.readFully(remainingBytes)
                 raf.close()
 
                 file.writeBytes(remainingBytes)
-                Log.i(TAG, "Pruned log file from $currentSize bytes to ${file.length()} bytes")
+                Log.i(TAG, "Pruned log file ${file.name} to ${file.length()} bytes")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to prune log file", e)
+                Log.e(TAG, "Failed to prune log file ${file.name}", e)
             }
         }
     }
@@ -160,19 +265,18 @@ object AppLogger {
             memoryLogList.clear()
             _recentLogs.value = emptyList()
             try {
-                logFile?.writeText("", Charsets.UTF_8)
+                logTextFile?.writeText("", Charsets.UTF_8)
+                logJsonFile?.writeText("", Charsets.UTF_8)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to clear log file", e)
+                Log.e(TAG, "Failed to clear log files", e)
             }
         }
     }
 
-    fun getLogFile(): File? = logFile
-
     fun getExportableText(): String {
         synchronized(lock) {
             return try {
-                val text = logFile?.takeIf { it.exists() }?.readText(Charsets.UTF_8)
+                val text = logTextFile?.takeIf { it.exists() }?.readText(Charsets.UTF_8)
                 if (!text.isNullOrBlank()) text else memoryLogList.joinToString("\n\n")
             } catch (_: Exception) {
                 memoryLogList.joinToString("\n\n")
@@ -180,35 +284,15 @@ object AppLogger {
         }
     }
 
-    /**
-     * Sanitizes sensitive information: passwords, national IDs, RSA private keys, and session cookies.
-     */
-    fun sanitize(raw: String): String {
-        val base = raw
-            // Mask Passwords
-            .replace(Regex("(txtPassword|txtPasswordPlain)=([^&]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
-            // Mask Usernames (National ID / Student ID)
-            .replace(Regex("(txtUsername|txtUsernamePlain)=([^&]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_USER]")
-            // Mask ASP.NET Session Cookie
-            .replace(Regex("ASP\\.NET_SessionId=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "ASP.NET_SessionId=***")
-            // Mask Public Key in form body to keep log readable
-            .replace(Regex("(publicKeytxt=)([^&]*)", RegexOption.IGNORE_CASE), "$1[PEM_KEY_TRUNCATED]")
-
-        return Regex("(__VIEWSTATE=)([^&]{40,})").replace(base) { match ->
-            val key = match.groupValues[1]
-            val value = match.groupValues[2]
-            "${key}[VIEWSTATE_LENGTH_${value.length}]"
-        }
-    }
-
-    private fun sanitizeHeaders(headers: Map<String, String>): String {
-        return headers.entries.joinToString(", ") { (k, v) ->
-            val cleanValue = if (k.equals("Cookie", ignoreCase = true) || k.equals("Set-Cookie", ignoreCase = true)) {
-                v.replace(Regex("ASP\\.NET_SessionId=([^;,\\s]+)", RegexOption.IGNORE_CASE), "ASP.NET_SessionId=***")
-            } else {
-                v
+    fun getExportableJsonl(): String {
+        synchronized(lock) {
+            return try {
+                logJsonFile?.takeIf { it.exists() }?.readText(Charsets.UTF_8) ?: ""
+            } catch (_: Exception) {
+                ""
             }
-            "$k=$cleanValue"
         }
     }
+
+    fun sanitize(raw: String): String = LogSanitizer.sanitizeText(raw)
 }

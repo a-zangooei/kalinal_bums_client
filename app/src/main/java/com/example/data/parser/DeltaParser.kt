@@ -128,6 +128,21 @@ object DeltaParser {
         val isSessionExpired = redirectUrl?.contains("Login.aspx", ignoreCase = true) == true ||
             (updatePanels.isEmpty() && (deltaText.contains("Login.aspx") || deltaText.contains("txtUsernamePlain")))
 
+        com.example.data.logger.AppLogger.log(
+            com.example.data.logger.LogEntry(
+                timestamp = "",
+                level = com.example.data.logger.LogLevel.DEBUG,
+                component = "DeltaParser",
+                operation = "ParseDelta",
+                aspnet = com.example.data.logger.AspNetDiagnostics(
+                    viewStateLength = hiddenFields["__VIEWSTATE"]?.length,
+                    viewStateFingerprint = hiddenFields["__VIEWSTATE"]?.let { com.example.data.logger.LogSanitizer.computeFingerprint(it) },
+                    viewStateGenerator = hiddenFields["__VIEWSTATEGENERATOR"]
+                ),
+                message = "Parsed ${rawTokens.size} delta tokens (Panels: ${updatePanels.keys.joinToString()}, Expired: $isSessionExpired, Toast: $extractedToastType)"
+            )
+        )
+
         return DeltaResponse(
             updatePanels = updatePanels,
             hiddenFields = hiddenFields,
