@@ -221,94 +221,112 @@ object AppLogger {
         return sb.toString()
     }
 
+    private fun escapeJson(s: String?): String {
+        if (s == null) return ""
+        val sb = StringBuilder()
+        for (ch in s) {
+            when (ch) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                '\b' -> sb.append("\\b")
+                '\u000C' -> sb.append("\\f")
+                else -> {
+                    if (ch < ' ') {
+                        sb.append("\\u%04x".format(ch.code))
+                    } else {
+                        sb.append(ch)
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
+
     /**
-     * Serializes LogEntry to a single JSONL line using native org.json.JSONObject.
-     * Guarantees correct escaping for all control characters and Unicode.
+     * Serializes LogEntry to a single JSONL line with complete character escaping.
+     * Guarantees universal execution compatibility across JVM Unit Tests and Android Runtimes.
      */
     fun buildJsonlLine(e: LogEntry): String {
-        return try {
-            val json = JSONObject()
-            json.put("ts", e.timestamp)
-            json.put("lvl", e.level.name)
-            json.put("comp", e.component)
-            json.put("op", e.operation)
-            e.flowId?.let { json.put("flowId", it) }
-            e.requestId?.let { json.put("reqId", it) }
-            e.durationMs?.let { json.put("durMs", it) }
-            e.errorCategory?.let { json.put("errCat", it) }
+        val sb = StringBuilder()
+        sb.append("{")
+        sb.append("\"ts\":\"${escapeJson(e.timestamp)}\",")
+        sb.append("\"lvl\":\"${e.level.name}\",")
+        sb.append("\"comp\":\"${escapeJson(e.component)}\",")
+        sb.append("\"op\":\"${escapeJson(e.operation)}\"")
+        if (e.flowId != null) sb.append(",\"flowId\":\"${escapeJson(e.flowId)}\"")
+        if (e.requestId != null) sb.append(",\"reqId\":\"${escapeJson(e.requestId)}\"")
+        if (e.durationMs != null) sb.append(",\"durMs\":${e.durationMs}")
+        if (e.errorCategory != null) sb.append(",\"errCat\":\"${escapeJson(e.errorCategory)}\"")
 
-            e.http?.let { h ->
-                val httpJson = JSONObject()
-                httpJson.put("method", h.method)
-                httpJson.put("url", h.url)
-                h.statusCode?.let { httpJson.put("status", it) }
-                h.contentType?.let { httpJson.put("contentType", it) }
-                h.contentLength?.let { httpJson.put("contentLength", it) }
-                h.redirectCount?.let { httpJson.put("redirectCount", it) }
-                h.finalUrl?.let { httpJson.put("finalUrl", it) }
-                if (h.isCompatibilitySsl) httpJson.put("sslFallback", true)
-                if (h.isNoRedirect) httpJson.put("noRedirect", true)
-                json.put("http", httpJson)
-            }
-
-            e.aspnet?.let { a ->
-                val aspJson = JSONObject()
-                a.viewStateLength?.let { aspJson.put("vsLen", it) }
-                a.viewStateFingerprint?.let { aspJson.put("vsFp", it) }
-                a.viewStateChunksCount?.let { aspJson.put("vsChunks", it) }
-                a.viewStateFieldCount?.let { aspJson.put("vsFieldCount", it) }
-                a.viewStateGenerator?.let { aspJson.put("vsGen", it) }
-                if (a.hasEventValidation) {
-                    aspJson.put("hasEv", true)
-                    a.eventValidationLength?.let { aspJson.put("evLen", it) }
-                }
-                a.eventTarget?.let { aspJson.put("target", it) }
-                a.formFieldCount?.let { aspJson.put("fields", it) }
-                if (a.isCachedState) aspJson.put("cached", true)
-                json.put("aspnet", aspJson)
-            }
-
-            e.cookies?.let { c ->
-                val cookieJson = JSONObject()
-                cookieJson.put("act", c.action)
-                cookieJson.put("cnt", c.cookieCount)
-                cookieJson.put("hasSession", c.hasSessionCookie)
-                c.sessionFingerprint?.let { cookieJson.put("sessionFp", it) }
-                if (c.expiredRemovedCount > 0) cookieJson.put("expiredPruned", c.expiredRemovedCount)
-                json.put("cookies", cookieJson)
-            }
-
-            e.parser?.let { p ->
-                val parserJson = JSONObject()
-                parserJson.put("pageType", p.pageType)
-                parserJson.put("htmlLen", p.htmlLength)
-                parserJson.put("rawTables", p.rawTablesInDom)
-                parserJson.put("tablesFound", p.tablesFound)
-                parserJson.put("meals", p.parsedMealsCount)
-                parserJson.put("skippedRows", p.skippedRowsCount)
-                parserJson.put("isEmpty", p.isMenuEmpty)
-                if (p.isFragment) parserJson.put("isFragment", true)
-                json.put("parser", parserJson)
-            }
-
-            e.notice?.let { n ->
-                val noticeJson = JSONObject()
-                noticeJson.put("detected", n.isNoticeDetected)
-                n.noticeType?.let { noticeJson.put("type", it) }
-                noticeJson.put("ack", n.isAcknowledged)
-                n.actionUrl?.let { noticeJson.put("action", it) }
-                json.put("notice", noticeJson)
-            }
-
-            json.put("msg", e.message)
-            e.exceptionType?.let { json.put("exType", it) }
-            e.exceptionMessage?.let { json.put("exMsg", it) }
-
-            json.toString()
-        } catch (ex: Exception) {
-            Log.e(TAG, "buildJsonlLine failed for ${e.component}/${e.operation}", ex)
-            "{\"ts\":\"${e.timestamp}\",\"lvl\":\"ERROR\",\"comp\":\"${e.component}\",\"msg\":\"Serialization failure: ${ex.message}\"}"
+        e.http?.let { h ->
+            sb.append(",\"http\":{")
+            sb.append("\"method\":\"${escapeJson(h.method)}\",")
+            sb.append("\"url\":\"${escapeJson(h.url)}\"")
+            if (h.statusCode != null) sb.append(",\"status\":${h.statusCode}")
+            if (h.contentType != null) sb.append(",\"contentType\":\"${escapeJson(h.contentType)}\"")
+            if (h.contentLength != null) sb.append(",\"contentLength\":${h.contentLength}")
+            if (h.redirectCount != null) sb.append(",\"redirectCount\":${h.redirectCount}")
+            if (h.finalUrl != null) sb.append(",\"finalUrl\":\"${escapeJson(h.finalUrl)}\"")
+            if (h.isCompatibilitySsl) sb.append(",\"sslFallback\":true")
+            if (h.isNoRedirect) sb.append(",\"noRedirect\":true")
+            sb.append("}")
         }
+
+        e.aspnet?.let { a ->
+            sb.append(",\"aspnet\":{")
+            sb.append("\"hasEv\":${a.hasEventValidation}")
+            if (a.viewStateLength != null) sb.append(",\"vsLen\":${a.viewStateLength}")
+            if (a.viewStateFingerprint != null) sb.append(",\"vsFp\":\"${escapeJson(a.viewStateFingerprint)}\"")
+            if (a.viewStateChunksCount != null) sb.append(",\"vsChunks\":${a.viewStateChunksCount}")
+            if (a.viewStateFieldCount != null) sb.append(",\"vsFieldCount\":${a.viewStateFieldCount}")
+            if (a.viewStateGenerator != null) sb.append(",\"vsGen\":\"${escapeJson(a.viewStateGenerator)}\"")
+            if (a.eventValidationLength != null) sb.append(",\"evLen\":${a.eventValidationLength}")
+            if (a.eventTarget != null) sb.append(",\"target\":\"${escapeJson(a.eventTarget)}\"")
+            if (a.formFieldCount != null) sb.append(",\"fields\":${a.formFieldCount}")
+            if (a.isCachedState) sb.append(",\"cached\":true")
+            sb.append("}")
+        }
+
+        e.cookies?.let { c ->
+            sb.append(",\"cookies\":{")
+            sb.append("\"act\":\"${escapeJson(c.action)}\",")
+            sb.append("\"cnt\":${c.cookieCount},")
+            sb.append("\"hasSession\":${c.hasSessionCookie}")
+            if (c.sessionFingerprint != null) sb.append(",\"sessionFp\":\"${escapeJson(c.sessionFingerprint)}\"")
+            if (c.expiredRemovedCount > 0) sb.append(",\"expiredPruned\":${c.expiredRemovedCount}")
+            sb.append("}")
+        }
+
+        e.parser?.let { p ->
+            sb.append(",\"parser\":{")
+            sb.append("\"pageType\":\"${escapeJson(p.pageType)}\",")
+            sb.append("\"htmlLen\":${p.htmlLength},")
+            sb.append("\"rawTables\":${p.rawTablesInDom},")
+            sb.append("\"tablesFound\":${p.tablesFound},")
+            sb.append("\"meals\":${p.parsedMealsCount},")
+            sb.append("\"skippedRows\":${p.skippedRowsCount},")
+            sb.append("\"isEmpty\":${p.isMenuEmpty}")
+            if (p.isFragment) sb.append(",\"isFragment\":true")
+            sb.append("}")
+        }
+
+        e.notice?.let { n ->
+            sb.append(",\"notice\":{")
+            sb.append("\"detected\":${n.isNoticeDetected},")
+            sb.append("\"ack\":${n.isAcknowledged}")
+            if (n.noticeType != null) sb.append(",\"type\":\"${escapeJson(n.noticeType)}\"")
+            if (n.actionUrl != null) sb.append(",\"action\":\"${escapeJson(n.actionUrl)}\"")
+            sb.append("}")
+        }
+
+        sb.append(",\"msg\":\"${escapeJson(e.message)}\"")
+        if (e.exceptionType != null) sb.append(",\"exType\":\"${escapeJson(e.exceptionType)}\"")
+        if (e.exceptionMessage != null) sb.append(",\"exMsg\":\"${escapeJson(e.exceptionMessage)}\"")
+        sb.append("}")
+        return sb.toString()
     }
 
     private fun checkAndPruneFile(file: File) {

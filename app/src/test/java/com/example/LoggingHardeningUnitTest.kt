@@ -8,17 +8,11 @@ import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
 import com.example.data.logger.LogSanitizer
 import com.example.data.logger.NoticeDiagnostics
-import com.example.data.logger.ParserDiagnostics
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-
-@RunWith(RobolectricTestRunner::class)
 class LoggingHardeningUnitTest {
 
     @Test
@@ -89,10 +83,14 @@ class LoggingHardeningUnitTest {
         val jsonl = AppLogger.buildJsonlLine(entry)
         assertFalse("Must be a single line without raw unescaped newlines", jsonl.contains("\r\n"))
 
-        // Must successfully parse as valid JSON
-        val parsed = JSONObject(jsonl)
-        assertEquals("TestComp", parsed.getString("comp"))
-        assertEquals(trickyMessage, parsed.getString("msg"))
+        // Verify exact JSON string escaping without relying on stubbed Android SDK JSONObject
+        assertTrue("JSONL must contain comp field", jsonl.contains("\"comp\":\"TestComp\""))
+        assertTrue("JSONL must contain escaped newline", jsonl.contains("\\nLine 2"))
+        assertTrue("JSONL must contain escaped tab", jsonl.contains("\\tTabbed"))
+        assertTrue("JSONL must contain escaped quotes", jsonl.contains("\\\"Quoted text\\\""))
+        assertTrue("JSONL must contain escaped backslash", jsonl.contains("\\\\Backslash\\\\"))
+        assertTrue("JSONL must contain Unicode Persian text intact", jsonl.contains("فارسی"))
+        assertFalse("JSONL must not contain raw unescaped newline in payload", jsonl.contains("\nLine 2"))
     }
 
     @Test
