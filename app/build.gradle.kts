@@ -17,7 +17,7 @@ android {
       ?: 1
   val buildVersionName = project.findProperty("versionName")?.toString()
       ?: System.getenv("VERSION_NAME")
-      ?: "1.0"
+      ?: "1.0.0"
 
   defaultConfig {
     applicationId = "com.aistudio.cullinan.vfkzrw"

@@ -423,7 +423,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "نسخه برنامه: ۱.۰ (بیلد ${BuildConfig.VERSION_CODE})",
+                                    text = "نسخه v${BuildConfig.VERSION_NAME} (بیلد #${BuildConfig.VERSION_CODE})",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
