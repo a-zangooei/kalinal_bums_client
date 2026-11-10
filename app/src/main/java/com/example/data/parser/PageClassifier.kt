@@ -113,14 +113,15 @@ object PageClassifier {
             if (isMessagesUrl) evidence.add("URL_CONTAINS_MYMESSAGE")
 
             val rows = doc.select("#cphMain_grdContent tr").filter {
-                !it.hasClass("HeaderStyle") && !it.hasClass("PagerStyle") && it.select("th").isEmpty()
+                it.select("input[name*='imgbtnMessageText']").isNotEmpty()
             }
             var unreadCount = 0
             for (row in rows) {
                 val hasCloseIcon = row.select("img[src*='MsgClose']").isNotEmpty()
+                val hasOpenIcon = row.select("img[src*='MsgOpen']").isNotEmpty()
                 val cells = row.select("td")
                 val readDate = if (cells.size > 6) cells[6].text().trim() else ""
-                val isUnread = hasCloseIcon || readDate == "-" || readDate.isBlank()
+                val isUnread = hasCloseIcon || (!hasOpenIcon && (readDate == "-" || readDate.isBlank()))
                 if (isUnread) {
                     unreadCount++
                 }

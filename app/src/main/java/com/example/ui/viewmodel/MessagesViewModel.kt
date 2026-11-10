@@ -62,6 +62,13 @@ class MessagesViewModel(
             return
         }
 
+        if (message.buttonInputName.isBlank()) {
+            _selectedMessageDetail.value = message.copy(
+                messageText = "شناسه دکمه پیام موجود نیست یا این پیام محتوای متنی ندارد."
+            )
+            return
+        }
+
         // Fetch message text from server via Delta POST
         viewModelScope.launch {
             _selectedMessageDetail.value = message
@@ -79,7 +86,7 @@ class MessagesViewModel(
             result.onSuccess { (newVs, text) ->
                 val updatedItem = message.copy(
                     isRead = true,
-                    messageText = text.ifBlank { "متن پیام خالی است یا بارگذاری نشد." }
+                    messageText = text.ifBlank { "متن این پیام خالی است." }
                 )
                 _selectedMessageDetail.value = updatedItem
 

@@ -212,4 +212,118 @@ class UnreadMessagesUnitTest {
         assertEquals(3, exception.unreadCount)
         assertTrue(exception.message?.contains("پیام خوانده‌نشده") == true)
     }
+
+    @Test
+    fun testMessagesTableWithPagerRowDoesNotCreateFakeUnreadMessage() {
+        val htmlWithPager = """
+            <!DOCTYPE html>
+            <html lang="fa-ir">
+            <body>
+            <div menuidx="1">رزرو و خرید غذا</div>
+            <a href="https://jeton.bums.ac.ir/Reservation/Reservation.aspx"><div class="subMenu">رزرو و خرید هفتگی غذا</div></a>
+            <form method="post" action="https://jeton.bums.ac.ir/MyCullinan/MyMessage.aspx" id="MainForm">
+                <input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="TEST_VS_PAGER" />
+                <input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="87AF9C2D" />
+                <table id="cphMain_grdContent" class="GridviewStyle">
+                    <tbody>
+                        <tr class="HeaderStyle">
+                            <th>ردیف</th><th>عنوان پیام</th><th>متن پیام</th><th>تاریخ ارسال</th><th>زمان ارسال</th><th>وضعیت</th><th>تاریخ خواندن</th><th>زمان خواندن</th>
+                        </tr>
+                        <tr>
+                            <td>1</td>
+                            <td>همراه داشتن کارت دانشجویی</td>
+                            <td><input type="image" name="ctl00${'$'}cphMain${'$'}grdContent${'$'}ctl02${'$'}imgbtnMessageText" src="../Images/Icon/view.png"></td>
+                            <td>1405/08/18</td><td>10:18:58</td>
+                            <td><img src="https://jeton.bums.ac.ir/Images/Icon/MsgOpen.png"></td>
+                            <td>1405/08/18</td><td>22:44:50</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>اطلاعیه مهم</td>
+                            <td><input type="image" name="ctl00${'$'}cphMain${'$'}grdContent${'$'}ctl03${'$'}imgbtnMessageText" src="../Images/Icon/view.png"></td>
+                            <td>1405/02/05</td><td>08:13:07</td>
+                            <td><img src="https://jeton.bums.ac.ir/Images/Icon/MsgOpen.png"></td>
+                            <td>1405/03/07</td><td>22:21:37</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>خدمات سامانه تغذیه در پیام رسان ایتا</td>
+                            <td><input type="image" name="ctl00${'$'}cphMain${'$'}grdContent${'$'}ctl04${'$'}imgbtnMessageText" src="../Images/Icon/view.png"></td>
+                            <td>1405/01/07</td><td>19:36:33</td>
+                            <td><img src="https://jeton.bums.ac.ir/Images/Icon/MsgOpen.png"></td>
+                            <td>1405/03/07</td><td>22:21:33</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>ساعت کاری سلف سرویس دانشگاه در ماه مبارک رمضان</td>
+                            <td><input type="image" name="ctl00${'$'}cphMain${'$'}grdContent${'$'}ctl05${'$'}imgbtnMessageText" src="../Images/Icon/view.png"></td>
+                            <td>1404/11/30</td><td>10:38:36</td>
+                            <td><img src="https://jeton.bums.ac.ir/Images/Icon/MsgOpen.png"></td>
+                            <td>1405/03/07</td><td>22:21:18</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>اطلاعیه</td>
+                            <td><input type="image" name="ctl00${'$'}cphMain${'$'}grdContent${'$'}ctl06${'$'}imgbtnMessageText" src="../Images/Icon/view.png"></td>
+                            <td>1404/11/21</td><td>13:22:43</td>
+                            <td><img src="https://jeton.bums.ac.ir/Images/Icon/MsgOpen.png"></td>
+                            <td>1404/11/22</td><td>10:20:29</td>
+                        </tr>
+                        <tr class="PagerStyle">
+                            <td colspan="8">
+                                <table>
+                                    <tbody>
+                                        <tr>
+                                            <td><span>1</span></td>
+                                            <td><a href="javascript:__doPostBack('ctl00${'$'}cphMain${'$'}grdContent','Page${'$'}2')">2</a></td>
+                                            <td><a href="javascript:__doPostBack('ctl00${'$'}cphMain${'$'}grdContent','Page${'$'}3')">3</a></td>
+                                            <td><a href="javascript:__doPostBack('ctl00${'$'}cphMain${'$'}grdContent','Page${'$'}4')">4</a></td>
+                                            <td><a href="javascript:__doPostBack('ctl00${'$'}cphMain${'$'}grdContent','Page${'$'}5')">5</a></td>
+                                            <td><a href="javascript:__doPostBack('ctl00${'$'}cphMain${'$'}grdContent','Page${'$'}6')">6</a></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </form>
+            </body>
+            </html>
+        """.trimIndent()
+
+        // 1. Check PageClassifier
+        val classified = PageClassifier.classify(htmlWithPager, 200, "https://jeton.bums.ac.ir/MyCullinan/MyMessage.aspx")
+        assertEquals(PageClassifier.TYPE_MESSAGES, classified.pageType)
+        assertFalse("Must have NO unread messages when all 5 are read", classified.hasUnreadMessages)
+        assertEquals("Unread message count must be 0", 0, classified.unreadMessageCount)
+        assertTrue("Must detect pagination controls", classified.hasPaginationControls)
+
+        // 2. Check row filtering directly (as done in MessageRepository)
+        val doc = Jsoup.parse(htmlWithPager)
+        val rows = doc.select("#cphMain_grdContent tr").filter {
+            it.select("input[name*='imgbtnMessageText']").isNotEmpty()
+        }
+        assertEquals("Must parse exactly 5 message rows, excluding header and pager rows", 5, rows.size)
+
+        for (i in 0 until 5) {
+            val r = rows[i]
+            val btn = r.select("input[name*='imgbtnMessageText']").first()
+            assertNotNull(btn)
+            assertTrue("Button name must match expected ctl0${i + 2}", btn?.attr("name")?.contains("ctl0${i + 2}") == true)
+        }
+    }
+
+    @Test
+    fun testFallbackMessageContentExtractionFromRawDelta() {
+        val rawDelta = "1|#||4|250|updatePanel|ctl00${'$'}UpdatePanel1|<div><p id=\"cphMain_pMessage\">متن تستی استخراج پیام خارج از فرمت عادی</p></div>|20|hiddenField|__VIEWSTATE|NEW_VS|"
+        val deltaResponse = DeltaParser.parse(rawDelta)
+        val vs = deltaResponse.hiddenFields["__VIEWSTATE"]
+        assertEquals("NEW_VS", vs)
+
+        val upHtml = deltaResponse.updatePanels["UpdatePanel1"] ?: deltaResponse.updatePanels["ctl00${'$'}UpdatePanel1"] ?: ""
+        val text = Jsoup.parse(upHtml).select("#cphMain_pMessage").text().trim()
+        assertEquals("متن تستی استخراج پیام خارج از فرمت عادی", text)
+    }
 }
+

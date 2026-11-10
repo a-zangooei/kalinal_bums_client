@@ -57,14 +57,16 @@ class MessageRepository {
             val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
             val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "87AF9C2D" }
 
-            // Check if full menu has been unlocked (Reservation link is present)
-            val isReservationUnlocked = html.contains("Reservation/Reservation.aspx")
+            // Check if full menu has been unlocked (Reservation link is present, either absolute or relative)
+            val isReservationUnlocked = html.contains("Reservation/Reservation.aspx", ignoreCase = true)
 
             // Check for pagination controls
             val hasPager = doc.select("#cphMain_grdContent tr.PagerStyle, .PagerStyle, tr[class*='Pager']").isNotEmpty()
 
+            // Filter message rows strictly by requiring the imgbtnMessageText input button.
+            // This prevents pager rows (which contain nested tables/tr with numbers) from being counted as messages.
             val rows = doc.select("#cphMain_grdContent tr").filter {
-                !it.hasClass("HeaderStyle") && !it.hasClass("PagerStyle") && it.select("th").isEmpty()
+                it.select("input[name*='imgbtnMessageText']").isNotEmpty()
             }
 
             val messages = mutableListOf<MessageItem>()
@@ -88,7 +90,7 @@ class MessageRepository {
                 val readDate = if (cells.size > 6) cells[6].text().trim() else ""
                 val readTime = if (cells.size > 7) cells[7].text().trim() else ""
 
-                val isRead = hasMsgOpen || (readDate.isNotBlank() && readDate != "-") && !hasMsgClose
+                val isRead = hasMsgOpen || (!hasMsgClose && readDate.isNotBlank() && readDate != "-")
 
                 messages.add(
                     MessageItem(
@@ -161,6 +163,11 @@ class MessageRepository {
             )
         )
 
+        if (buttonInputName.isBlank()) {
+            AppLogger.logError("MessageRepository", "buttonInputName cannot be blank", flowId = flowId)
+            return@withContext Result.failure(IllegalArgumentException("شناسه دکمه پیام موجود نیست"))
+        }
+
         try {
             val formBody = FormBody.Builder()
                 .add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$buttonInputName")
@@ -199,9 +206,27 @@ class MessageRepository {
 
             val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentViewState
 
-            val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"] ?: ""
-            val panelDoc = Jsoup.parse(updatePanelHtml)
-            val messageContent = panelDoc.select("#cphMain_pMessage").text().trim()
+            val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
+                ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
+                ?: ""
+
+            var messageContent = ""
+            if (updatePanelHtml.isNotBlank()) {
+                messageContent = Jsoup.parse(updatePanelHtml).select("#cphMain_pMessage").text().trim()
+            }
+
+            // Fallback 1: Extract from full delta text using Jsoup
+            if (messageContent.isBlank()) {
+                messageContent = Jsoup.parse(deltaText).select("#cphMain_pMessage").text().trim()
+            }
+
+            // Fallback 2: Regex extraction directly from raw response
+            if (messageContent.isBlank()) {
+                val pMatch = Regex("""<p[^>]*id=["']cphMain_pMessage["'][^>]*>([\s\S]*?)</p>""", RegexOption.IGNORE_CASE).find(deltaText)
+                if (pMatch != null) {
+                    messageContent = Jsoup.parse(pMatch.groupValues[1]).text().trim()
+                }
+            }
 
             AppLogger.log(
                 LogEntry(
@@ -248,7 +273,7 @@ class MessageRepository {
             )
 
             var currentState = initialState
-            val unreadList = currentState.messages.filter { !it.isRead }
+            val unreadList = currentState.messages.filter { !it.isRead && it.buttonInputName.isNotBlank() }
             val totalCount = unreadList.size
 
             if (totalCount == 0) {

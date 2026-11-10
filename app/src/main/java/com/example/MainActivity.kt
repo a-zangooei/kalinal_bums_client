@@ -121,9 +121,9 @@ fun KalinanApp(
                 viewModel = authViewModel,
                 onLoginSuccess = { userSession ->
                     activeSession = userSession
+                    messagesViewModel.loadMessages()
                     if (userSession.hasUnreadMessages) {
                         selectedBottomTab = 1
-                        messagesViewModel.loadMessages()
                     } else {
                         selectedBottomTab = 0
                     }
@@ -220,6 +220,7 @@ fun KalinanApp(
                             selected = selectedBottomTab == 1,
                             onClick = {
                                 selectedBottomTab = 1
+                                messagesViewModel.loadMessages()
                                 AppLogger.logAction("Switched to Messages tab")
                             },
                             icon = {

@@ -329,7 +329,10 @@ fun MessagesScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(pageState.messages, key = { it.rowIndex }) { message ->
+                    items(
+                        pageState.messages,
+                        key = { "${it.rowIndex}_${it.buttonInputName}_${it.title.hashCode()}" }
+                    ) { message ->
                         MessageCard(
                             message = message,
                             onClick = { viewModel.selectMessageForDetails(message) }
