@@ -12,7 +12,7 @@
 | بخش | سرفصل | موضوع و محتوا |
 |:---:|---|---|
 | **۰۱** | [**معماری نرم‌افزار**](./01-architecture/overview.md) | الگوهای طراحی MVVM، معماری پاک (Clean Architecture)، جریان یک‌طرفه داده (UDF) و پشته فناوری |
-| **۰۲** | [**مهندسی معکوس ASP.NET**](./02-reverse-engineering/aspnet-protocol.md) و [**خروج واقعی از سرور**](./02-reverse-engineering/server-logout-flow.md) | تحلیل عمیق پروتکل وب‌فرم‌های کلاسیک مایکروسافت، احراز هویت، ابطال نشست و خروج سرور، رمزنگاری RSA، فریم‌های دلتای UpdatePanel و فیلدهای ViewState |
+| **۰۲** | [**مهندسی معکوس ASP.NET**](./02-reverse-engineering/aspnet-protocol.md)، [**خروج سرور**](./02-reverse-engineering/server-logout-flow.md) و [**پیام‌های خوانده‌نشده و قفل منو**](./02-reverse-engineering/unread-messages-and-menu-lock.md) | تحلیل عمیق پروتکل وب‌فرم‌های کلاسیک مایکروسافت، احراز هویت، پیام‌های خوانده‌نشده و رفع قفل منو با زنجیره دلتا، ابطال نشست سرور، رمزنگاری RSA، فریم‌های UpdatePanel و فیلدهای ViewState |
 | **۰۳** | [**امنیت و گواهی SSL**](./03-security-and-ssl/ssl-certificate-chain.md) | کالبدشکافی خطای Trust Anchor در اندروید، تفاوت با مرورگرها و معماری کلاینت هوشمند دو لایه (Dual-Layer SSL Fallback) |
 | **۰۴** | [**خط لوله CI/CD و انتشار**](./04-ci-cd-and-release/github-actions.md) | پایپ‌لاین‌های GitHub Actions، تفکیک کامل جاب‌های تست و بیلد، نسخه پویا و توزیع فایل‌های نصبی پایدار |
 | **۰۵** | [**نمونه‌ها و ترافیک شبکه (Fixtures)**](./05-samples-and-fixtures/README.md) | نمونه‌های ترافیک خام سرور دانشگاه (HAR Responses) و راهنمای ساختار پاسخ‌های دلتا برای تست‌های واحد |

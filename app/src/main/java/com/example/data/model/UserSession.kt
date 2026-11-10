@@ -6,7 +6,8 @@ data class UserSession(
     val studentName: String = "",
     val studentNumber: String = "",
     val nationalId: String = "",
-    val creditFormatted: String = ""
+    val creditFormatted: String = "",
+    val hasUnreadMessages: Boolean = false
 )
 
 data class LoginPageState(

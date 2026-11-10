@@ -4,6 +4,7 @@ import com.example.data.logger.LogContext
 import com.example.data.model.MealType
 import com.example.data.model.ReservationResult
 import com.example.data.model.WeekNavigationDirection
+import com.example.data.model.UnreadMessagesException
 import com.example.data.model.WeeklyMenu
 import com.example.data.network.CullinanHttpClient
 import com.example.data.parser.DeltaParser
@@ -72,12 +73,13 @@ class MenuRepository {
                         )
                     )
 
-                    val failureMsg = when (classification.pageType) {
-                        PageClassifier.TYPE_NOTICE -> "اطلاعیه در سامانه تغذیه دانشگاه فعال است و دسترسی به جدول رزرو مسدود می‌باشد"
-                        PageClassifier.TYPE_LOGIN -> "نشست کاری در سامانه دانشگاه منقضی شده است. لطفاً مجدداً وارد شوید"
-                        else -> "پاسخ سرور دانشگاه نامعتبر بوده یا با خطا مواجه شد"
+                    val failureException = when (classification.pageType) {
+                        PageClassifier.TYPE_MESSAGES -> UnreadMessagesException(classification.unreadMessageCount)
+                        PageClassifier.TYPE_NOTICE -> Exception("اطلاعیه در سامانه تغذیه دانشگاه فعال است و دسترسی به جدول رزرو مسدود می‌باشد")
+                        PageClassifier.TYPE_LOGIN -> Exception("نشست کاری در سامانه دانشگاه منقضی شده است. لطفاً مجدداً وارد شوید")
+                        else -> Exception("پاسخ سرور دانشگاه نامعتبر بوده یا با خطا مواجه شد")
                     }
-                    return@withContext Result.failure(Exception(failureMsg))
+                    return@withContext Result.failure(failureException)
                 }
 
                 val menu = ReservationHtmlParser.parse(html, flowId = flowId)

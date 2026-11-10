@@ -152,16 +152,19 @@ class AuthRepository {
                 .tag(LogContext::class.java, LogContext(flowId, "LoginPost"))
                 .build()
 
-            val response = CullinanHttpClient.executeCall(request)
-            val finalUrl = response.request.url.toString()
+            val response = CullinanHttpClient.executeCallNoRedirect(request)
+            val statusCode = response.code
+            val location = response.header("Location") ?: ""
             val bodyString = response.body?.string() ?: ""
 
-            // Detection of successful login:
-            val isSuccess = finalUrl.contains("/Master/Default.aspx", ignoreCase = true) ||
-                    finalUrl.contains("/Reservation/", ignoreCase = true) ||
-                    (!bodyString.contains("txtUsernamePlain") && (bodyString.contains("خروج") || bodyString.contains("اطلاعات کاربری") || bodyString.contains("رزرو غذا")))
+            // Detection of successful login strictly based on 302 Location header:
+            val isRedirect = statusCode in 300..399 || location.isNotBlank()
+            val isMessagesRedirect = location.contains("MyMessage.aspx", ignoreCase = true)
+            val isDashboardRedirect = location.contains("Default.aspx", ignoreCase = true) ||
+                    location.contains("Reservation", ignoreCase = true) ||
+                    location.contains("/Master/", ignoreCase = true)
 
-            if (isSuccess) {
+            if (isRedirect && (isMessagesRedirect || isDashboardRedirect)) {
                 AppLogger.log(
                     LogEntry(
                         timestamp = "",
@@ -169,7 +172,7 @@ class AuthRepository {
                         component = "AuthRepository",
                         operation = "LoginSuccess",
                         flowId = flowId,
-                        message = "User successfully authenticated. FinalUrl: $finalUrl"
+                        message = "User successfully authenticated (HTTP $statusCode -> Location: $location, hasUnreadMessages: $isMessagesRedirect)"
                     )
                 )
 
@@ -178,11 +181,12 @@ class AuthRepository {
                         isLoggedIn = true,
                         username = usernamePlain,
                         studentNumber = usernamePlain,
-                        nationalId = ""
+                        nationalId = "",
+                        hasUnreadMessages = isMessagesRedirect
                     )
                 )
             } else {
-                // Extract error message from server response
+                // If not redirected, login failed on server. Extract user-facing Persian error message from HTML response.
                 val doc = Jsoup.parse(bodyString)
                 val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
                 val errorMsg = when {
@@ -200,7 +204,7 @@ class AuthRepository {
                         operation = "LoginFailed",
                         flowId = flowId,
                         errorCategory = "AUTH_REJECTED",
-                        message = "Authentication rejected: $errorMsg"
+                        message = "Authentication rejected (HTTP $statusCode, Location: $location): $errorMsg"
                     )
                 )
 

@@ -8,6 +8,7 @@ object PageClassifier {
     const val TYPE_RESERVATION = "RESERVATION"
     const val TYPE_LOGIN = "LOGIN"
     const val TYPE_NOTICE = "NOTICE"
+    const val TYPE_MESSAGES = "MESSAGES"
     const val TYPE_ERROR = "ERROR"
     const val TYPE_UNKNOWN = "UNKNOWN"
 
@@ -17,7 +18,10 @@ object PageClassifier {
         val noticeActionUrl: String? = null,
         val noticeType: String? = null,
         val hasReservationGrid: Boolean = false,
-        val isSessionExpired: Boolean = false
+        val isSessionExpired: Boolean = false,
+        val hasUnreadMessages: Boolean = false,
+        val unreadMessageCount: Int = 0,
+        val hasPaginationControls: Boolean = false
     )
 
     /**
@@ -98,6 +102,40 @@ object PageClassifier {
         if (html.startsWith("1|#||4|") || html.contains("|updatePanel|")) {
             evidence.add("DELTA_FRAGMENT")
             return ClassificationResult(pageType = TYPE_RESERVATION, evidence = evidence, hasReservationGrid = true)
+        }
+
+        // 6. Check for Messages Page (cphMain_grdContent or MyMessage.aspx)
+        val hasMessagesTable = doc.select("#cphMain_grdContent").isNotEmpty()
+        val isMessagesUrl = finalUrl?.contains("MyMessage.aspx", ignoreCase = true) == true
+        if (hasMessagesTable || isMessagesUrl) {
+            evidence.add("MESSAGES_PAGE")
+            if (hasMessagesTable) evidence.add("HAS_MESSAGES_GRID")
+            if (isMessagesUrl) evidence.add("URL_CONTAINS_MYMESSAGE")
+
+            val rows = doc.select("#cphMain_grdContent tr").filter {
+                !it.hasClass("HeaderStyle") && !it.hasClass("PagerStyle") && it.select("th").isEmpty()
+            }
+            var unreadCount = 0
+            for (row in rows) {
+                val hasCloseIcon = row.select("img[src*='MsgClose']").isNotEmpty()
+                val cells = row.select("td")
+                val readDate = if (cells.size > 6) cells[6].text().trim() else ""
+                val isUnread = hasCloseIcon || readDate == "-" || readDate.isBlank()
+                if (isUnread) {
+                    unreadCount++
+                }
+            }
+
+            val hasPager = doc.select("#cphMain_grdContent tr.PagerStyle, .PagerStyle, tr[class*='Pager']").isNotEmpty()
+            if (hasPager) evidence.add("HAS_PAGINATION_CONTROLS")
+
+            return ClassificationResult(
+                pageType = TYPE_MESSAGES,
+                evidence = evidence,
+                hasUnreadMessages = unreadCount > 0,
+                unreadMessageCount = unreadCount,
+                hasPaginationControls = hasPager
+            )
         }
 
         evidence.add("NO_MATCHING_SIGNATURE")

@@ -49,6 +49,13 @@ import com.example.ui.viewmodel.MenuViewModel
 import com.example.ui.viewmodel.UpdateViewModel
 import kotlinx.coroutines.launch
 
+import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.ui.graphics.Color
+import com.example.ui.screens.MessagesScreen
+import com.example.ui.viewmodel.MessagesViewModel
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,14 +88,19 @@ fun KalinanApp(
 ) {
     var activeSession by remember { mutableStateOf<UserSession?>(null) }
     var isPreLoginSettingsOpen by remember { mutableStateOf(false) }
-    var selectedBottomTab by remember { mutableIntStateOf(0) } // 0: Reservation, 1: Settings
+    var selectedBottomTab by remember { mutableIntStateOf(0) } // 0: Reservation, 1: Messages, 2: Settings
 
     val authViewModel: AuthViewModel = viewModel()
     val menuViewModel: MenuViewModel = viewModel()
+    val messagesViewModel: MessagesViewModel = viewModel()
     val updateViewModel: UpdateViewModel = viewModel()
 
     val updateInfo by updateViewModel.updateInfo.collectAsState()
     val userMessage by updateViewModel.userMessage.collectAsState()
+    val messagesState by messagesViewModel.pageState.collectAsState()
+    val menuBlockedByUnread by menuViewModel.hasUnreadMessagesBlocked.collectAsState()
+
+    val isMandatoryBlocking = (activeSession?.hasUnreadMessages == true || menuBlockedByUnread || messagesState.hasUnreadMessages) && !messagesState.isReservationUnlocked
 
     val session = activeSession
     if (session == null) {
@@ -109,8 +121,13 @@ fun KalinanApp(
                 viewModel = authViewModel,
                 onLoginSuccess = { userSession ->
                     activeSession = userSession
-                    selectedBottomTab = 0
-                    AppLogger.logAction("User logged in: ${userSession.username}")
+                    if (userSession.hasUnreadMessages) {
+                        selectedBottomTab = 1
+                        messagesViewModel.loadMessages()
+                    } else {
+                        selectedBottomTab = 0
+                    }
+                    AppLogger.logAction("User logged in: ${userSession.username} (hasUnreadMessages: ${userSession.hasUnreadMessages})")
                 },
                 onOpenSettings = {
                     isPreLoginSettingsOpen = true
@@ -145,6 +162,7 @@ fun KalinanApp(
                         // 1. Purge active local session state
                         activeSession = null
                         selectedBottomTab = 0
+                        menuViewModel.clearUnreadBlocked()
                         // 2. Clear local cookies AFTER server request completed
                         com.example.data.network.CullinanHttpClient.cookieJar.clear()
                         // 3. Fetch a fresh Login.aspx page (fresh ViewState, fresh RSA Pem key, and fresh Captcha)
@@ -156,7 +174,9 @@ fun KalinanApp(
         }
 
         BackHandler {
-            if (selectedBottomTab != 0) {
+            if (isMandatoryBlocking) {
+                handleLogout()
+            } else if (selectedBottomTab != 0) {
                 selectedBottomTab = 0
             } else {
                 handleLogout()
@@ -200,6 +220,45 @@ fun KalinanApp(
                             selected = selectedBottomTab == 1,
                             onClick = {
                                 selectedBottomTab = 1
+                                AppLogger.logAction("Switched to Messages tab")
+                            },
+                            icon = {
+                                BadgedBox(
+                                    badge = {
+                                        if (messagesState.unreadCount > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = Color.White
+                                            ) {
+                                                Text(messagesState.unreadCount.toString())
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mail,
+                                        contentDescription = "صندوق پیام‌ها"
+                                    )
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = "پیام‌ها",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selectedBottomTab == 1) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = TealPrimary,
+                                selectedTextColor = TealPrimary,
+                                indicatorColor = TealPrimary.copy(alpha = 0.12f)
+                            )
+                        )
+
+                        NavigationBarItem(
+                            selected = selectedBottomTab == 2,
+                            onClick = {
+                                selectedBottomTab = 2
                                 AppLogger.logAction("Switched to Settings tab")
                             },
                             icon = {
@@ -212,7 +271,7 @@ fun KalinanApp(
                                 Text(
                                     text = "تنظیمات",
                                     fontSize = 11.sp,
-                                    fontWeight = if (selectedBottomTab == 1) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (selectedBottomTab == 2) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
@@ -226,16 +285,49 @@ fun KalinanApp(
                 modifier = Modifier.fillMaxSize()
             ) { paddingValues ->
                 when (selectedBottomTab) {
-                    0 -> MenuScreen(
-                        userSession = session,
-                        viewModel = menuViewModel,
-                        onLogout = handleLogout,
-                        isLoggingOut = isLoggingOut,
+                    0 -> {
+                        if (isMandatoryBlocking) {
+                            MessagesScreen(
+                                viewModel = messagesViewModel,
+                                isBlockingMode = true,
+                                onNavigateBack = null,
+                                onUnlockedSuccess = {
+                                    activeSession = activeSession?.copy(hasUnreadMessages = false)
+                                    menuViewModel.clearUnreadBlocked()
+                                    menuViewModel.loadInitialMenu()
+                                    selectedBottomTab = 0
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues)
+                            )
+                        } else {
+                            MenuScreen(
+                                userSession = session,
+                                viewModel = menuViewModel,
+                                onLogout = handleLogout,
+                                isLoggingOut = isLoggingOut,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues)
+                            )
+                        }
+                    }
+                    1 -> MessagesScreen(
+                        viewModel = messagesViewModel,
+                        isBlockingMode = isMandatoryBlocking,
+                        onNavigateBack = if (!isMandatoryBlocking) { { selectedBottomTab = 0 } } else null,
+                        onUnlockedSuccess = {
+                            activeSession = activeSession?.copy(hasUnreadMessages = false)
+                            menuViewModel.clearUnreadBlocked()
+                            menuViewModel.loadInitialMenu()
+                            selectedBottomTab = 0
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
                     )
-                    1 -> SettingsScreen(
+                    2 -> SettingsScreen(
                         currentThemeMode = currentThemeMode,
                         onThemeChanged = onThemeChanged,
                         onNavigateBack = { selectedBottomTab = 0 },

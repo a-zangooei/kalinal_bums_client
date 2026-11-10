@@ -41,7 +41,14 @@ class MenuViewModel(
     private val _userFeedback = MutableStateFlow<Pair<String, Boolean>?>(null) // message to isSuccess
     val userFeedback: StateFlow<Pair<String, Boolean>?> = _userFeedback.asStateFlow()
 
+    private val _hasUnreadMessagesBlocked = MutableStateFlow(false)
+    val hasUnreadMessagesBlocked: StateFlow<Boolean> = _hasUnreadMessagesBlocked.asStateFlow()
+
     private var currentWeekOffset = 0
+
+    fun clearUnreadBlocked() {
+        _hasUnreadMessagesBlocked.value = false
+    }
 
     fun loadInitialMenu() {
         viewModelScope.launch {
@@ -51,8 +58,14 @@ class MenuViewModel(
             result.onSuccess { menu ->
                 _weeklyMenu.value = menu
                 currentWeekOffset = 0
+                _hasUnreadMessagesBlocked.value = false
             }.onFailure { error ->
-                _errorMessage.value = error.message ?: "خطا در دریافت جدول برنامه غذایی از سرور دانشگاه"
+                if (error is com.example.data.model.UnreadMessagesException) {
+                    _hasUnreadMessagesBlocked.value = true
+                    _errorMessage.value = error.message
+                } else {
+                    _errorMessage.value = error.message ?: "خطا در دریافت جدول برنامه غذایی از سرور دانشگاه"
+                }
             }
             _isLoading.value = false
         }

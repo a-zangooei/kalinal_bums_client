@@ -32,7 +32,15 @@
 2. **`ReservationLiveHarUnitTest.kt`:**
    - تست پارس داده‌های واقعی ضبط‌شده در ترافیک زنده سرور دانشگاه (فایل‌های `docs/05-samples-and-fixtures/`).
    - اعتبارسنجی استخراج درست قیمت‌ها، روزها، گزینه‌های انتخابی غذا و نیم‌پرس‌ها.
-3. **`KalinanUnitTests.kt`:**
+3. **`UnreadMessagesUnitTest.kt`:**
+   - تست طبقه‌بندی صفحه پیام‌های خوانده‌نشده از روی ضبط واقعی ترافیک (`testPageClassifierIdentifiesUnreadMessagesPage`).
+   - تست طبقه‌بندی صفحه پیام‌های خوانده‌شده و بازگشت منوی رزرو (`testPageClassifierIdentifiesAllReadMessagesPage`).
+   - تست کشف کنترل‌های صفحه‌بندی پیام‌ها (`testPageClassifierDetectsPaginationControls`).
+   - تست استخراج متن پیام از تگ `cphMain_pMessage` و توکن `__VIEWSTATE` در فریم‌های دلتا (`testDeltaParserExtractsMessageContentAndChainedViewState`).
+   - تست شبیه‌سازی زنجیره ترتیبی ViewState بین چند پیام متوالی (`testSerializedViewStateChainingSimulation`).
+   - تست اعتبارسنجی ریدایرکت‌های ورود ۳۰۲ به `MyMessage.aspx` در برابر `Default.aspx` (`testLoginRedirectInspectionLogic`).
+   - تست رفتار استثنای مسدودیت منوی رزرو (`testUnreadMessagesExceptionClassification`).
+4. **`KalinalUnitTests.kt`:**
    - تست‌های تکمیلی منطق رزرو، اعتبارسنجی فرم‌ها و متدهای تبدیل مدل داده.
 
 ---

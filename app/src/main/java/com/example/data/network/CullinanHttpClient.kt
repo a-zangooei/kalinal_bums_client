@@ -33,6 +33,7 @@ object CullinanHttpClient {
     const val BASE_URL = "https://jeton.bums.ac.ir"
     const val LOGIN_URL = "$BASE_URL/Login.aspx"
     const val RESERVATION_URL = "$BASE_URL/Reservation/Reservation.aspx"
+    const val MESSAGES_URL = "$BASE_URL/MyCullinan/MyMessage.aspx"
     const val CAPTCHA_URL = "$BASE_URL/UserControls/Captcha.ashx"
 
     val cookieJar = CullinanCookieJar()
