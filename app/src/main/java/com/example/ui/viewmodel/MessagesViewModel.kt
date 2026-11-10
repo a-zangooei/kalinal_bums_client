@@ -76,11 +76,17 @@ class MessagesViewModel(
 
             val currentVs = _pageState.value.viewState
             val vsGen = _pageState.value.viewStateGenerator
+            val ev = _pageState.value.eventValidation
+            val sm = _pageState.value.scriptManagerName
+            val up = _pageState.value.updatePanelName
 
             val result = messageRepository.openMessage(
                 buttonInputName = message.buttonInputName,
                 currentViewState = currentVs,
-                currentViewStateGenerator = vsGen
+                currentViewStateGenerator = vsGen,
+                currentEventValidation = ev,
+                scriptManagerName = sm,
+                updatePanelName = up
             )
 
             result.onSuccess { (newVs, text) ->

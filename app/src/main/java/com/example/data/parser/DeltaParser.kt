@@ -101,11 +101,16 @@ object DeltaParser {
         }
 
         if (!updatePanels.containsKey("UpdatePanel1") && !updatePanels.containsKey("ctl00\$UpdatePanel1")) {
-            val upPattern = Regex("""\|updatePanel\|(?:ctl00\$)?UpdatePanel1\|([\s\S]*?)(?:\|\d+\|hiddenField\||\z)""")
-            val upMatch = upPattern.find(deltaText)
-            if (upMatch != null) {
-                updatePanels["UpdatePanel1"] = upMatch.groupValues[1]
-                updatePanels["ctl00\$UpdatePanel1"] = upMatch.groupValues[1]
+            val upPattern = Regex("""\|updatePanel\|([^|]+)\|([\s\S]*?)(?:\|\d+\|hiddenField\||\z)""")
+            val upMatches = upPattern.findAll(deltaText)
+            for (match in upMatches) {
+                val panelId = match.groupValues[1]
+                val panelContent = match.groupValues[2]
+                updatePanels[panelId] = panelContent
+                if (panelId.endsWith("UpdatePanel1")) {
+                    updatePanels["UpdatePanel1"] = panelContent
+                    updatePanels["ctl00\$UpdatePanel1"] = panelContent
+                }
             }
         }
 

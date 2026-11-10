@@ -21,6 +21,9 @@ data class MessageItem(
 data class MessagesPageState(
     val viewState: String = "",
     val viewStateGenerator: String = "87AF9C2D",
+    val eventValidation: String = "",
+    val scriptManagerName: String = "ctl00\$ScriptManager",
+    val updatePanelName: String = "ctl00\$UpdatePanel1",
     val messages: List<MessageItem> = emptyList(),
     val hasUnreadMessages: Boolean = false,
     val unreadCount: Int = 0,

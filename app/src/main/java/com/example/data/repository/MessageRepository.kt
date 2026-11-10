@@ -56,6 +56,12 @@ class MessageRepository {
 
             val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
             val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "87AF9C2D" }
+            val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`()
+
+            val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull()
+            val scriptManagerName = scriptManagerInput?.attr("name") ?: "ctl00\$ScriptManager"
+            val updatePanelDiv = doc.select("div[id*='UpdatePanel']").firstOrNull()
+            val updatePanelName = updatePanelDiv?.attr("id")?.replace('_', '$') ?: "ctl00\$UpdatePanel1"
 
             // Check if full menu has been unlocked (Reservation link is present, either absolute or relative)
             val isReservationUnlocked = html.contains("Reservation/Reservation.aspx", ignoreCase = true)
@@ -125,6 +131,9 @@ class MessageRepository {
                 MessagesPageState(
                     viewState = viewState,
                     viewStateGenerator = viewStateGenerator,
+                    eventValidation = eventValidation,
+                    scriptManagerName = scriptManagerName,
+                    updatePanelName = updatePanelName,
                     messages = messages,
                     hasUnreadMessages = hasUnread,
                     unreadCount = unreadCount,
@@ -149,7 +158,10 @@ class MessageRepository {
     suspend fun openMessage(
         buttonInputName: String,
         currentViewState: String,
-        currentViewStateGenerator: String = "87AF9C2D"
+        currentViewStateGenerator: String = "87AF9C2D",
+        currentEventValidation: String = "",
+        scriptManagerName: String = "ctl00\$ScriptManager",
+        updatePanelName: String = "ctl00\$UpdatePanel1"
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         val flowId = AppLogger.generateFlowId("msg_open")
         AppLogger.log(
@@ -169,22 +181,26 @@ class MessageRepository {
         }
 
         try {
-            val formBody = FormBody.Builder()
-                .add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$buttonInputName")
+            val formBuilder = FormBody.Builder()
+                .add(scriptManagerName, "$updatePanelName|$buttonInputName")
                 .add("__EVENTTARGET", "")
                 .add("__EVENTARGUMENT", "")
                 .add("__VIEWSTATE", currentViewState)
                 .add("__VIEWSTATEGENERATOR", currentViewStateGenerator.ifBlank { "87AF9C2D" })
                 .add("__VIEWSTATEENCRYPTED", "")
-                .add("ctl00\$cphMain\$hdnId", "")
+
+            if (currentEventValidation.isNotBlank()) {
+                formBuilder.add("__EVENTVALIDATION", currentEventValidation)
+            }
+
+            formBuilder.add("ctl00\$cphMain\$hdnId", "")
                 .add("__ASYNCPOST", "true")
                 .add("$buttonInputName.x", "10")
                 .add("$buttonInputName.y", "10")
-                .build()
 
             val request = Request.Builder()
                 .url(CullinanHttpClient.MESSAGES_URL)
-                .post(formBody)
+                .post(formBuilder.build())
                 .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("X-MicrosoftAjax", "Delta=true")
@@ -206,28 +222,50 @@ class MessageRepository {
 
             val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentViewState
 
-            val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
-                ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
-                ?: ""
-
+            // Comprehensive message content extraction from all potential locations in delta response
             var messageContent = ""
-            if (updatePanelHtml.isNotBlank()) {
-                messageContent = Jsoup.parse(updatePanelHtml).select("#cphMain_pMessage").text().trim()
+
+            // 1. Search in all update panels (including UpdatePanel1, ctl00$UpdatePanel1, etc.)
+            for ((_, panelHtml) in deltaResponse.updatePanels) {
+                val doc = Jsoup.parse(panelHtml)
+                val pText = doc.select("#cphMain_pMessage, .messageText, #lblMessageText, .modal-body, #pMessage").text().trim()
+                if (pText.isNotBlank()) {
+                    messageContent = pText
+                    break
+                }
             }
 
-            // Fallback 1: Extract from full delta text using Jsoup
+            // 2. Search entire delta text using Jsoup selector
             if (messageContent.isBlank()) {
-                messageContent = Jsoup.parse(deltaText).select("#cphMain_pMessage").text().trim()
+                val doc = Jsoup.parse(deltaText)
+                val pText = doc.select("#cphMain_pMessage, .messageText, #lblMessageText, .modal-body, #pMessage").text().trim()
+                if (pText.isNotBlank()) {
+                    messageContent = pText
+                }
             }
 
-            // Fallback 2: Regex extraction directly from raw response
+            // 3. Regex search for paragraph or label tag
             if (messageContent.isBlank()) {
-                val pMatch = Regex("""<p[^>]*id=["']cphMain_pMessage["'][^>]*>([\s\S]*?)</p>""", RegexOption.IGNORE_CASE).find(deltaText)
+                val pMatch = Regex("""<(?:p|span|div)[^>]*id=["'](?:cphMain_)?(?:p|lbl)?Message(?:Text)?["'][^>]*>([\s\S]*?)</(?:p|span|div)>""", RegexOption.IGNORE_CASE).find(deltaText)
                 if (pMatch != null) {
                     messageContent = Jsoup.parse(pMatch.groupValues[1]).text().trim()
                 }
             }
 
+            // 4. Search in startup scripts for showMessage('...'), alert('...'), etc.
+            if (messageContent.isBlank()) {
+                val scriptMatches = Regex("""(?:showMessage|showModal|alert|toastify)\s*\(\s*['"]([^'"]+)['"]""", RegexOption.IGNORE_CASE).findAll(deltaText)
+                for (sm in scriptMatches) {
+                    val candidate = sm.groupValues[1].trim()
+                    if (candidate.length > 3 && !candidate.equals("true", true) && !candidate.equals("false", true)) {
+                        messageContent = candidate
+                        break
+                    }
+                }
+            }
+
+            // 5. Diagnostics logging of tokens and preview
+            val preview = if (deltaText.length > 200) deltaText.substring(0, 200) + "..." else deltaText
             AppLogger.log(
                 LogEntry(
                     timestamp = "",
@@ -235,7 +273,7 @@ class MessageRepository {
                     component = "MessageRepository",
                     operation = "OpenMessageSuccess",
                     flowId = flowId,
-                    message = "Message successfully opened. Text length: ${messageContent.length}, New VS length: ${newViewState.length}"
+                    message = "Message successfully opened. Text length: ${messageContent.length}, Delta tokens: ${deltaResponse.rawTokens.size}, Raw preview: $preview"
                 )
             )
 
@@ -299,7 +337,10 @@ class MessageRepository {
                 val openResult = openMessage(
                     buttonInputName = targetMsg.buttonInputName,
                     currentViewState = currentVs,
-                    currentViewStateGenerator = vsGen
+                    currentViewStateGenerator = vsGen,
+                    currentEventValidation = currentState.eventValidation,
+                    scriptManagerName = currentState.scriptManagerName,
+                    updatePanelName = currentState.updatePanelName
                 )
 
                 if (openResult.isFailure) {

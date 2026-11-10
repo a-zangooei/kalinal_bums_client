@@ -325,5 +325,21 @@ class UnreadMessagesUnitTest {
         val text = Jsoup.parse(upHtml).select("#cphMain_pMessage").text().trim()
         assertEquals("متن تستی استخراج پیام خارج از فرمت عادی", text)
     }
+
+    @Test
+    fun testScriptBlockOrDifferentPanelIdExtraction() {
+        val rawDeltaWithModal = "1|#||4|200|updatePanel|cphMain_pnlModal|<div><div class=\"modal-body\">متن پیام داخل مدال پاپ‌آپ دانشگاه</div></div>|20|hiddenField|__VIEWSTATE|NEW_VS_MODAL|"
+        val deltaResponse = DeltaParser.parse(rawDeltaWithModal)
+        assertTrue("Panel cphMain_pnlModal must be extracted", deltaResponse.updatePanels.containsKey("cphMain_pnlModal"))
+        val modalHtml = deltaResponse.updatePanels["cphMain_pnlModal"] ?: ""
+        val modalText = Jsoup.parse(modalHtml).select(".modal-body").text().trim()
+        assertEquals("متن پیام داخل مدال پاپ‌آپ دانشگاه", modalText)
+
+        val rawDeltaWithScript = "1|#||4|60|scriptStartupBlock|ScriptContent|showMessage('متن هشدار از اسکریپت');|20|hiddenField|__VIEWSTATE|VS_SCRIPT|"
+        val deltaWithScript = DeltaParser.parse(rawDeltaWithScript)
+        val scriptText = deltaWithScript.startupScripts.firstOrNull() ?: ""
+        val scriptMatch = Regex("""showMessage\s*\(\s*['"]([^'"]+)['"]""").find(scriptText)
+        assertEquals("متن هشدار از اسکریپت", scriptMatch?.groupValues?.get(1))
+    }
 }
 
