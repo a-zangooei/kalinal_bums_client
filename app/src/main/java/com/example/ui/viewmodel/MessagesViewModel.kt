@@ -5,12 +5,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.logger.AppLogger
 import com.example.data.model.MessageItem
+import com.example.data.model.MessageOpenResult
 import com.example.data.model.MessagesPageState
 import com.example.data.repository.MessageRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MessagesViewModel(
     application: Application,
@@ -37,6 +41,9 @@ class MessagesViewModel(
     private val _userMessage = MutableStateFlow<String?>(null)
     val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
 
+    private val detailMutex = Mutex()
+    private var detailJob: Job? = null
+
     init {
         loadMessages()
     }
@@ -57,7 +64,8 @@ class MessagesViewModel(
     }
 
     fun selectMessageForDetails(message: MessageItem) {
-        if (!message.messageText.isNullOrBlank()) {
+        // If message text is already cached in memory, display it immediately
+        if (!message.messageText.isNullOrBlank() && !message.messageText.startsWith("خطا")) {
             _selectedMessageDetail.value = message
             return
         }
@@ -69,56 +77,59 @@ class MessagesViewModel(
             return
         }
 
-        // Fetch message text from server via Delta POST
-        viewModelScope.launch {
+        // Cancel any pending detail fetch job to prevent race conditions
+        detailJob?.cancel()
+
+        // Fetch message text from server via Delta POST with mutex protection
+        detailJob = viewModelScope.launch {
             _selectedMessageDetail.value = message
             _isDetailLoading.value = true
 
-            val currentVs = _pageState.value.viewState
-            val vsGen = _pageState.value.viewStateGenerator
-            val ev = _pageState.value.eventValidation
-            val sm = _pageState.value.scriptManagerName
-            val up = _pageState.value.updatePanelName
+            detailMutex.withLock {
+                val currentState = _pageState.value
+                val webFormsState = currentState.toWebFormsState()
 
-            val result = messageRepository.openMessage(
-                buttonInputName = message.buttonInputName,
-                currentViewState = currentVs,
-                currentViewStateGenerator = vsGen,
-                currentEventValidation = ev,
-                scriptManagerName = sm,
-                updatePanelName = up
-            )
-
-            result.onSuccess { (newVs, text) ->
-                val updatedItem = message.copy(
-                    isRead = true,
-                    messageText = text.ifBlank { "متن این پیام خالی است." }
+                val result = messageRepository.openMessage(
+                    buttonInputName = message.buttonInputName,
+                    state = webFormsState,
+                    scriptManagerName = currentState.scriptManagerName,
+                    updatePanelName = currentState.updatePanelName
                 )
-                _selectedMessageDetail.value = updatedItem
 
-                // Update in state list
-                val updatedList = _pageState.value.messages.map {
-                    if (it.rowIndex == message.rowIndex) updatedItem else it
+                when (result) {
+                    is MessageOpenResult.Success -> {
+                        val updatedItem = message.copy(
+                            isRead = true,
+                            messageText = result.messageText
+                        )
+                        _selectedMessageDetail.value = updatedItem
+
+                        // Update in state list and chain updated WebFormsState
+                        val updatedList = _pageState.value.messages.map {
+                            if (it.rowIndex == message.rowIndex) updatedItem else it
+                        }
+                        val newUnreadCount = updatedList.count { !it.isRead }
+                        _pageState.value = _pageState.value.withUpdatedWebFormsState(result.updatedState).copy(
+                            messages = updatedList,
+                            hasUnreadMessages = newUnreadCount > 0,
+                            unreadCount = newUnreadCount
+                        )
+                    }
+                    is MessageOpenResult.Failure -> {
+                        AppLogger.logError("MessagesViewModel", "Failed to load message text: ${result.error.userMessage}", result.error)
+                        _selectedMessageDetail.value = message.copy(
+                            messageText = "خطا در دریافت متن پیام: ${result.error.userMessage}"
+                        )
+                    }
                 }
-                val newUnreadCount = updatedList.count { !it.isRead }
-                _pageState.value = _pageState.value.copy(
-                    viewState = newVs,
-                    messages = updatedList,
-                    hasUnreadMessages = newUnreadCount > 0,
-                    unreadCount = newUnreadCount
-                )
-            }.onFailure { err ->
-                AppLogger.logError("MessagesViewModel", "Failed to load message text: ${err.message}", err)
-                _selectedMessageDetail.value = message.copy(
-                    messageText = "خطا در دریافت متن پیام از سرور: ${err.message}"
-                )
-            }
 
-            _isDetailLoading.value = false
+                _isDetailLoading.value = false
+            }
         }
     }
 
     fun dismissMessageDetails() {
+        detailJob?.cancel()
         _selectedMessageDetail.value = null
         _isDetailLoading.value = false
     }

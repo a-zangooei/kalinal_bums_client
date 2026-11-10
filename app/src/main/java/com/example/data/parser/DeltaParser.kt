@@ -1,5 +1,7 @@
 package com.example.data.parser
 
+import com.example.data.model.WebFormsState
+
 data class DeltaToken(
     val length: Int,
     val type: String,
@@ -99,6 +101,12 @@ object DeltaParser {
                 hiddenFields["__VIEWSTATEGENERATOR"] = vsgMatch.groupValues[1]
             }
         }
+        if (!hiddenFields.containsKey("__EVENTVALIDATION")) {
+            val evMatch = Regex("""\|hiddenField\|__EVENTVALIDATION\|([^|]+)\|""").find(deltaText)
+            if (evMatch != null) {
+                hiddenFields["__EVENTVALIDATION"] = evMatch.groupValues[1]
+            }
+        }
 
         if (!updatePanels.containsKey("UpdatePanel1") && !updatePanels.containsKey("ctl00\$UpdatePanel1")) {
             val upPattern = Regex("""\|updatePanel\|([^|]+)\|([\s\S]*?)(?:\|\d+\|hiddenField\||\z)""")
@@ -160,6 +168,20 @@ object DeltaParser {
             toastMessage = extractedToastMessage,
             toastTitle = extractedToastTitle,
             isSessionExpired = isSessionExpired
+        )
+    }
+
+    /**
+     * Extracts an updated WebFormsState from delta response hidden fields, falling back to previous state values.
+     */
+    fun extractWebFormsState(deltaResponse: DeltaResponse, fallbackState: WebFormsState): WebFormsState {
+        val newVs = deltaResponse.hiddenFields["__VIEWSTATE"] ?: fallbackState.viewState
+        val newGen = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: fallbackState.viewStateGenerator
+        val newEv = deltaResponse.hiddenFields["__EVENTVALIDATION"] ?: fallbackState.eventValidation
+        return WebFormsState(
+            viewState = newVs,
+            viewStateGenerator = newGen,
+            eventValidation = newEv
         )
     }
 }

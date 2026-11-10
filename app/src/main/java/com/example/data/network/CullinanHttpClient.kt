@@ -30,11 +30,24 @@ object CullinanHttpClient {
 
     private const val TAG = "CullinanHttpClient"
 
-    const val BASE_URL = "https://jeton.bums.ac.ir"
-    const val LOGIN_URL = "$BASE_URL/Login.aspx"
-    const val RESERVATION_URL = "$BASE_URL/Reservation/Reservation.aspx"
-    const val MESSAGES_URL = "$BASE_URL/MyCullinan/MyMessage.aspx"
-    const val CAPTCHA_URL = "$BASE_URL/UserControls/Captcha.ashx"
+    const val DEFAULT_BASE_URL = "https://jeton.bums.ac.ir"
+
+    @Volatile
+    private var customBaseUrl: String? = null
+
+    val BASE_URL: String get() = customBaseUrl ?: DEFAULT_BASE_URL
+    val LOGIN_URL: String get() = "$BASE_URL/Login.aspx"
+    val RESERVATION_URL: String get() = "$BASE_URL/Reservation/Reservation.aspx"
+    val MESSAGES_URL: String get() = "$BASE_URL/MyCullinan/MyMessage.aspx"
+    val CAPTCHA_URL: String get() = "$BASE_URL/UserControls/Captcha.ashx"
+
+    fun setCustomBaseUrl(url: String) {
+        customBaseUrl = url.trimEnd('/')
+    }
+
+    fun resetCustomBaseUrl() {
+        customBaseUrl = null
+    }
 
     val cookieJar = CullinanCookieJar()
 

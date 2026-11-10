@@ -4,8 +4,12 @@ import com.example.data.logger.AppLogger
 import com.example.data.logger.LogContext
 import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
+import com.example.data.logger.LogSanitizer
+import com.example.data.model.MessageError
 import com.example.data.model.MessageItem
+import com.example.data.model.MessageOpenResult
 import com.example.data.model.MessagesPageState
+import com.example.data.model.WebFormsState
 import com.example.data.network.CullinanHttpClient
 import com.example.data.parser.DeltaParser
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +62,18 @@ class MessageRepository {
             val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "87AF9C2D" }
             val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`()
 
+            // In ASP.NET WebForms, the default ScriptManager UniqueID is usually ctl00$ScriptManager
             val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull()
             val scriptManagerName = scriptManagerInput?.attr("name") ?: "ctl00\$ScriptManager"
+
+            // UpdatePanel UniqueID: Check for UpdatePanel div
             val updatePanelDiv = doc.select("div[id*='UpdatePanel']").firstOrNull()
-            val updatePanelName = updatePanelDiv?.attr("id")?.replace('_', '$') ?: "ctl00\$UpdatePanel1"
+            val updatePanelHtmlId = updatePanelDiv?.attr("id")
+            val updatePanelName = when {
+                updatePanelHtmlId != null && updatePanelHtmlId.contains("ctl00") -> updatePanelHtmlId.replace('_', '$')
+                updatePanelHtmlId != null && updatePanelHtmlId.isNotEmpty() -> "ctl00\$$updatePanelHtmlId"
+                else -> "ctl00\$UpdatePanel1"
+            }
 
             // Check if full menu has been unlocked (Reservation link is present, either absolute or relative)
             val isReservationUnlocked = html.contains("Reservation/Reservation.aspx", ignoreCase = true)
@@ -151,18 +163,16 @@ class MessageRepository {
 
     /**
      * Opens a specific message using ASP.NET partial-rendering Delta POST.
-     * Records the message as read on server side, updates ViewState, and extracts message text.
+     * Records the message as read on server side, updates WebForms state, and extracts message text.
      *
      * IMPORTANT: No automatic retry to prevent state corruption.
      */
     suspend fun openMessage(
         buttonInputName: String,
-        currentViewState: String,
-        currentViewStateGenerator: String = "87AF9C2D",
-        currentEventValidation: String = "",
+        state: WebFormsState,
         scriptManagerName: String = "ctl00\$ScriptManager",
         updatePanelName: String = "ctl00\$UpdatePanel1"
-    ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+    ): MessageOpenResult = withContext(Dispatchers.IO) {
         val flowId = AppLogger.generateFlowId("msg_open")
         AppLogger.log(
             LogEntry(
@@ -177,7 +187,9 @@ class MessageRepository {
 
         if (buttonInputName.isBlank()) {
             AppLogger.logError("MessageRepository", "buttonInputName cannot be blank", flowId = flowId)
-            return@withContext Result.failure(IllegalArgumentException("شناسه دکمه پیام موجود نیست"))
+            return@withContext MessageOpenResult.Failure(
+                MessageError.ServerError(400, "شناسه دکمه پیام موجود نیست")
+            )
         }
 
         try {
@@ -185,12 +197,12 @@ class MessageRepository {
                 .add(scriptManagerName, "$updatePanelName|$buttonInputName")
                 .add("__EVENTTARGET", "")
                 .add("__EVENTARGUMENT", "")
-                .add("__VIEWSTATE", currentViewState)
-                .add("__VIEWSTATEGENERATOR", currentViewStateGenerator.ifBlank { "87AF9C2D" })
+                .add("__VIEWSTATE", state.viewState)
+                .add("__VIEWSTATEGENERATOR", state.viewStateGenerator.ifBlank { "87AF9C2D" })
                 .add("__VIEWSTATEENCRYPTED", "")
 
-            if (currentEventValidation.isNotBlank()) {
-                formBuilder.add("__EVENTVALIDATION", currentEventValidation)
+            if (!state.eventValidation.isNullOrBlank()) {
+                formBuilder.add("__EVENTVALIDATION", state.eventValidation)
             }
 
             formBuilder.add("ctl00\$cphMain\$hdnId", "")
@@ -214,58 +226,80 @@ class MessageRepository {
             val response = CullinanHttpClient.executeCall(request)
             if (!response.isSuccessful) {
                 AppLogger.logError("MessageRepository", "Open message failed HTTP ${response.code}", flowId = flowId)
-                return@withContext Result.failure(Exception("خطا در باز کردن پیام از سرور (${response.code})"))
+                return@withContext MessageOpenResult.Failure(
+                    MessageError.ServerError(response.code, "پاسخ ناموفق از سرور با کد ${response.code}")
+                )
             }
 
             val deltaText = response.body?.string() ?: ""
+
+            // Strict check 1: Check for full HTML page (redirect or error) instead of delta
+            val isFullHtml = (deltaText.contains("<!DOCTYPE", ignoreCase = true) || deltaText.contains("<html", ignoreCase = true)) &&
+                !deltaText.contains("|updatePanel|") && !deltaText.contains("|hiddenField|")
+
+            if (isFullHtml) {
+                if (deltaText.contains("Login.aspx", ignoreCase = true) || deltaText.contains("txtUsernamePlain")) {
+                    AppLogger.logError("MessageRepository", "Session expired detected via HTML redirect", flowId = flowId)
+                    return@withContext MessageOpenResult.Failure(MessageError.SessionExpired)
+                }
+                AppLogger.logError("MessageRepository", "Unexpected full HTML received instead of Delta response", flowId = flowId)
+                return@withContext MessageOpenResult.Failure(MessageError.InvalidDeltaResponse)
+            }
+
             val deltaResponse = DeltaParser.parse(deltaText)
 
-            val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentViewState
+            // Strict check 2: Session expired token
+            if (deltaResponse.isSessionExpired) {
+                AppLogger.logError("MessageRepository", "Session expired detected via Delta redirect", flowId = flowId)
+                return@withContext MessageOpenResult.Failure(MessageError.SessionExpired)
+            }
 
-            // Comprehensive message content extraction from all potential locations in delta response
-            var messageContent = ""
+            // Strict check 3: Valid Delta structure
+            if (deltaResponse.rawTokens.isEmpty()) {
+                AppLogger.logError("MessageRepository", "Empty delta tokens returned by server", flowId = flowId)
+                return@withContext MessageOpenResult.Failure(MessageError.InvalidDeltaResponse)
+            }
 
-            // 1. Search in all update panels (including UpdatePanel1, ctl00$UpdatePanel1, etc.)
+            // Strict check 4: Presence of UpdatePanel
+            if (deltaResponse.updatePanels.isEmpty()) {
+                AppLogger.logError("MessageRepository", "No update panels returned in delta response", flowId = flowId)
+                return@withContext MessageOpenResult.Failure(MessageError.MissingUpdatePanel)
+            }
+
+            // Strict check 5: Strict message extraction from update panels or message paragraph
+            var messageContent: String? = null
+
+            // 1. Search in all update panels (e.g. UpdatePanel1, ctl00$UpdatePanel1)
             for ((_, panelHtml) in deltaResponse.updatePanels) {
                 val doc = Jsoup.parse(panelHtml)
-                val pText = doc.select("#cphMain_pMessage, .messageText, #lblMessageText, .modal-body, #pMessage").text().trim()
+                val pText = doc.select("#cphMain_pMessage, .messageText, #lblMessageText").text().trim()
                 if (pText.isNotBlank()) {
                     messageContent = pText
                     break
                 }
             }
 
-            // 2. Search entire delta text using Jsoup selector
-            if (messageContent.isBlank()) {
-                val doc = Jsoup.parse(deltaText)
-                val pText = doc.select("#cphMain_pMessage, .messageText, #lblMessageText, .modal-body, #pMessage").text().trim()
-                if (pText.isNotBlank()) {
-                    messageContent = pText
-                }
-            }
-
-            // 3. Regex search for paragraph or label tag
-            if (messageContent.isBlank()) {
+            // 2. Fallback regex search for explicit message container tag in delta
+            if (messageContent.isNullOrBlank()) {
                 val pMatch = Regex("""<(?:p|span|div)[^>]*id=["'](?:cphMain_)?(?:p|lbl)?Message(?:Text)?["'][^>]*>([\s\S]*?)</(?:p|span|div)>""", RegexOption.IGNORE_CASE).find(deltaText)
                 if (pMatch != null) {
-                    messageContent = Jsoup.parse(pMatch.groupValues[1]).text().trim()
-                }
-            }
-
-            // 4. Search in startup scripts for showMessage('...'), alert('...'), etc.
-            if (messageContent.isBlank()) {
-                val scriptMatches = Regex("""(?:showMessage|showModal|alert|toastify)\s*\(\s*['"]([^'"]+)['"]""", RegexOption.IGNORE_CASE).findAll(deltaText)
-                for (sm in scriptMatches) {
-                    val candidate = sm.groupValues[1].trim()
-                    if (candidate.length > 3 && !candidate.equals("true", true) && !candidate.equals("false", true)) {
+                    val candidate = Jsoup.parse(pMatch.groupValues[1]).text().trim()
+                    if (candidate.isNotBlank()) {
                         messageContent = candidate
-                        break
                     }
                 }
             }
 
-            // 5. Diagnostics logging of tokens and preview
-            val preview = if (deltaText.length > 200) deltaText.substring(0, 200) + "..." else deltaText
+            // If still missing or empty, fail strictly without silent empty success
+            if (messageContent.isNullOrBlank()) {
+                AppLogger.logError("MessageRepository", "No message content found inside expected panel elements", flowId = flowId)
+                return@withContext MessageOpenResult.Failure(MessageError.EmptyMessageContent)
+            }
+
+            // Extract updated WebForms atomic state (ViewState, Generator, EventValidation)
+            val updatedState = DeltaParser.extractWebFormsState(deltaResponse, state)
+
+            // Privacy-preserving diagnostics: NEVER log messageContent or raw delta body
             AppLogger.log(
                 LogEntry(
                     timestamp = "",
@@ -273,20 +307,44 @@ class MessageRepository {
                     component = "MessageRepository",
                     operation = "OpenMessageSuccess",
                     flowId = flowId,
-                    message = "Message successfully opened. Text length: ${messageContent.length}, Delta tokens: ${deltaResponse.rawTokens.size}, Raw preview: $preview"
+                    message = "Message successfully opened. Extracted text length: ${messageContent.length}, Delta tokens: ${deltaResponse.rawTokens.size}, Panels: ${deltaResponse.updatePanels.keys.joinToString()}, State fingerprint: ${LogSanitizer.computeFingerprint(updatedState.viewState)}"
                 )
             )
 
-            Result.success(Pair(newViewState, messageContent))
+            MessageOpenResult.Success(
+                updatedState = updatedState,
+                messageText = messageContent
+            )
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             AppLogger.logError("MessageRepository", "Exception in openMessage: ${e.message}", e, flowId = flowId)
-            Result.failure(e)
+            MessageOpenResult.Failure(MessageError.NetworkError(e))
         }
     }
 
     /**
-     * Sequentially marks all unread messages as read with serialized ViewState chaining.
+     * Backwards-compatible overload for openMessage with primitive parameters.
+     */
+    suspend fun openMessage(
+        buttonInputName: String,
+        currentViewState: String,
+        currentViewStateGenerator: String = "87AF9C2D",
+        currentEventValidation: String = "",
+        scriptManagerName: String = "ctl00\$ScriptManager",
+        updatePanelName: String = "ctl00\$UpdatePanel1"
+    ): MessageOpenResult = openMessage(
+        buttonInputName = buttonInputName,
+        state = WebFormsState(
+            viewState = currentViewState,
+            viewStateGenerator = currentViewStateGenerator.ifBlank { "87AF9C2D" },
+            eventValidation = currentEventValidation.ifBlank { null }
+        ),
+        scriptManagerName = scriptManagerName,
+        updatePanelName = updatePanelName
+    )
+
+    /**
+     * Sequentially marks all unread messages as read with serialized ViewState and EventValidation chaining.
      * Enforces safety protections:
      * - Hard loop ceiling (max 50)
      * - Zero automatic retry on POST failures
@@ -310,7 +368,7 @@ class MessageRepository {
                 )
             )
 
-            var currentState = initialState
+            val currentState = initialState
             val unreadList = currentState.messages.filter { !it.isRead && it.buttonInputName.isNotBlank() }
             val totalCount = unreadList.size
 
@@ -318,9 +376,7 @@ class MessageRepository {
                 return@withLock fetchMessagesPage()
             }
 
-            var currentVs = currentState.viewState
-            val vsGen = currentState.viewStateGenerator.ifBlank { "87AF9C2D" }
-
+            var currentWebFormsState = currentState.toWebFormsState()
             val updatedMessages = currentState.messages.toMutableList()
 
             // Safety limit: max 50 iterations
@@ -333,52 +389,62 @@ class MessageRepository {
                     return@withLock Result.failure(Exception("شناسه دکمه پیام '${targetMsg.title}' یافت نشد"))
                 }
 
-                // Execute exact Delta POST with chained ViewState
+                // Execute exact Delta POST with chained WebFormsState
                 val openResult = openMessage(
                     buttonInputName = targetMsg.buttonInputName,
-                    currentViewState = currentVs,
-                    currentViewStateGenerator = vsGen,
-                    currentEventValidation = currentState.eventValidation,
+                    state = currentWebFormsState,
                     scriptManagerName = currentState.scriptManagerName,
                     updatePanelName = currentState.updatePanelName
                 )
 
-                if (openResult.isFailure) {
-                    val err = openResult.exceptionOrNull()
-                    AppLogger.logError("MessageRepository", "Aborting serialized read due to failure on message '${targetMsg.title}': ${err?.message}", err, flowId = flowId)
-                    return@withLock Result.failure(err ?: Exception("خطا در ثبت خوانده شدن پیام"))
+                when (openResult) {
+                    is MessageOpenResult.Failure -> {
+                        AppLogger.logError("MessageRepository", "Aborting serialized read due to failure on message '${targetMsg.title}': ${openResult.error.userMessage}", openResult.error, flowId = flowId)
+                        return@withLock Result.failure(openResult.error)
+                    }
+                    is MessageOpenResult.Success -> {
+                        currentWebFormsState = openResult.updatedState
+
+                        // Update local memory list
+                        val listIdx = updatedMessages.indexOfFirst { it.rowIndex == targetMsg.rowIndex }
+                        if (listIdx != -1) {
+                            updatedMessages[listIdx] = targetMsg.copy(
+                                isRead = true,
+                                messageText = openResult.messageText
+                            )
+                        }
+
+                        // Notify live UI listener
+                        onProgress(i + 1, totalCount, targetMsg.title, openResult.messageText)
+                    }
                 }
-
-                val (newVs, msgText) = openResult.getOrThrow()
-                currentVs = newVs
-
-                // Update local memory list
-                val listIdx = updatedMessages.indexOfFirst { it.rowIndex == targetMsg.rowIndex }
-                if (listIdx != -1) {
-                    updatedMessages[listIdx] = targetMsg.copy(
-                        isRead = true,
-                        messageText = msgText
-                    )
-                }
-
-                // Notify live UI listener
-                onProgress(i + 1, totalCount, targetMsg.title, msgText)
             }
 
             // Final check: Perform a fresh GET to verify that the reservation menu has been unlocked
             val verifyResult = fetchMessagesPage()
             if (verifyResult.isSuccess) {
-                val finalState = verifyResult.getOrThrow()
-                Result.success(finalState)
-            } else {
-                // Fallback to locally updated state
+                val freshState = verifyResult.getOrThrow()
+                val mergedMessages = freshState.messages.map { freshMsg ->
+                    val local = updatedMessages.firstOrNull { it.rowIndex == freshMsg.rowIndex }
+                    if (local != null && local.isRead) {
+                        freshMsg.copy(isRead = true, messageText = local.messageText)
+                    } else {
+                        freshMsg
+                    }
+                }
                 Result.success(
-                    currentState.copy(
-                        viewState = currentVs,
+                    freshState.copy(
+                        messages = mergedMessages,
+                        unreadCount = mergedMessages.count { !it.isRead },
+                        hasUnreadMessages = mergedMessages.any { !it.isRead }
+                    )
+                )
+            } else {
+                Result.success(
+                    currentState.withUpdatedWebFormsState(currentWebFormsState).copy(
                         messages = updatedMessages,
-                        hasUnreadMessages = false,
-                        unreadCount = 0,
-                        isReservationUnlocked = true
+                        unreadCount = updatedMessages.count { !it.isRead },
+                        hasUnreadMessages = updatedMessages.any { !it.isRead }
                     )
                 )
             }
