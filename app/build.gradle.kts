@@ -20,7 +20,7 @@ android {
       ?: "1.0.0"
 
   defaultConfig {
-    applicationId = "com.aistudio.cullinan.vfkzrw"
+    applicationId = "ir.ac.bums.jeton.client"
     minSdk = 24
     targetSdk = 36
     versionCode = buildVersionCode
