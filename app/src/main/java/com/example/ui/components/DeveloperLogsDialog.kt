@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -95,6 +96,25 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val DialogSurfaceShape = RoundedCornerShape(20.dp)
+private val LogCardShape = RoundedCornerShape(12.dp)
+private val SmallBadgeShape = RoundedCornerShape(6.dp)
+private val SnapshotBtnShape = RoundedCornerShape(8.dp)
+private val LogsListPadding = PaddingValues(vertical = 4.dp)
+
+private val FatalBg = Color(0xFFB71C1C)
+private val ErrorBg = Color(0xFFFFEBEE)
+private val ErrorFg = Color(0xFFC62828)
+private val WarnBg = Color(0xFFFFF3E0)
+private val WarnFg = Color(0xFFE65100)
+private val InfoBg = Color(0xFFE0F2F1)
+private val StackTraceBg = Color(0xFFFFEBEE).copy(alpha = 0.6f)
+private val ErrorCardBorder = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.45f))
+private val TealAlpha14 = TealPrimary.copy(alpha = 0.14f)
+private val TealAlpha16 = TealPrimary.copy(alpha = 0.16f)
+private val SnapshotOkBg = Color(0xFFE8F5E9)
+private val SnapshotOkFg = Color(0xFF2E7D32)
+
 private enum class LogLevelFilter(val label: String) {
     ALL("همه"),
     ERRORS("خطا و کرش"),
@@ -126,6 +146,20 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
     var categoryFilter by remember { mutableStateOf(LogCategoryFilter.ALL) }
     var onlyWithSnapshot by remember { mutableStateOf(false) }
     var activeSnapshot by remember { mutableStateOf<PageSnapshotRecord?>(null) }
+
+    val onOpenSnapshotCallback = remember(context) {
+        { fileName: String ->
+            val rec = AppLogger.getSnapshotByFileName(fileName)
+            if (rec != null) {
+                activeSnapshot = rec
+            } else {
+                Toast.makeText(context, "فایل صفحه $fileName یافت نشد", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val onCopyEntryCallback = remember(context) {
+        { entry: LogEntry -> copyLogEntryToClipboard(context, entry) }
+    }
 
     val saveZipLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
@@ -211,7 +245,7 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
     ) {
         PersianRtlLayout {
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = DialogSurfaceShape,
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp,
                 modifier = Modifier
@@ -423,19 +457,17 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                    contentPadding = LogsListPadding
                                 ) {
-                                    items(filteredEntries) { entry ->
+                                    items(
+                                        items = filteredEntries,
+                                        key = { entry -> if (entry.id > 0L) entry.id else "${entry.timestamp}_${entry.component}_${entry.operation}_${entry.message.hashCode()}" },
+                                        contentType = { "log_entry" }
+                                    ) { entry ->
                                         LogEntryCard(
                                             entry = entry,
-                                            onOpenSnapshot = { fileName ->
-                                                val rec = AppLogger.getSnapshotByFileName(fileName)
-                                                if (rec != null) {
-                                                    activeSnapshot = rec
-                                                } else {
-                                                    Toast.makeText(context, "فایل صفحه $fileName یافت نشد", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
+                                            onOpenSnapshot = onOpenSnapshotCallback,
+                                            onCopyEntry = onCopyEntryCallback
                                         )
                                     }
                                 }
@@ -461,9 +493,13 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                    contentPadding = LogsListPadding
                                 ) {
-                                    items(filteredSnapshots, key = { "${it.sequence}_${it.fileName}" }) { snap ->
+                                    items(
+                                        items = filteredSnapshots,
+                                        key = { "${it.sequence}_${it.fileName}" },
+                                        contentType = { "snapshot_card" }
+                                    ) { snap ->
                                         SnapshotCard(
                                             snapshot = snap,
                                             onClick = { activeSnapshot = snap }
@@ -549,29 +585,62 @@ private fun EmptyLogsPlaceholder(text: String) {
 @Composable
 private fun LogEntryCard(
     entry: LogEntry,
-    onOpenSnapshot: (String) -> Unit
+    onOpenSnapshot: (String) -> Unit,
+    onCopyEntry: (LogEntry) -> Unit
 ) {
     val (levelBg, levelFg) = when (entry.level) {
-        LogLevel.FATAL -> Color(0xFFB71C1C) to Color.White
-        LogLevel.ERROR -> Color(0xFFFFEBEE) to Color(0xFFC62828)
-        LogLevel.WARN -> Color(0xFFFFF3E0) to Color(0xFFE65100)
-        LogLevel.INFO -> Color(0xFFE0F2F1) to TealPrimary
+        LogLevel.FATAL -> FatalBg to Color.White
+        LogLevel.ERROR -> ErrorBg to ErrorFg
+        LogLevel.WARN -> WarnBg to WarnFg
+        LogLevel.INFO -> InfoBg to TealPrimary
         LogLevel.DEBUG, LogLevel.TRACE -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val border = remember(entry.level, outlineColor) {
+        if (entry.level == LogLevel.ERROR || entry.level == LogLevel.FATAL) {
+            ErrorCardBorder
+        } else {
+            BorderStroke(1.dp, outlineColor.copy(alpha = 0.18f))
+        }
+    }
+
+    val formattedTime = remember(entry.id, entry.timestamp) {
+        entry.timestamp.substringAfter('T').removeSuffix("Z")
+    }
+    val metaLine = remember(entry.id) {
+        buildList {
+            entry.flowId?.let { add("flow=$it") }
+            entry.requestId?.let { add("req=$it") }
+            entry.durationMs?.let { add("${it}ms") }
+            entry.errorCategory?.let { add("err=$it") }
+        }.joinToString(" · ")
+    }
+    val httpSummary = remember(entry.id) {
+        entry.http?.let { h ->
+            buildString {
+                append("${h.method} ${h.url}")
+                h.statusCode?.let { append(" -> $it") }
+                h.redirectLocation?.let { append(" [Loc: $it]") }
+            }
+        }
+    }
+    val stackPreview = remember(entry.id) {
+        entry.stackTrace?.takeIf { it.isNotBlank() }?.lines()?.take(5)?.joinToString("\n")
+    }
+
+    val onCopyClick = remember(entry, onCopyEntry) { { onCopyEntry(entry) } }
+    val snapFileName = entry.snapshot?.fileName
+    val onSnapshotClick = remember(snapFileName, onOpenSnapshot) {
+        { if (snapFileName != null) onOpenSnapshot(snapFileName) }
+    }
+
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = LogCardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
         ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (entry.level == LogLevel.ERROR || entry.level == LogLevel.FATAL) {
-                Color(0xFFC62828).copy(alpha = 0.45f)
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
-            }
-        ),
+        border = border,
         modifier = Modifier.fillMaxWidth()
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -587,7 +656,7 @@ private fun LogEntryCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = SmallBadgeShape,
                             color = levelBg
                         ) {
                             Text(
@@ -608,20 +677,27 @@ private fun LogEntryCard(
                         )
                     }
 
-                    Text(
-                        text = entry.timestamp.substringAfter('T').removeSuffix("Z"),
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = formattedTime,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        IconButton(
+                            onClick = onCopyClick,
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "کپی متن رویداد",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
-                val metaLine = buildList {
-                    entry.flowId?.let { add("flow=$it") }
-                    entry.requestId?.let { add("req=$it") }
-                    entry.durationMs?.let { add("${it}ms") }
-                    entry.errorCategory?.let { add("err=$it") }
-                }.joinToString(" · ")
                 if (metaLine.isNotEmpty()) {
                     Text(
                         text = metaLine,
@@ -632,22 +708,15 @@ private fun LogEntryCard(
                     )
                 }
 
-                SelectionContainer {
-                    Text(
-                        text = entry.message,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+                Text(
+                    text = entry.message,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
 
-                entry.http?.let { h ->
-                    val httpSummary = buildString {
-                        append("${h.method} ${h.url}")
-                        h.statusCode?.let { append(" -> $it") }
-                        h.redirectLocation?.let { append(" [Loc: $it]") }
-                    }
+                if (httpSummary != null) {
                     Text(
                         text = httpSummary,
                         fontSize = 10.sp,
@@ -662,37 +731,31 @@ private fun LogEntryCard(
                         text = "Exception: $exType - ${entry.exceptionMessage ?: ""}",
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFC62828),
+                        color = ErrorFg,
                         modifier = Modifier.padding(top = 3.dp)
                     )
                 }
 
-                entry.stackTrace?.takeIf { it.isNotBlank() }?.let { stack ->
-                    val previewLines = stack.lines().take(5).joinToString("\n")
-                    SelectionContainer {
-                        Text(
-                            text = previewLines,
-                            fontSize = 9.sp,
-                            lineHeight = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = Color(0xFFB71C1C),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp)
-                                .background(
-                                    Color(0xFFFFEBEE).copy(alpha = 0.6f),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .padding(6.dp)
-                        )
-                    }
+                if (stackPreview != null) {
+                    Text(
+                        text = stackPreview,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = FatalBg,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .background(StackTraceBg, SmallBadgeShape)
+                            .padding(6.dp)
+                    )
                 }
 
                 entry.snapshot?.let { snap ->
                     Spacer(modifier = Modifier.height(6.dp))
                     OutlinedButton(
-                        onClick = { onOpenSnapshot(snap.fileName) },
-                        shape = RoundedCornerShape(8.dp),
+                        onClick = onSnapshotClick,
+                        shape = SnapshotBtnShape,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier
                             .heightIn(min = 48.dp)
@@ -726,19 +789,26 @@ private fun SnapshotCard(
     val isOk = snapshot.statusCode in 200..299
     val isRedirect = snapshot.statusCode in 300..399
     val statusBg = when {
-        isOk -> Color(0xFFE8F5E9)
-        isRedirect -> Color(0xFFFFF3E0)
-        else -> Color(0xFFFFEBEE)
+        isOk -> SnapshotOkBg
+        isRedirect -> WarnBg
+        else -> ErrorBg
     }
     val statusFg = when {
-        isOk -> Color(0xFF2E7D32)
-        isRedirect -> Color(0xFFE65100)
-        else -> Color(0xFFC62828)
+        isOk -> SnapshotOkFg
+        isRedirect -> WarnFg
+        else -> ErrorFg
+    }
+    val seqText = remember(snapshot.sequence) {
+        "#${String.format(Locale.US, "%04d", snapshot.sequence)}"
+    }
+    val sizeText = remember(snapshot.sizeBytes) { formatBytes(snapshot.sizeBytes) }
+    val preview = remember(snapshot.fileName, snapshot.rawContent.length) {
+        snapshot.rawContent.trimStart().replace('\n', ' ').take(140)
     }
 
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = LogCardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
         ),
@@ -759,9 +829,9 @@ private fun SnapshotCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Surface(shape = RoundedCornerShape(6.dp), color = TealPrimary.copy(alpha = 0.14f)) {
+                        Surface(shape = SmallBadgeShape, color = TealAlpha14) {
                             Text(
-                                text = "#${String.format(Locale.US, "%04d", snapshot.sequence)}",
+                                text = seqText,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -769,7 +839,7 @@ private fun SnapshotCard(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
-                        Surface(shape = RoundedCornerShape(6.dp), color = statusBg) {
+                        Surface(shape = SmallBadgeShape, color = statusBg) {
                             Text(
                                 text = "${snapshot.method} ${snapshot.statusCode}",
                                 fontSize = 10.sp,
@@ -789,7 +859,7 @@ private fun SnapshotCard(
                     }
 
                     Text(
-                        text = formatBytes(snapshot.sizeBytes),
+                        text = sizeText,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -814,9 +884,6 @@ private fun SnapshotCard(
                     modifier = Modifier.padding(top = 2.dp)
                 )
 
-                val preview = remember(snapshot.fileName) {
-                    snapshot.rawContent.trimStart().replace('\n', ' ').take(140)
-                }
                 Text(
                     text = preview,
                     fontSize = 9.sp,
@@ -911,7 +978,11 @@ private fun SnapshotViewerDialog(
                                         .padding(10.dp),
                                     verticalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
-                                    items(chunks) { chunk ->
+                                    itemsIndexed(
+                                        items = chunks,
+                                        key = { index, _ -> index },
+                                        contentType = { _, _ -> "snapshot_chunk" }
+                                    ) { _, chunk ->
                                         Text(
                                             text = chunk,
                                             fontSize = 10.sp,
@@ -1064,6 +1135,29 @@ private fun shareSingleSnapshot(context: Context, snapshot: PageSnapshotRecord) 
         AppLogger.logError("DeveloperLogsDialog", "Failed to share single snapshot: ${e.message}", e, operation = "ShareSnapshotError")
         Toast.makeText(context, "خطا در ارسال فایل صفحه: ${e.message}", Toast.LENGTH_LONG).show()
     }
+}
+
+private fun copyLogEntryToClipboard(context: Context, entry: LogEntry) {
+    val text = buildString {
+        append("[${entry.timestamp}] [${entry.level.name}] [${entry.component}/${entry.operation}]")
+        entry.flowId?.let { append(" flow=$it") }
+        entry.requestId?.let { append(" req=$it") }
+        entry.durationMs?.let { append(" (${it}ms)") }
+        appendLine()
+        appendLine(entry.message)
+        entry.http?.let { h ->
+            appendLine("${h.method} ${h.url} -> ${h.statusCode ?: "-"}")
+        }
+        entry.exceptionType?.let { ex ->
+            appendLine("Exception: $ex - ${entry.exceptionMessage ?: ""}")
+        }
+        entry.stackTrace?.takeIf { it.isNotBlank() }?.let { stack ->
+            appendLine(stack)
+        }
+    }.trim()
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    clipboard?.setPrimaryClip(ClipData.newPlainText("log_entry_${entry.id}", text))
+    Toast.makeText(context, "متن کامل رویداد کپی شد", Toast.LENGTH_SHORT).show()
 }
 
 private fun formatBytes(bytes: Int): String {

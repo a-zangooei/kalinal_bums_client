@@ -1,5 +1,7 @@
 package com.example.data.logger
 
+import androidx.compose.runtime.Immutable
+
 enum class LogLevel {
     TRACE,
     DEBUG,
@@ -13,12 +15,14 @@ enum class LogLevel {
  * Contextual correlation metadata attached to OkHttp Requests via Request.tag(LogContext::class.java).
  * Survives request retries and clones while providing correlation across UI, Repositories, Network, and CookieJar.
  */
+@Immutable
 data class LogContext(
     val flowId: String,
     val operation: String,
     val parentReqId: String? = null
 )
 
+@Immutable
 data class LogEntry(
     val timestamp: String,
     val level: LogLevel,
@@ -37,9 +41,11 @@ data class LogEntry(
     val errorCategory: String? = null,
     val exceptionType: String? = null,
     val exceptionMessage: String? = null,
-    val stackTrace: String? = null
+    val stackTrace: String? = null,
+    val id: Long = 0L
 )
 
+@Immutable
 data class HttpDiagnostics(
     val method: String,
     val url: String,
@@ -56,6 +62,7 @@ data class HttpDiagnostics(
     val isNoRedirect: Boolean = false
 )
 
+@Immutable
 data class AspNetDiagnostics(
     val viewStateLength: Int? = null,
     val viewStateFingerprint: String? = null,
@@ -69,6 +76,7 @@ data class AspNetDiagnostics(
     val isCachedState: Boolean = false
 )
 
+@Immutable
 data class CookieDiagnostics(
     val action: String, // SAVE_RESPONSE, LOAD_REQUEST, CLEAR_ALL
     val cookieCount: Int,
@@ -78,6 +86,7 @@ data class CookieDiagnostics(
     val cookieNames: List<String>? = null
 )
 
+@Immutable
 data class ParserDiagnostics(
     val pageType: String, // RESERVATION, LOGIN, NOTICE, ERROR, UNKNOWN
     val htmlLength: Int,
@@ -89,6 +98,7 @@ data class ParserDiagnostics(
     val isFragment: Boolean = false
 )
 
+@Immutable
 data class NoticeDiagnostics(
     val isNoticeDetected: Boolean,
     val noticeType: String? = null,
@@ -96,6 +106,7 @@ data class NoticeDiagnostics(
     val actionUrl: String? = null
 )
 
+@Immutable
 data class SnapshotDiagnostics(
     val sequence: Int,
     val fileName: String,
@@ -107,6 +118,7 @@ data class SnapshotDiagnostics(
 /**
  * Represents a full, uncensored HTML/Delta/Text server response captured sequentially step-by-step.
  */
+@Immutable
 data class PageSnapshotRecord(
     val sequence: Int,
     val fileName: String,

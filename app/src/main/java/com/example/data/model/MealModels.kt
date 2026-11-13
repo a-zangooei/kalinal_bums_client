@@ -1,5 +1,7 @@
 package com.example.data.model
 
+import androidx.compose.runtime.Immutable
+
 enum class MealType(val titlePersian: String, val tabId: String) {
     BREAKFAST("صبحانه", "css3-tabstrip-0-0"),
     LUNCH("ناهار", "css3-tabstrip-0-1"),
@@ -18,6 +20,7 @@ enum class ReservationStatus(
     CONSUMED("تحویل داده شده", true, true)
 }
 
+@Immutable
 data class FoodOption(
     val id: String,
     val name: String,
@@ -25,12 +28,14 @@ data class FoodOption(
     val isHalfPortion: Boolean = false
 )
 
+@Immutable
 data class SelfOption(
     val id: String,
     val name: String,
     val isDefault: Boolean = false
 )
 
+@Immutable
 data class TableRowSnapshot(
     val mealType: MealType,
     val dayIndex: Int,
@@ -45,6 +50,7 @@ data class TableRowSnapshot(
     val drpFoodCountValue: String // e.g. "1" or "0"
 )
 
+@Immutable
 data class MealItem(
     val id: String,
     val mealType: MealType,
@@ -65,6 +71,7 @@ data class MealItem(
     val availableSelfOptions: List<SelfOption> = emptyList()
 )
 
+@Immutable
 data class DayMenu(
     val dayIndex: Int, // 0 to 6
     val dayName: String, // شنبه، یکشنبه، ...
@@ -73,6 +80,7 @@ data class DayMenu(
     val meals: Map<MealType, List<MealItem>> = emptyMap()
 )
 
+@Immutable
 data class WeeklyMenu(
     val weekDateRange: String, // e.g. "1405/08/16 الی 1405/08/22"
     val days: List<DayMenu>,
@@ -95,6 +103,7 @@ enum class WeekNavigationDirection {
     NEXT
 }
 
+@Immutable
 data class ReservationResult(
     val isSuccess: Boolean,
     val message: String,

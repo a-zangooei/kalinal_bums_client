@@ -21,6 +21,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -42,6 +43,7 @@ object AppLogger {
 
     private val lock = Any()
     private val snapshotSequence = AtomicInteger(0)
+    private val entryIdGenerator = AtomicLong(0L)
 
     private val memoryLogList = mutableListOf<String>()
     private val memoryEntryList = mutableListOf<LogEntry>()
@@ -332,7 +334,11 @@ object AppLogger {
 
         try {
             val timestamp = synchronized(dateFormat) { dateFormat.format(Date()) }
-            val sanitized = LogSanitizer.sanitizeEntry(entry).copy(timestamp = timestamp)
+            val assignedId = if (entry.id > 0L) entry.id else entryIdGenerator.incrementAndGet()
+            val sanitized = LogSanitizer.sanitizeEntry(entry).copy(
+                timestamp = timestamp,
+                id = assignedId
+            )
 
             val humanReadableText = buildHumanReadableLine(sanitized)
             val jsonlLine = buildJsonlLine(sanitized)
@@ -734,7 +740,8 @@ object AppLogger {
                 errorCategory = obj.optString("errCat", "").ifBlank { null },
                 exceptionType = obj.optString("exType", "").ifBlank { null },
                 exceptionMessage = obj.optString("exMsg", "").ifBlank { null },
-                stackTrace = obj.optString("stack", "").ifBlank { null }
+                stackTrace = obj.optString("stack", "").ifBlank { null },
+                id = entryIdGenerator.incrementAndGet()
             )
         } catch (_: Exception) {
             null

@@ -1,5 +1,8 @@
 package com.example.data.model
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class UserSession(
     val isLoggedIn: Boolean = false,
     val username: String = "",
@@ -10,6 +13,7 @@ data class UserSession(
     val hasUnreadMessages: Boolean = false
 )
 
+@Immutable
 data class LoginPageState(
     val viewState: String = "",
     val viewStateGenerator: String = "C2EE9ABB",

@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,14 +23,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
@@ -42,9 +41,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RestaurantMenu
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,13 +64,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -86,6 +79,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,7 +92,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 import com.example.data.model.FoodOption
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
@@ -112,6 +106,26 @@ import com.example.ui.theme.AccentGold
 import com.example.ui.theme.TealPrimary
 import com.example.ui.theme.TealPrimaryDark
 import com.example.ui.viewmodel.MenuViewModel
+import kotlin.math.abs
+import kotlinx.coroutines.launch
+
+private val MenuListPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+private val WeekCardShape = RoundedCornerShape(16.dp)
+private val CurrentWeekBtnShape = RoundedCornerShape(10.dp)
+private val DayHeaderShape = RoundedCornerShape(14.dp)
+private val DayEmptyCardShape = RoundedCornerShape(12.dp)
+private val NoticeCardShape = RoundedCornerShape(12.dp)
+private val TodayBadgeShape = RoundedCornerShape(6.dp)
+private val ReservedBadgeShape = RoundedCornerShape(8.dp)
+
+private val TealAlpha08 = TealPrimary.copy(alpha = 0.08f)
+private val TealAlpha14 = TealPrimary.copy(alpha = 0.14f)
+private val TealAlpha15 = TealPrimary.copy(alpha = 0.15f)
+private val TealAlpha18 = TealPrimary.copy(alpha = 0.18f)
+private val TealAlpha80 = TealPrimary.copy(alpha = 0.8f)
+private val TodayDayBorder = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.45f))
+private val ReservedGreen = Color(0xFF2E7D32)
+private val ReservedGreenBg = Color(0xFFE8F5E9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,8 +154,26 @@ fun MenuScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    val visibleDays = remember(weeklyMenu) {
-        weeklyMenu?.days?.filter { it.dayIndex in 0..4 } ?: emptyList()
+    val flattenedMenu = remember(weeklyMenu, selectedMealFilter) {
+        buildFlattenedMenuList(
+            weeklyMenu = weeklyMenu,
+            selectedMealFilter = selectedMealFilter,
+            headerItemCount = 3
+        )
+    }
+
+    val currentHasMenu by rememberUpdatedState(weeklyMenu != null)
+    val currentIsLoading by rememberUpdatedState(isLoading)
+    val currentIsMutating by rememberUpdatedState(isMutating)
+
+    val onRefreshCallback = remember(viewModel) {
+        { if (!currentIsMutating) viewModel.refresh() }
+    }
+    val onReserveCallback = remember {
+        { meal: MealItem -> if (!currentIsMutating) mealToReserve = meal }
+    }
+    val onCancelCallback = remember {
+        { meal: MealItem -> if (!currentIsMutating) mealToCancel = meal }
     }
 
     LaunchedEffect(userSession) {
@@ -237,13 +269,13 @@ fun MenuScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .background(MaterialTheme.colorScheme.background)
-                    .pointerInput(isLoading, isMutating, weeklyMenu != null) {
-                        if (weeklyMenu == null) return@pointerInput
+                    .pointerInput(viewModel) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            if (!currentHasMenu) return@awaitEachGesture
+                            val touchSlop = viewConfiguration.touchSlop
                             var totalDx = 0f
                             var totalDy = 0f
-                            var triggered = false
                             val pointerId = down.id
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -253,15 +285,19 @@ fun MenuScreen(
                                 val delta = change.position - change.previousPosition
                                 totalDx += delta.x
                                 totalDy += delta.y
-                                if (!triggered && abs(totalDx) > 96f && abs(totalDx) > abs(totalDy) * 1.6f) {
-                                    if (!isLoading && !isMutating) {
-                                        triggered = true
+                                // Bail out early once vertical scrolling is clear so vertical flings don't compute swipe math
+                                if (abs(totalDy) > touchSlop && abs(totalDy) > abs(totalDx)) {
+                                    break
+                                }
+                                if (abs(totalDx) > 96f && abs(totalDx) > abs(totalDy) * 1.6f) {
+                                    if (!currentIsLoading && !currentIsMutating) {
                                         if (totalDx > 0f) {
                                             viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS)
                                         } else {
                                             viewModel.navigateWeek(WeekNavigationDirection.NEXT)
                                         }
                                     }
+                                    break
                                 }
                             }
                         }
@@ -282,154 +318,46 @@ fun MenuScreen(
                         )
                     }
                 } else {
+                    val chipColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = TealAlpha15,
+                        selectedLabelColor = TealPrimary
+                    )
+                    val weekButtonsEnabled = !isLoading && !isMutating && weeklyMenu != null
+
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                        contentPadding = MenuListPadding
                     ) {
                         // 1. Credit & Student Header
-                        item {
+                        item(key = "credit_header", contentType = "credit_header") {
                             CreditHeader(
                                 studentName = weeklyMenu?.studentName?.ifEmpty { userSession.studentName } ?: userSession.studentName,
                                 studentNumber = weeklyMenu?.studentNumber?.ifEmpty { userSession.studentNumber } ?: userSession.studentNumber,
                                 creditText = weeklyMenu?.creditText?.ifEmpty { userSession.creditFormatted } ?: userSession.creditFormatted,
-                                onRefresh = { if (!isMutating) viewModel.refresh() }
+                                onRefresh = onRefreshCallback
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                         }
 
                         // 2. Week Navigation Header Card
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("week_navigation_card"),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                            ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Previous Week Button (on Right in RTL):
-                                        // Points RIGHT towards the past
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            IconButton(
-                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) },
-                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
-                                                modifier = Modifier.testTag("prev_week_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ChevronRight,
-                                                    contentDescription = "هفته قبلی",
-                                                    tint = if (!isLoading && !isMutating && weeklyMenu != null) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                                )
-                                            }
-                                            Text(
-                                                text = "قبلی",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-
-                                        // Week Date Range & Current Week Quick Jump
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (isLoading) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(15.dp),
-                                                        strokeWidth = 2.dp,
-                                                        color = TealPrimary
-                                                    )
-                                                } else {
-                                                    Icon(
-                                                        imageVector = Icons.Default.DateRange,
-                                                        contentDescription = "بازه زمانی هفته",
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = weeklyMenu?.weekDateRange ?: "در حال بارگذاری...",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 14.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-
-                                            Spacer(modifier = Modifier.height(4.dp))
-
-                                            Surface(
-                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) },
-                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = if (weekOffset != 0) TealPrimary.copy(alpha = 0.14f) else Color.Transparent,
-                                                modifier = Modifier.testTag("current_week_button")
-                                            ) {
-                                                Text(
-                                                    text = if (weekOffset != 0) "بازگشت به هفته جاری" else "هفته جاری (برای تغییر بکشید)",
-                                                    fontSize = 11.sp,
-                                                    color = if (weekOffset != 0) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontWeight = if (weekOffset != 0) FontWeight.Bold else FontWeight.Normal,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                )
-                                            }
-                                        }
-
-                                        // Next Week Button (on Left in RTL):
-                                        // Points LEFT towards the future
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            IconButton(
-                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.NEXT) },
-                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
-                                                modifier = Modifier.testTag("next_week_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ChevronLeft,
-                                                    contentDescription = "هفته بعدی",
-                                                    tint = if (!isLoading && !isMutating && weeklyMenu != null) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                                )
-                                            }
-                                            Text(
-                                                text = "بعدی",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    AnimatedVisibility(
-                                        visible = isLoading,
-                                        enter = fadeIn(),
-                                        exit = fadeOut()
-                                    ) {
-                                        LinearProgressIndicator(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(3.dp),
-                                            color = TealPrimary,
-                                            trackColor = TealPrimary.copy(alpha = 0.18f)
-                                        )
-                                    }
-                                }
-                            }
+                        item(key = "week_navigation", contentType = "week_navigation") {
+                            WeekNavigationCard(
+                                weekDateRange = weeklyMenu?.weekDateRange ?: "در حال بارگذاری...",
+                                weekOffset = weekOffset,
+                                isLoading = isLoading,
+                                enabled = weekButtonsEnabled,
+                                onPrevWeek = { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) },
+                                onCurrentWeek = { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) },
+                                onNextWeek = { viewModel.navigateWeek(WeekNavigationDirection.NEXT) }
+                            )
                             Spacer(modifier = Modifier.height(14.dp))
                         }
 
-                        // 3. Quick-jump Day Bar & Meal Type Filter
-                        item {
-                            val days = visibleDays
-                            if (days.isNotEmpty()) {
+                        // 3. Quick-jump Day Bar & Meal Type Filter (lightweight horizontalScroll Rows instead of nested LazyRow)
+                        item(key = "quick_jump_filters", contentType = "quick_jump_filters") {
+                            val dayPills = flattenedMenu.dayPills
+                            if (dayPills.isNotEmpty()) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
                                         text = "روزهای هفته (مشاهده پیوسته یا پرش مستقیم):",
@@ -439,52 +367,47 @@ fun MenuScreen(
                                         modifier = Modifier.padding(bottom = 6.dp)
                                     )
 
-                                    // Horizontal Quick-Jump Day Pills
-                                    LazyRow(
+                                    Row(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
                                     ) {
-                                        items(days.size) { index ->
-                                            val day = days[index]
-                                            val isSelected = day.dayIndex == selectedDayIndex
-                                            val hasReserved = day.meals.values.flatten().any { it.status.isReserved }
-
+                                        dayPills.forEachIndexed { index, pill ->
+                                            val isSelected = pill.dayIndex == selectedDayIndex
                                             FilterChip(
                                                 selected = isSelected,
                                                 onClick = {
-                                                    viewModel.selectDay(day.dayIndex)
+                                                    viewModel.selectDay(pill.dayIndex)
+                                                    val targetIndex = flattenedMenu.dayScrollIndices[pill.dayIndex] ?: 3
                                                     coroutineScope.launch {
-                                                        val targetIndex = calculateDayScrollIndex(days, index, selectedMealFilter)
                                                         listState.animateScrollToItem(targetIndex)
                                                     }
                                                 },
                                                 label = {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Text(day.dayName)
-                                                        if (day.isToday) {
+                                                        Text(pill.dayName)
+                                                        if (pill.isToday) {
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                             Text(
                                                                 text = "(امروز)",
                                                                 fontSize = 10.sp,
                                                                 fontWeight = FontWeight.Bold,
-                                                                color = if (isSelected) TealPrimary else TealPrimary.copy(alpha = 0.8f)
+                                                                color = if (isSelected) TealPrimary else TealAlpha80
                                                             )
                                                         }
-                                                        if (hasReserved) {
+                                                        if (pill.hasReserved) {
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                             Box(
                                                                 modifier = Modifier
                                                                     .size(6.dp)
                                                                     .clip(CircleShape)
-                                                                    .background(Color(0xFF2E7D32))
+                                                                    .background(ReservedGreen)
                                                             )
                                                         }
                                                     }
                                                 },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = TealPrimary.copy(alpha = 0.15f),
-                                                    selectedLabelColor = TealPrimary
-                                                ),
+                                                colors = chipColors,
                                                 modifier = Modifier.testTag("day_tab_$index")
                                             )
                                         }
@@ -492,32 +415,25 @@ fun MenuScreen(
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Meal Type Filter Chips
-                                    LazyRow(
+                                    Row(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
                                     ) {
-                                        item {
-                                            FilterChip(
-                                                selected = selectedMealFilter == null,
-                                                onClick = { viewModel.selectMealFilter(null) },
-                                                label = { Text("همه وعده‌ها") },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = TealPrimary.copy(alpha = 0.15f),
-                                                    selectedLabelColor = TealPrimary
-                                                ),
-                                                modifier = Modifier.testTag("filter_all_meals")
-                                            )
-                                        }
-                                        items(MealType.values()) { mealType ->
+                                        FilterChip(
+                                            selected = selectedMealFilter == null,
+                                            onClick = { viewModel.selectMealFilter(null) },
+                                            label = { Text("همه وعده‌ها") },
+                                            colors = chipColors,
+                                            modifier = Modifier.testTag("filter_all_meals")
+                                        )
+                                        MealType.entries.forEach { mealType ->
                                             FilterChip(
                                                 selected = selectedMealFilter == mealType,
                                                 onClick = { viewModel.selectMealFilter(mealType) },
                                                 label = { Text(mealType.titlePersian) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = TealPrimary.copy(alpha = 0.15f),
-                                                    selectedLabelColor = TealPrimary
-                                                ),
+                                                colors = chipColors,
                                                 modifier = Modifier.testTag("filter_${mealType.name}")
                                             )
                                         }
@@ -528,210 +444,38 @@ fun MenuScreen(
                             }
                         }
 
-                        // 4. Continuous All-Week Days and Meals
-                        val days = visibleDays
-                        if (days.isEmpty()) {
-                            item {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 24.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(28.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CalendarToday,
-                                            contentDescription = "بدون برنامه",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Text(
-                                            text = "هیچ برنامه‌ای برای این هفته دریافت نشد",
-                                            fontSize = 14.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            days.forEachIndexed { dayIdx, day ->
-                                val dayMeals = getMealsForDay(day, selectedMealFilter)
-                                val hasReserved = day.meals.values.flatten().any { it.status.isReserved }
-
-                                // Day Header Card
-                                item(key = "day_header_${day.dayIndex}") {
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = if (dayIdx == 0) 0.dp else 16.dp, bottom = 8.dp),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (day.isToday) TealPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                                        ),
-                                        border = if (day.isToday) BorderStroke(1.dp, TealPrimary.copy(alpha = 0.45f)) else null
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(32.dp)
-                                                        .clip(CircleShape)
-                                                        .background(if (day.isToday) TealPrimary else MaterialTheme.colorScheme.primaryContainer),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = day.dayName.take(1),
-                                                        color = if (day.isToday) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 14.sp
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Column {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Text(
-                                                            text = day.dayName,
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontSize = 15.sp,
-                                                            color = MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                        if (day.isToday) {
-                                                            Spacer(modifier = Modifier.width(6.dp))
-                                                            Surface(
-                                                                shape = RoundedCornerShape(6.dp),
-                                                                color = TealPrimary,
-                                                                modifier = Modifier.padding(2.dp)
-                                                            ) {
-                                                                Text(
-                                                                    text = "امروز",
-                                                                    color = Color.White,
-                                                                    fontSize = 10.sp,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                    if (day.dateJalali.isNotEmpty()) {
-                                                        Text(
-                                                            text = day.dateJalali,
-                                                            fontSize = 12.sp,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            // Reservation status badge
-                                            if (hasReserved) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = Color(0xFFE8F5E9)
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(6.dp)
-                                                                .clip(CircleShape)
-                                                                .background(Color(0xFF2E7D32))
-                                                        )
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text(
-                                                            text = "دارای رزرو",
-                                                            fontSize = 11.sp,
-                                                            fontWeight = FontWeight.Medium,
-                                                            color = Color(0xFF2E7D32)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Meals for this day
-                                if (dayMeals.isEmpty()) {
-                                    item(key = "day_empty_${day.dayIndex}") {
-                                        Card(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 6.dp),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-                                        ) {
-                                            val currentFilter = selectedMealFilter
-                                            Text(
-                                                text = if (currentFilter != null) "هیچ وعده ${currentFilter.titlePersian} برای این روز ثبت نشده است" else "هیچ وعده غذایی برای این روز ثبت نشده است",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    items(
-                                        items = dayMeals,
-                                        key = { meal -> "${meal.id}_${meal.dayIndex}_${meal.mealType.name}" }
-                                    ) { meal ->
-                                        MealCard(
-                                            meal = meal,
-                                            isProcessing = isMutating && processingDayIndex == meal.dayIndex,
-                                            onReserveClick = { if (!isMutating) mealToReserve = it },
-                                            onCancelClick = { if (!isMutating) mealToCancel = it },
-                                            onChangeFoodClick = { if (!isMutating) mealToReserve = it }
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
+                        // 4. Continuous Flattened All-Week Days and Meals (key + contentType for fast recycling)
+                        items(
+                            items = flattenedMenu.rows,
+                            key = { it.key },
+                            contentType = { it.contentType }
+                        ) { row ->
+                            when (row) {
+                                MenuListRow.EmptyWeekRow -> EmptyWeekCard()
+                                is MenuListRow.DayHeaderRow -> DayHeaderCard(
+                                    day = row.day,
+                                    isFirstDay = row.isFirstDay,
+                                    hasReserved = row.hasReserved
+                                )
+                                is MenuListRow.DayEmptyRow -> DayEmptyCard(
+                                    filterTitlePersian = row.filterTitlePersian
+                                )
+                                is MenuListRow.MealCardRow -> {
+                                    MealCard(
+                                        meal = row.meal,
+                                        isProcessing = isMutating && processingDayIndex == row.meal.dayIndex,
+                                        onReserveClick = onReserveCallback,
+                                        onCancelClick = onCancelCallback,
+                                        onChangeFoodClick = onReserveCallback
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
                             }
                         }
 
                         // 6. Reservation System Notice
-                        item {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = "اطلاعیه",
-                                        tint = TealPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "سامانه رزرو و لغو صبحانه، ناهار و شام فعال است. درخواست‌ها به صورت مستقیم با سرور سامانه تغذیه کالینان (jeton.bums.ac.ir) مبادله می‌شوند.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        lineHeight = 18.sp
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
+                        item(key = "reservation_notice", contentType = "reservation_notice") {
+                            ReservationNoticeCard()
                         }
                     }
                 }
@@ -1175,25 +919,322 @@ private fun ProfileDetailRow(title: String, value: String) {
     }
 }
 
-private fun getMealsForDay(day: com.example.data.model.DayMenu, filter: com.example.data.model.MealType?): List<com.example.data.model.MealItem> {
-    return if (filter == null) {
-        listOfNotNull(
-            day.meals[com.example.data.model.MealType.BREAKFAST],
-            day.meals[com.example.data.model.MealType.LUNCH],
-            day.meals[com.example.data.model.MealType.DINNER]
-        ).flatten()
-    } else {
-        day.meals[filter] ?: emptyList()
+@Composable
+private fun WeekNavigationCard(
+    weekDateRange: String,
+    weekOffset: Int,
+    isLoading: Boolean,
+    enabled: Boolean,
+    onPrevWeek: () -> Unit,
+    onCurrentWeek: () -> Unit,
+    onNextWeek: () -> Unit
+) {
+    val navTint = if (enabled) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("week_navigation_card"),
+        shape = WeekCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(
+                        onClick = onPrevWeek,
+                        enabled = enabled,
+                        modifier = Modifier.testTag("prev_week_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "هفته قبلی",
+                            tint = navTint
+                        )
+                    }
+                    Text(
+                        text = "قبلی",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(15.dp),
+                                strokeWidth = 2.dp,
+                                color = TealPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "بازه زمانی هفته",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = weekDateRange,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Surface(
+                        onClick = onCurrentWeek,
+                        enabled = enabled,
+                        shape = CurrentWeekBtnShape,
+                        color = if (weekOffset != 0) TealAlpha14 else Color.Transparent,
+                        modifier = Modifier.testTag("current_week_button")
+                    ) {
+                        Text(
+                            text = if (weekOffset != 0) "بازگشت به هفته جاری" else "هفته جاری (برای تغییر بکشید)",
+                            fontSize = 11.sp,
+                            color = if (weekOffset != 0) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (weekOffset != 0) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(
+                        onClick = onNextWeek,
+                        enabled = enabled,
+                        modifier = Modifier.testTag("next_week_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronLeft,
+                            contentDescription = "هفته بعدی",
+                            tint = navTint
+                        )
+                    }
+                    Text(
+                        text = "بعدی",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isLoading,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = TealPrimary,
+                    trackColor = TealAlpha18
+                )
+            }
+        }
     }
 }
 
-private fun calculateDayScrollIndex(days: List<com.example.data.model.DayMenu>, targetDayIndex: Int, filter: com.example.data.model.MealType?): Int {
-    var index = 3 // CreditHeader (0), WeekNav (1), QuickJump (2)
-    for (i in 0 until minOf(targetDayIndex, days.size)) {
-        val meals = getMealsForDay(days[i], filter)
-        val itemCount = 1 + if (meals.isEmpty()) 1 else meals.size
-        index += itemCount
+@Composable
+private fun EmptyWeekCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        shape = WeekCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.CalendarToday,
+                contentDescription = "بدون برنامه",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "هیچ برنامه‌ای برای این هفته دریافت نشد",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
-    return index
+}
+
+@Composable
+private fun DayHeaderCard(
+    day: com.example.data.model.DayMenu,
+    isFirstDay: Boolean,
+    hasReserved: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (isFirstDay) 0.dp else 16.dp, bottom = 8.dp),
+        shape = DayHeaderShape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (day.isToday) TealAlpha08 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ),
+        border = if (day.isToday) TodayDayBorder else null
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(if (day.isToday) TealPrimary else MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = day.dayName.take(1),
+                        color = if (day.isToday) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = day.dayName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (day.isToday) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = TodayBadgeShape,
+                                color = TealPrimary,
+                                modifier = Modifier.padding(2.dp)
+                            ) {
+                                Text(
+                                    text = "امروز",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (day.dateJalali.isNotEmpty()) {
+                        Text(
+                            text = day.dateJalali,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (hasReserved) {
+                Surface(
+                    shape = ReservedBadgeShape,
+                    color = ReservedGreenBg
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(ReservedGreen)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "دارای رزرو",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = ReservedGreen
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayEmptyCard(filterTitlePersian: String?) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+        shape = DayEmptyCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+    ) {
+        Text(
+            text = if (filterTitlePersian != null) {
+                "هیچ وعده $filterTitlePersian برای این روز ثبت نشده است"
+            } else {
+                "هیچ وعده غذایی برای این روز ثبت نشده است"
+            },
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ReservationNoticeCard() {
+    Spacer(modifier = Modifier.height(16.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = NoticeCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "اطلاعیه",
+                tint = TealPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "سامانه رزرو و لغو صبحانه، ناهار و شام فعال است. درخواست‌ها به صورت مستقیم با سرور سامانه تغذیه کالینان (jeton.bums.ac.ir) مبادله می‌شوند.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
 }
 

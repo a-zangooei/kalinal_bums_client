@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +47,22 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
 import com.example.data.model.ReservationStatus
-import com.example.ui.theme.TealPrimary
+
+private val MealCardShape = RoundedCornerShape(16.dp)
+private val MealChipShape = RoundedCornerShape(6.dp)
+private val MealButtonShape = RoundedCornerShape(10.dp)
+
+private val BreakfastColor = Color(0xFFF57C00)
+private val BreakfastBg = BreakfastColor.copy(alpha = 0.12f)
+private val LunchColor = Color(0xFF00796B)
+private val LunchBg = LunchColor.copy(alpha = 0.12f)
+private val DinnerColor = Color(0xFF512DA8)
+private val DinnerBg = DinnerColor.copy(alpha = 0.12f)
+
+private val CaloriesBg = Color(0xFFFFF3E0)
+private val CaloriesFg = Color(0xFFE65100)
+private val PriceBg = Color(0xFFE8F5E9)
+private val PriceFg = Color(0xFF2E7D32)
 
 @Composable
 fun MealCard(
@@ -57,17 +73,27 @@ fun MealCard(
     onChangeFoodClick: (MealItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val (mealIcon, mealColor) = when (meal.mealType) {
-        MealType.BREAKFAST -> Pair(Icons.Default.BreakfastDining, Color(0xFFF57C00))
-        MealType.LUNCH -> Pair(Icons.Default.LunchDining, Color(0xFF00796B))
-        MealType.DINNER -> Pair(Icons.Default.DinnerDining, Color(0xFF512DA8))
+    val mealIcon = when (meal.mealType) {
+        MealType.BREAKFAST -> Icons.Default.BreakfastDining
+        MealType.LUNCH -> Icons.Default.LunchDining
+        MealType.DINNER -> Icons.Default.DinnerDining
+    }
+    val mealColor = when (meal.mealType) {
+        MealType.BREAKFAST -> BreakfastColor
+        MealType.LUNCH -> LunchColor
+        MealType.DINNER -> DinnerColor
+    }
+    val mealIconBg = when (meal.mealType) {
+        MealType.BREAKFAST -> BreakfastBg
+        MealType.LUNCH -> LunchBg
+        MealType.DINNER -> DinnerBg
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("meal_card_${meal.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = MealCardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -85,7 +111,7 @@ fun MealCard(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(mealColor.copy(alpha = 0.12f)),
+                            .background(mealIconBg),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -132,7 +158,7 @@ fun MealCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(MealChipShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
@@ -159,21 +185,21 @@ fun MealCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFFFF3E0))
+                                .clip(MealChipShape)
+                                .background(CaloriesBg)
                                 .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.LocalFireDepartment,
                                 contentDescription = "کالری",
                                 modifier = Modifier.size(13.dp),
-                                tint = Color(0xFFE65100)
+                                tint = CaloriesFg
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = "${meal.calories} کالری",
                                 fontSize = 11.sp,
-                                color = Color(0xFFE65100),
+                                color = CaloriesFg,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -185,22 +211,22 @@ fun MealCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFE8F5E9))
+                                .clip(MealChipShape)
+                                .background(PriceBg)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Payments,
                                 contentDescription = "قیمت",
                                 modifier = Modifier.size(13.dp),
-                                tint = Color(0xFF2E7D32)
+                                tint = PriceFg
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = meal.priceFormatted,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2E7D32)
+                                color = PriceFg
                             )
                         }
                     }
@@ -219,6 +245,9 @@ fun MealCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val mealTag = meal.mealType.name.lowercase()
+                val onReserve = remember(meal, onReserveClick) { { onReserveClick(meal) } }
+                val onCancel = remember(meal, onCancelClick) { { onCancelClick(meal) } }
+                val onChangeFood = remember(meal, onChangeFoodClick) { { onChangeFoodClick(meal) } }
 
                 if (isProcessing) {
                     Row(
@@ -240,13 +269,13 @@ fun MealCard(
                     }
                 } else if (meal.status == ReservationStatus.NOT_RESERVED) {
                     Button(
-                        onClick = { onReserveClick(meal) },
+                        onClick = onReserve,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp)
                             .testTag("reserve_${mealTag}_button_${meal.dayIndex}"),
                         colors = ButtonDefaults.buttonColors(containerColor = mealColor),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = MealButtonShape
                     ) {
                         Icon(
                             imageVector = Icons.Default.RestaurantMenu,
@@ -266,7 +295,7 @@ fun MealCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { onCancelClick(meal) },
+                            onClick = onCancel,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp)
@@ -274,7 +303,7 @@ fun MealCard(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = MealButtonShape
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Cancel,
@@ -291,7 +320,7 @@ fun MealCard(
 
                         if (meal.availableFoodOptions.size > 1) {
                             OutlinedButton(
-                                onClick = { onChangeFoodClick(meal) },
+                                onClick = onChangeFood,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(42.dp)
@@ -299,7 +328,7 @@ fun MealCard(
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = mealColor
                                 ),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MealButtonShape
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,

@@ -32,6 +32,8 @@ import com.example.ui.theme.StatusLockedGreyBg
 import com.example.ui.theme.StatusReservedGreen
 import com.example.ui.theme.StatusReservedGreenBg
 
+private val BadgeShape = RoundedCornerShape(8.dp)
+
 @Composable
 fun StatusBadge(
     status: ReservationStatus,
@@ -47,7 +49,7 @@ fun StatusBadge(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(BadgeShape)
             .background(bgColor)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center

@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,6 +53,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +67,13 @@ import com.example.data.model.MessageItem
 import com.example.ui.components.PersianRtlLayout
 import com.example.ui.theme.TealPrimary
 import com.example.ui.viewmodel.MessagesViewModel
+
+private val MessagesListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+private val UnreadBannerShape = RoundedCornerShape(16.dp)
+private val MessageCardShape = RoundedCornerShape(14.dp)
+private val MessageBadgeShape = RoundedCornerShape(6.dp)
+private val TealAlpha10 = TealPrimary.copy(alpha = 0.10f)
+private val TealAlpha12 = TealPrimary.copy(alpha = 0.12f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +90,10 @@ fun MessagesScreen(
     val selectedDetail by viewModel.selectedMessageDetail.collectAsState()
     val isDetailLoading by viewModel.isDetailLoading.collectAsState()
     val userNotification by viewModel.userMessage.collectAsState()
+
+    val onSelectMessage = remember(viewModel) {
+        { message: MessageItem -> viewModel.selectMessageForDetails(message) }
+    }
 
     PersianRtlLayout {
         Column(
@@ -326,16 +338,17 @@ fun MessagesScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag("messages_list"),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = MessagesListPadding,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(
-                        pageState.messages,
-                        key = { "${it.rowIndex}_${it.buttonInputName}_${it.title.hashCode()}" }
+                        items = pageState.messages,
+                        key = { "${it.rowIndex}_${it.buttonInputName}_${it.title.hashCode()}" },
+                        contentType = { "message_card" }
                     ) { message ->
                         MessageCard(
                             message = message,
-                            onClick = { viewModel.selectMessageForDetails(message) }
+                            onSelect = onSelectMessage
                         )
                     }
                 }
@@ -491,14 +504,20 @@ fun MessagesScreen(
 @Composable
 fun MessageCard(
     message: MessageItem,
-    onClick: () -> Unit
+    onSelect: (MessageItem) -> Unit
 ) {
+    val onClick = remember(message, onSelect) { { onSelect(message) } }
+    val errorColor = MaterialTheme.colorScheme.error
+    val unreadBorder = remember(errorColor) {
+        BorderStroke(1.dp, errorColor.copy(alpha = 0.4f))
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .testTag("message_card_${message.rowIndex}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = MessageCardShape,
         colors = CardDefaults.cardColors(
             containerColor = if (message.isRead) {
                 MaterialTheme.colorScheme.surface
@@ -507,11 +526,7 @@ fun MessageCard(
             }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (message.isRead) 1.dp else 2.dp),
-        border = if (!message.isRead) {
-            CardDefaults.outlinedCardBorder().copy(
-                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
-            )
-        } else null
+        border = if (!message.isRead) unreadBorder else null
     ) {
         Row(
             modifier = Modifier
@@ -524,18 +539,14 @@ fun MessageCard(
                     .size(42.dp)
                     .clip(CircleShape)
                     .background(
-                        if (message.isRead) {
-                            TealPrimary.copy(alpha = 0.12f)
-                        } else {
-                            MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                        }
+                        if (message.isRead) TealAlpha12 else errorColor.copy(alpha = 0.15f)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (message.isRead) Icons.Default.MarkEmailRead else Icons.Default.MarkEmailUnread,
                     contentDescription = null,
-                    tint = if (message.isRead) TealPrimary else MaterialTheme.colorScheme.error,
+                    tint = if (message.isRead) TealPrimary else errorColor,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -559,14 +570,14 @@ fun MessageCard(
                     )
 
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (message.isRead) TealPrimary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                        shape = MessageBadgeShape,
+                        color = if (message.isRead) TealAlpha10 else errorColor.copy(alpha = 0.15f)
                     ) {
                         Text(
                             text = if (message.isRead) "خوانده‌شده" else "خوانده‌نشده",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (message.isRead) TealPrimary else MaterialTheme.colorScheme.error,
+                            color = if (message.isRead) TealPrimary else errorColor,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }

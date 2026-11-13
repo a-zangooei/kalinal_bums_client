@@ -17,12 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,6 +36,13 @@ import com.example.ui.theme.AccentGold
 import com.example.ui.theme.TealPrimary
 import com.example.ui.theme.TealPrimaryDark
 
+private val CreditCardShape = RoundedCornerShape(20.dp)
+private val CreditHeaderGradient = Brush.horizontalGradient(
+    colors = listOf(TealPrimary, TealPrimaryDark)
+)
+private val WhiteAvatarBg = Color.White.copy(alpha = 0.2f)
+private val WhiteSubtitle = Color.White.copy(alpha = 0.8f)
+
 @Composable
 fun CreditHeader(
     studentName: String,
@@ -50,18 +55,14 @@ fun CreditHeader(
         modifier = modifier
             .fillMaxWidth()
             .testTag("credit_header_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = CreditCardShape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(TealPrimary, TealPrimaryDark)
-                    )
-                )
+                .background(CreditHeaderGradient)
                 .padding(18.dp)
         ) {
             Column {
@@ -76,7 +77,7 @@ fun CreditHeader(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
+                                .background(WhiteAvatarBg),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -97,7 +98,7 @@ fun CreditHeader(
                             if (studentNumber.isNotEmpty()) {
                                 Text(
                                     text = "شماره دانشجویی: $studentNumber",
-                                    color = Color.White.copy(alpha = 0.8f),
+                                    color = WhiteSubtitle,
                                     fontSize = 12.sp
                                 )
                             }

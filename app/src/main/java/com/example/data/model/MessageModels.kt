@@ -1,8 +1,11 @@
 package com.example.data.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Represents a single message / announcement row in Cullinan's MyMessage.aspx table.
  */
+@Immutable
 data class MessageItem(
     val rowIndex: Int,
     val title: String,
@@ -18,6 +21,7 @@ data class MessageItem(
 /**
  * Represents ASP.NET WebForms atomic state fields required for chaining postbacks.
  */
+@Immutable
 data class WebFormsState(
     val viewState: String,
     val viewStateGenerator: String = "87AF9C2D",
@@ -53,6 +57,7 @@ sealed class MessageError(val userMessage: String) : Exception(userMessage) {
 /**
  * State representing the loaded messages page, including ASP.NET ViewState and unlock status.
  */
+@Immutable
 data class MessagesPageState(
     val viewState: String = "",
     val viewStateGenerator: String = "87AF9C2D",
