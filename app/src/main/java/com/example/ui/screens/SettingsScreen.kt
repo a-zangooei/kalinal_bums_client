@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,12 +39,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.BuildConfig
 import com.example.data.local.UserPreferences
 import com.example.data.logger.AppLogger
 import com.example.data.model.AppThemeMode
 import com.example.data.network.CullinanHttpClient
 import com.example.data.security.BiometricHelper
+import com.example.data.security.BiometricLockCoordinator
+import com.example.data.security.BiometricToggleOutcome
 import com.example.ui.components.DeveloperLogsDialog
 import com.example.ui.components.LogSharePreviewDialog
 import com.example.ui.components.PersianRtlLayout
@@ -58,22 +67,41 @@ fun SettingsScreen(
     onThemeChanged: (AppThemeMode) -> Unit,
     onNavigateBack: (() -> Unit)? = null,
     onCheckForUpdates: (() -> Unit)? = null,
+    onSecuritySettingsChanged: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val userPrefs = remember { UserPreferences(context) }
+    val lockCoordinator = remember(context, userPrefs) { BiometricLockCoordinator(context, userPrefs) }
+
     var isDevUnlocked by remember { mutableStateOf(userPrefs.isDeveloperModeUnlocked) }
+    var isEncryptionAvailable by remember { mutableStateOf(userPrefs.isEncryptionAvailable) }
     var isBiometricEnabled by remember { mutableStateOf(userPrefs.isBiometricLockEnabled) }
-    val canUseBiometric = remember(context) { BiometricHelper.canAuthenticate(context) }
+    var canUseBiometric by remember { mutableStateOf(BiometricHelper.canAuthenticate(context)) }
     var tapCounter by remember { mutableIntStateOf(0) }
     var showLogsDialog by remember { mutableStateOf(false) }
     var showSharePreviewDialog by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner, context, userPrefs) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isEncryptionAvailable = userPrefs.isEncryptionAvailable
+                isBiometricEnabled = userPrefs.isBiometricLockEnabled
+                canUseBiometric = BiometricHelper.canAuthenticate(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsState()
 
     SettingsScreenContent(
         currentThemeMode = currentThemeMode,
-        isEncryptionAvailable = userPrefs.isEncryptionAvailable,
+        isEncryptionAvailable = isEncryptionAvailable,
         canUseBiometric = canUseBiometric,
         isBiometricEnabled = isBiometricEnabled,
         baseUrl = CullinanHttpClient.BASE_URL,
@@ -88,30 +116,46 @@ fun SettingsScreen(
             AppLogger.logAction("Theme changed to ${mode.name}")
         },
         onToggleBiometric = { enable ->
-            if (!enable) {
-                userPrefs.isBiometricLockEnabled = false
-                isBiometricEnabled = false
-                AppLogger.logAction("Biometric lock disabled")
-            } else {
-                val activity = context.findFragmentActivity()
-                if (activity == null) {
-                    Toast.makeText(context, "پنجره بیومتریک در دسترس نیست", Toast.LENGTH_SHORT).show()
-                } else {
-                    BiometricHelper.authenticate(
-                        activity = activity,
-                        title = "فعال‌سازی قفل امنیتی",
-                        subtitle = "برای فعال‌سازی محافظت از رمز ذخیره‌شده احراز هویت کنید",
-                        onSuccess = {
-                            userPrefs.isBiometricLockEnabled = true
-                            isBiometricEnabled = true
-                            Toast.makeText(context, "قفل بیومتریک فعال شد", Toast.LENGTH_SHORT).show()
-                        },
-                        onError = { err ->
-                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+            val authenticator = context.findFragmentActivity()?.let { BiometricHelper.forActivity(it) }
+            lockCoordinator.requestLockChange(
+                targetEnabled = enable,
+                authenticator = authenticator
+            ) { outcome ->
+                when (outcome) {
+                    is BiometricToggleOutcome.Updated -> {
+                        isBiometricEnabled = outcome.isEnabled
+                        onSecuritySettingsChanged?.invoke()
+                        val msg = if (outcome.isEnabled) {
+                            "قفل بیومتریک فعال شد"
+                        } else {
+                            "قفل بیومتریک غیرفعال شد"
                         }
-                    )
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    }
+                    BiometricToggleOutcome.Cancelled -> {
+                        Toast.makeText(context, "احراز هویت لغو شد؛ وضعیت قفل تغییری نکرد", Toast.LENGTH_SHORT).show()
+                    }
+                    is BiometricToggleOutcome.Failed -> {
+                        Toast.makeText(context, outcome.message, Toast.LENGTH_LONG).show()
+                    }
                 }
             }
+        },
+        onOpenDeviceSecuritySettings = {
+            try {
+                val intent = Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, "تنظیمات امنیتی گوشی از این صفحه قابل باز شدن نیست", Toast.LENGTH_SHORT).show()
+            }
+        },
+        onRecoveryWipeAndDisableLock = {
+            lockCoordinator.clearCredentialsAndDisableLock()
+            isBiometricEnabled = false
+            onSecuritySettingsChanged?.invoke()
+            Toast.makeText(context, "رمزهای ذخیره‌شده پاک شد و قفل بیومتریک غیرفعال گردید", Toast.LENGTH_LONG).show()
         },
         onToggleCompatibilityMode = { enable ->
             CullinanHttpClient.setCompatibilityMode(enable)
@@ -184,6 +228,8 @@ internal fun SettingsScreenContent(
     onNavigateBack: (() -> Unit)?,
     onSelectTheme: (AppThemeMode) -> Unit,
     onToggleBiometric: (Boolean) -> Unit,
+    onOpenDeviceSecuritySettings: () -> Unit,
+    onRecoveryWipeAndDisableLock: () -> Unit,
     onToggleCompatibilityMode: (Boolean) -> Unit,
     onOpenLogs: () -> Unit,
     onExportZip: () -> Unit,
@@ -240,7 +286,9 @@ internal fun SettingsScreenContent(
                     isEncryptionAvailable = isEncryptionAvailable,
                     canUseBiometric = canUseBiometric,
                     isBiometricEnabled = isBiometricEnabled,
-                    onToggleBiometric = onToggleBiometric
+                    onToggleBiometric = onToggleBiometric,
+                    onOpenDeviceSecuritySettings = onOpenDeviceSecuritySettings,
+                    onRecoveryWipeAndDisableLock = onRecoveryWipeAndDisableLock
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -301,6 +349,8 @@ private fun SettingsScreenLightPreview() {
             onNavigateBack = {},
             onSelectTheme = {},
             onToggleBiometric = {},
+            onOpenDeviceSecuritySettings = {},
+            onRecoveryWipeAndDisableLock = {},
             onToggleCompatibilityMode = {},
             onOpenLogs = {},
             onExportZip = {},
@@ -319,7 +369,7 @@ private fun SettingsScreenDarkPreview() {
         SettingsScreenContent(
             currentThemeMode = AppThemeMode.DARK,
             isEncryptionAvailable = true,
-            canUseBiometric = true,
+            canUseBiometric = false,
             isBiometricEnabled = true,
             baseUrl = "https://jeton.bums.ac.ir",
             isCompatibilityModeActive = true,
@@ -329,6 +379,8 @@ private fun SettingsScreenDarkPreview() {
             onNavigateBack = {},
             onSelectTheme = {},
             onToggleBiometric = {},
+            onOpenDeviceSecuritySettings = {},
+            onRecoveryWipeAndDisableLock = {},
             onToggleCompatibilityMode = {},
             onOpenLogs = {},
             onExportZip = {},

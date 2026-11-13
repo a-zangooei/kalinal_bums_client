@@ -51,9 +51,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,23 +73,25 @@ import com.example.ui.theme.TealPrimary
 internal fun LoginCredentialsCard(
     username: String,
     password: String,
+    passwordVisible: Boolean,
     captchaInput: String,
     captchaBitmap: Bitmap?,
     rememberMe: Boolean,
     isEncryptionAvailable: Boolean,
     requiresBiometricUnlock: Boolean,
+    canQuickFillSavedCredentials: Boolean,
     isLoading: Boolean,
     isCaptchaRefreshing: Boolean,
     onBiometricUnlockClick: () -> Unit,
+    onQuickFillSavedCredentials: () -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onTogglePasswordVisibility: () -> Unit,
     onCaptchaChange: (String) -> Unit,
     onRefreshCaptcha: () -> Unit,
     onToggleRememberMe: () -> Unit,
     onSubmitLogin: () -> Unit
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -103,7 +102,7 @@ internal fun LoginCredentialsCard(
             modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Biometric / Device PIN unlock card when saved credentials are locked
+            // Biometric / Device PIN unlock button when saved credentials are locked
             AnimatedVisibility(visible = requiresBiometricUnlock) {
                 OutlinedButton(
                     onClick = onBiometricUnlockClick,
@@ -123,6 +122,33 @@ internal fun LoginCredentialsCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "بازیابی رمز ذخیره‌شده با اثر انگشت / قفل دستگاه",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TealPrimary
+                    )
+                }
+            }
+
+            // Explicit quick-fill option after manual logout when Remember Me is ON and Biometric Lock is OFF
+            AnimatedVisibility(visible = canQuickFillSavedCredentials && !requiresBiometricUnlock) {
+                OutlinedButton(
+                    onClick = onQuickFillSavedCredentials,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .heightIn(min = 48.dp)
+                        .testTag("quick_fill_saved_credentials_button"),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "بازیابی اطلاعات ذخیره‌شده",
+                        tint = TealPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "پرکردن خودکار اطلاعات ذخیره‌شده",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
@@ -152,7 +178,7 @@ internal fun LoginCredentialsCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Password Field
+            // Password Field (visibility managed in ViewModel state)
             OutlinedTextField(
                 value = password,
                 onValueChange = onPasswordChange,
@@ -161,7 +187,10 @@ internal fun LoginCredentialsCard(
                     Icon(Icons.Default.Lock, contentDescription = "گذرواژه")
                 },
                 trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(
+                        onClick = onTogglePasswordVisibility,
+                        modifier = Modifier.testTag("password_visibility_toggle")
+                    ) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = if (passwordVisible) "مخفی کردن گذرواژه" else "نمایش گذرواژه"
@@ -350,16 +379,20 @@ private fun LoginFormCardLightPreview() {
                 LoginCredentialsCard(
                     username = "4031001234",
                     password = "••••••••",
+                    passwordVisible = false,
                     captchaInput = "4821",
                     captchaBitmap = null,
                     rememberMe = true,
                     isEncryptionAvailable = true,
                     requiresBiometricUnlock = true,
+                    canQuickFillSavedCredentials = false,
                     isLoading = false,
                     isCaptchaRefreshing = false,
                     onBiometricUnlockClick = {},
+                    onQuickFillSavedCredentials = {},
                     onUsernameChange = {},
                     onPasswordChange = {},
+                    onTogglePasswordVisibility = {},
                     onCaptchaChange = {},
                     onRefreshCaptcha = {},
                     onToggleRememberMe = {},
@@ -379,16 +412,20 @@ private fun LoginFormCardDarkPreview() {
                 LoginCredentialsCard(
                     username = "",
                     password = "",
+                    passwordVisible = false,
                     captchaInput = "",
                     captchaBitmap = null,
                     rememberMe = false,
                     isEncryptionAvailable = false,
                     requiresBiometricUnlock = false,
+                    canQuickFillSavedCredentials = true,
                     isLoading = false,
                     isCaptchaRefreshing = true,
                     onBiometricUnlockClick = {},
+                    onQuickFillSavedCredentials = {},
                     onUsernameChange = {},
                     onPasswordChange = {},
+                    onTogglePasswordVisibility = {},
                     onCaptchaChange = {},
                     onRefreshCaptcha = {},
                     onToggleRememberMe = {},

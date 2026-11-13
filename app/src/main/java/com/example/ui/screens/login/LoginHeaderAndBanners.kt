@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,11 +21,13 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -196,6 +199,79 @@ internal fun EncryptionUnavailableBanner(visible: Boolean) {
 }
 
 @Composable
+internal fun BiometricUnavailableLockedBanner(
+    visible: Boolean,
+    onOpenSecuritySettings: () -> Unit,
+    onClearSavedCredentials: () -> Unit
+) {
+    AnimatedVisibility(visible = visible) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .testTag("biometric_unavailable_banner"),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "هشدار قفل امنیتی",
+                        tint = Color(0xFFE65100),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "قفل بیومتریک برای رمز ذخیره‌شده فعال است اما اثر انگشت یا قفل صفحه روی دستگاه در دسترس نیست. برای حفظ امنیت، بازیابی خودکار مسدود شد.",
+                        color = Color(0xFFE65100),
+                        fontSize = 11.sp,
+                        lineHeight = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onOpenSecuritySettings,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("open_device_security_settings_button"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE65100))
+                    ) {
+                        Text(
+                            text = "تنظیمات قفل گوشی",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    TextButton(
+                        onClick = onClearSavedCredentials,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("wipe_locked_credentials_button")
+                    ) {
+                        Text(
+                            text = "پاکسازی رمز ذخیره‌شده",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFC62828)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun LoginErrorBanner(
     errorMessage: String?,
     onRetryConnection: () -> Unit
@@ -257,6 +333,11 @@ private fun LoginHeaderBannersLightPreview() {
                 Spacer(modifier = Modifier.height(12.dp))
                 ServerConnectionBadge(isCompatibilityModeActive = true)
                 Spacer(modifier = Modifier.height(10.dp))
+                BiometricUnavailableLockedBanner(
+                    visible = true,
+                    onOpenSecuritySettings = {},
+                    onClearSavedCredentials = {}
+                )
                 EncryptionUnavailableBanner(visible = true)
                 LoginErrorBanner(errorMessage = "کد امنیتی وارد شده اشتباه است", onRetryConnection = {})
             }
@@ -277,6 +358,11 @@ private fun LoginHeaderBannersDarkPreview() {
                 Spacer(modifier = Modifier.height(12.dp))
                 ServerConnectionBadge(isCompatibilityModeActive = false)
                 Spacer(modifier = Modifier.height(10.dp))
+                BiometricUnavailableLockedBanner(
+                    visible = true,
+                    onOpenSecuritySettings = {},
+                    onClearSavedCredentials = {}
+                )
                 LoginErrorBanner(errorMessage = "خطا در ارتباط با سرور", onRetryConnection = {})
             }
         }

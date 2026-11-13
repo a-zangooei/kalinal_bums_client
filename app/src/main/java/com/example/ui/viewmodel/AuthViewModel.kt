@@ -8,6 +8,8 @@ import com.example.data.logger.AppLogger
 import com.example.data.model.LoginPageState
 import com.example.data.model.UserSession
 import com.example.data.repository.AuthRepository
+import com.example.data.security.BiometricAuthenticator
+import com.example.data.security.BiometricCapabilityChecker
 import com.example.data.security.BiometricHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,15 +20,33 @@ import kotlinx.coroutines.launch
 class AuthViewModel(
     application: Application,
     private val authRepository: AuthRepository,
-    private val userPrefs: UserPreferences
+    private val userPrefs: UserPreferences,
+    private val biometricCapabilityChecker: BiometricCapabilityChecker
 ) : AndroidViewModel(application) {
 
-    constructor(application: Application) : this(application, AuthRepository(), UserPreferences(application))
+    constructor(application: Application) : this(
+        application,
+        AuthRepository(),
+        UserPreferences(application),
+        BiometricCapabilityChecker { BiometricHelper.canAuthenticate(it) }
+    )
 
     constructor(application: Application, authRepository: AuthRepository) : this(
         application,
         authRepository,
-        UserPreferences(application)
+        UserPreferences(application),
+        BiometricCapabilityChecker { BiometricHelper.canAuthenticate(it) }
+    )
+
+    constructor(
+        application: Application,
+        authRepository: AuthRepository,
+        userPrefs: UserPreferences
+    ) : this(
+        application,
+        authRepository,
+        userPrefs,
+        BiometricCapabilityChecker { BiometricHelper.canAuthenticate(it) }
     )
 
     private val _isEncryptionAvailable = MutableStateFlow(userPrefs.isEncryptionAvailable)
@@ -38,11 +58,20 @@ class AuthViewModel(
     private val _requiresBiometricUnlock = MutableStateFlow(false)
     val requiresBiometricUnlock: StateFlow<Boolean> = _requiresBiometricUnlock.asStateFlow()
 
+    private val _biometricUnavailableWhileLocked = MutableStateFlow(false)
+    val biometricUnavailableWhileLocked: StateFlow<Boolean> = _biometricUnavailableWhileLocked.asStateFlow()
+
+    private val _canQuickFillSavedCredentials = MutableStateFlow(false)
+    val canQuickFillSavedCredentials: StateFlow<Boolean> = _canQuickFillSavedCredentials.asStateFlow()
+
     private val _username = MutableStateFlow("")
     val username: StateFlow<String> = _username.asStateFlow()
 
     private val _password = MutableStateFlow("")
     val password: StateFlow<String> = _password.asStateFlow()
+
+    private val _isPasswordVisible = MutableStateFlow(false)
+    val isPasswordVisible: StateFlow<Boolean> = _isPasswordVisible.asStateFlow()
 
     private val _captchaInput = MutableStateFlow("")
     val captchaInput: StateFlow<String> = _captchaInput.asStateFlow()
@@ -61,23 +90,25 @@ class AuthViewModel(
 
     val isCompatibilityModeActive: StateFlow<Boolean> = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive
 
-    fun toggleCompatibilityMode() {
-        val current = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value
-        val next = !current
-        com.example.data.network.CullinanHttpClient.setCompatibilityMode(next)
-        AppLogger.logAction("Login SSL Compatibility toggled", "enabled=$next")
-        loadLoginPage()
-    }
-
     private var loadPageJob: Job? = null
+    private var isBiometricUnlockedForCurrentForm: Boolean = false
+    private var suppressAutoFillAfterLogout: Boolean = false
 
     init {
         syncCredentialState(initialLoad = true)
         AppLogger.logDebug(
             "AuthViewModel",
             "Init",
-            "AuthViewModel initialized (rememberMe=${_rememberMe.value}, encryptionAvailable=${_isEncryptionAvailable.value}, biometricRequired=${_requiresBiometricUnlock.value})"
+            "AuthViewModel initialized (rememberMe=${_rememberMe.value}, encryptionAvailable=${_isEncryptionAvailable.value}, biometricRequired=${_requiresBiometricUnlock.value}, failClosedUnavailable=${_biometricUnavailableWhileLocked.value})"
         )
+        loadLoginPage()
+    }
+
+    fun toggleCompatibilityMode() {
+        val current = com.example.data.network.CullinanHttpClient.isCompatibilityModeActive.value
+        val next = !current
+        com.example.data.network.CullinanHttpClient.setCompatibilityMode(next)
+        AppLogger.logAction("Login SSL Compatibility toggled", "enabled=$next")
         loadLoginPage()
     }
 
@@ -87,9 +118,14 @@ class AuthViewModel(
         if (!encryptionOk) {
             _rememberMe.value = false
             _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _canQuickFillSavedCredentials.value = false
+            isBiometricUnlockedForCurrentForm = false
+            suppressAutoFillAfterLogout = false
             if (initialLoad) {
                 _username.value = ""
                 _password.value = ""
+                _isPasswordVisible.value = false
             }
             return
         }
@@ -99,54 +135,197 @@ class AuthViewModel(
 
         if (!rem || !userPrefs.hasSavedCredentials()) {
             _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _canQuickFillSavedCredentials.value = false
+            isBiometricUnlockedForCurrentForm = false
+            suppressAutoFillAfterLogout = false
             if (initialLoad) {
                 _username.value = ""
                 _password.value = ""
+                _isPasswordVisible.value = false
             }
             return
         }
 
-        val biometricGateActive =
-            userPrefs.isBiometricLockEnabled && BiometricHelper.canAuthenticate(getApplication())
+        val lockEnabled = userPrefs.isBiometricLockEnabled
+        val canAuth = biometricCapabilityChecker.canAuthenticate(getApplication())
 
-        if (biometricGateActive) {
-            if (_password.value.isEmpty() || initialLoad) {
+        if (lockEnabled) {
+            _canQuickFillSavedCredentials.value = false
+            if (!canAuth) {
+                // Fail-closed: lock is ON, device auth unavailable -> NEVER auto-fill credentials
                 _username.value = ""
                 _password.value = ""
-                _requiresBiometricUnlock.value = true
+                _isPasswordVisible.value = false
+                isBiometricUnlockedForCurrentForm = false
+                _requiresBiometricUnlock.value = false
+                _biometricUnavailableWhileLocked.value = true
+            } else {
+                _biometricUnavailableWhileLocked.value = false
+                if (initialLoad || !isBiometricUnlockedForCurrentForm || _password.value.isEmpty()) {
+                    _username.value = ""
+                    _password.value = ""
+                    _isPasswordVisible.value = false
+                    isBiometricUnlockedForCurrentForm = false
+                    _requiresBiometricUnlock.value = true
+                }
             }
         } else {
             _requiresBiometricUnlock.value = false
-            if (initialLoad || (_username.value.isBlank() && _password.value.isBlank())) {
-                _username.value = userPrefs.savedUsername
-                _password.value = userPrefs.savedPassword
+            _biometricUnavailableWhileLocked.value = false
+            if (suppressAutoFillAfterLogout) {
+                _canQuickFillSavedCredentials.value = _password.value.isEmpty()
+            } else {
+                _canQuickFillSavedCredentials.value = false
+                if (initialLoad || (_username.value.isBlank() && _password.value.isBlank())) {
+                    _username.value = userPrefs.savedUsername
+                    _password.value = userPrefs.savedPassword
+                    _isPasswordVisible.value = false
+                }
             }
         }
     }
 
-    fun unlockSavedCredentialsAfterBiometric() {
-        if (!userPrefs.isEncryptionAvailable || !userPrefs.hasSavedCredentials()) {
+    fun unlockWithBiometrics(authenticator: BiometricAuthenticator?) {
+        if (!userPrefs.isEncryptionAvailable || !userPrefs.rememberMe || !userPrefs.hasSavedCredentials()) {
             _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _isPasswordVisible.value = false
+            isBiometricUnlockedForCurrentForm = false
+            return
+        }
+
+        if (userPrefs.isBiometricLockEnabled && !biometricCapabilityChecker.canAuthenticate(getApplication())) {
+            _username.value = ""
+            _password.value = ""
+            _isPasswordVisible.value = false
+            isBiometricUnlockedForCurrentForm = false
+            _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = true
+            _errorMessage.value = "احراز هویت دستگاه در دسترس نیست؛ بازیابی رمز ذخیره‌شده مسدود شد."
+            return
+        }
+
+        if (authenticator == null) {
+            onBiometricAuthError("پنجره احراز هویت بیومتریک در این بافت قابل نمایش نیست.")
+            return
+        }
+
+        authenticator.authenticate(
+            title = "تایید هویت امنیتی",
+            subtitle = "برای دسترسی به اعتبارنامه ذخیره‌شده از اثر انگشت یا رمز دستگاه استفاده کنید",
+            onSuccess = { unlockSavedCredentialsAfterBiometric() },
+            onError = { errMsg -> onBiometricAuthError(errMsg) },
+            onCancelled = { onBiometricAuthCancelled() }
+        )
+    }
+
+    fun unlockSavedCredentialsAfterBiometric() {
+        if (!userPrefs.isEncryptionAvailable || !userPrefs.rememberMe || !userPrefs.hasSavedCredentials()) {
+            _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _isPasswordVisible.value = false
+            isBiometricUnlockedForCurrentForm = false
+            return
+        }
+        if (userPrefs.isBiometricLockEnabled && !biometricCapabilityChecker.canAuthenticate(getApplication())) {
+            _username.value = ""
+            _password.value = ""
+            _isPasswordVisible.value = false
+            isBiometricUnlockedForCurrentForm = false
+            _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = true
+            _errorMessage.value = "احراز هویت دستگاه در دسترس نیست؛ بازیابی رمز ذخیره‌شده مسدود شد."
             return
         }
         _username.value = userPrefs.savedUsername
         _password.value = userPrefs.savedPassword
+        // Password remains masked after unlock until user explicitly toggles visibility
+        _isPasswordVisible.value = false
+        isBiometricUnlockedForCurrentForm = true
+        suppressAutoFillAfterLogout = false
         _requiresBiometricUnlock.value = false
+        _biometricUnavailableWhileLocked.value = false
+        _canQuickFillSavedCredentials.value = false
         _errorMessage.value = null
         AppLogger.logInfo("AuthViewModel", "BiometricUnlockSuccess", "Populated saved credentials after biometric verification")
     }
 
+    fun onBiometricAuthCancelled() {
+        _isPasswordVisible.value = false
+        if (userPrefs.isBiometricLockEnabled && !isBiometricUnlockedForCurrentForm) {
+            _username.value = ""
+            _password.value = ""
+            val canAuth = biometricCapabilityChecker.canAuthenticate(getApplication())
+            val hasSaved = userPrefs.isEncryptionAvailable && userPrefs.rememberMe && userPrefs.hasSavedCredentials()
+            _requiresBiometricUnlock.value = hasSaved && canAuth
+            _biometricUnavailableWhileLocked.value = hasSaved && !canAuth
+        }
+        AppLogger.logInfo("AuthViewModel", "BiometricUnlockCancelled", "Biometric unlock cancelled by user; credentials remain locked")
+    }
+
     fun onBiometricAuthError(message: String) {
+        _isPasswordVisible.value = false
+        if (userPrefs.isBiometricLockEnabled && !isBiometricUnlockedForCurrentForm) {
+            _username.value = ""
+            _password.value = ""
+        }
         _errorMessage.value = message
+    }
+
+    fun clearSavedCredentialsForRecovery() {
+        userPrefs.clearCredentials()
+        userPrefs.isBiometricLockEnabled = false
+        _rememberMe.value = false
+        _username.value = ""
+        _password.value = ""
+        _isPasswordVisible.value = false
+        isBiometricUnlockedForCurrentForm = false
+        suppressAutoFillAfterLogout = false
+        _requiresBiometricUnlock.value = false
+        _biometricUnavailableWhileLocked.value = false
+        _canQuickFillSavedCredentials.value = false
+        _errorMessage.value = null
+        AppLogger.logInfo("AuthViewModel", "BiometricRecoveryWipe", "Cleared saved credentials and reset biometric lock for recovery")
+    }
+
+    fun refillSavedCredentialsAfterLogout() {
+        if (!userPrefs.isEncryptionAvailable || !userPrefs.rememberMe || !userPrefs.hasSavedCredentials()) {
+            _canQuickFillSavedCredentials.value = false
+            return
+        }
+        if (userPrefs.isBiometricLockEnabled) {
+            // Never bypass biometric lock
+            syncCredentialState(initialLoad = false)
+            return
+        }
+        _username.value = userPrefs.savedUsername
+        _password.value = userPrefs.savedPassword
+        _isPasswordVisible.value = false
+        suppressAutoFillAfterLogout = false
+        _canQuickFillSavedCredentials.value = false
+        _errorMessage.value = null
+    }
+
+    fun togglePasswordVisibility() {
+        _isPasswordVisible.value = !_isPasswordVisible.value
+    }
+
+    fun setPasswordVisible(visible: Boolean) {
+        _isPasswordVisible.value = visible
     }
 
     fun onUsernameChange(newVal: String) {
         _username.value = newVal
+        suppressAutoFillAfterLogout = false
+        _canQuickFillSavedCredentials.value = false
         _errorMessage.value = null
     }
 
     fun onPasswordChange(newVal: String) {
         _password.value = newVal
+        suppressAutoFillAfterLogout = false
+        _canQuickFillSavedCredentials.value = false
         _errorMessage.value = null
     }
 
@@ -161,6 +340,9 @@ class AuthViewModel(
         if (!userPrefs.isEncryptionAvailable) {
             _rememberMe.value = false
             _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _canQuickFillSavedCredentials.value = false
+            _isPasswordVisible.value = false
             _errorMessage.value = "رمزنگاری امن سخت‌افزاری روی این دستگاه در دسترس نیست؛ گزینه «مرا به خاطر بسپار» غیرفعال است."
             return
         }
@@ -170,7 +352,12 @@ class AuthViewModel(
         AppLogger.logInfo("AuthViewModel", "RememberMeToggled", "rememberMe=$next")
         if (!next) {
             userPrefs.clearCredentials()
+            isBiometricUnlockedForCurrentForm = false
+            suppressAutoFillAfterLogout = false
             _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            _canQuickFillSavedCredentials.value = false
+            _isPasswordVisible.value = false
         }
     }
 
@@ -259,10 +446,16 @@ class AuthViewModel(
                     userPrefs.saveCredentials(user, pass)
                 } else {
                     userPrefs.clearCredentials()
-                    _password.value = ""
                 }
+                _username.value = ""
+                _password.value = ""
+                _isPasswordVisible.value = false
                 _captchaInput.value = ""
+                isBiometricUnlockedForCurrentForm = false
+                suppressAutoFillAfterLogout = false
                 _requiresBiometricUnlock.value = false
+                _biometricUnavailableWhileLocked.value = false
+                _canQuickFillSavedCredentials.value = false
                 AppLogger.logInfo("AuthViewModel", "LoginSuccess", "Login succeeded (hasUnreadMessages=${session.hasUnreadMessages})")
                 onSuccess(session)
             }.onFailure { error ->
@@ -289,16 +482,31 @@ class AuthViewModel(
     fun onLogout() {
         _captchaInput.value = ""
         _errorMessage.value = null
+        // Always clear transient in-memory credentials and password visibility on logout
+        _username.value = ""
+        _password.value = ""
+        _isPasswordVisible.value = false
+        isBiometricUnlockedForCurrentForm = false
+
         if (!_rememberMe.value || !userPrefs.isEncryptionAvailable) {
             userPrefs.clearCredentials()
-            _username.value = ""
-            _password.value = ""
             _requiresBiometricUnlock.value = false
-        } else if (userPrefs.isBiometricLockEnabled && BiometricHelper.canAuthenticate(getApplication())) {
-            // Re-lock saved credentials so biometric/PIN prompt is required on next login
-            _username.value = ""
-            _password.value = ""
-            _requiresBiometricUnlock.value = userPrefs.hasSavedCredentials()
+            _biometricUnavailableWhileLocked.value = false
+            _canQuickFillSavedCredentials.value = false
+            suppressAutoFillAfterLogout = false
+        } else if (userPrefs.isBiometricLockEnabled) {
+            val canAuth = biometricCapabilityChecker.canAuthenticate(getApplication())
+            val hasSaved = userPrefs.hasSavedCredentials()
+            _requiresBiometricUnlock.value = hasSaved && canAuth
+            _biometricUnavailableWhileLocked.value = hasSaved && !canAuth
+            _canQuickFillSavedCredentials.value = false
+            suppressAutoFillAfterLogout = false
+        } else {
+            val hasSaved = userPrefs.hasSavedCredentials()
+            _requiresBiometricUnlock.value = false
+            _biometricUnavailableWhileLocked.value = false
+            suppressAutoFillAfterLogout = hasSaved
+            _canQuickFillSavedCredentials.value = hasSaved
         }
         loadLoginPage()
     }

@@ -8,6 +8,20 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.data.logger.AppLogger
 
+fun interface BiometricCapabilityChecker {
+    fun canAuthenticate(context: Context): Boolean
+}
+
+fun interface BiometricAuthenticator {
+    fun authenticate(
+        title: String,
+        subtitle: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+        onCancelled: () -> Unit
+    )
+}
+
 object BiometricHelper {
 
     fun allowedAuthenticators(): Int {
@@ -25,6 +39,19 @@ object BiometricHelper {
         } catch (e: Exception) {
             AppLogger.logWarn("BiometricHelper", "CanAuthenticateError", "Biometric capability check failed: ${e.message}", e)
             false
+        }
+    }
+
+    fun forActivity(activity: FragmentActivity): BiometricAuthenticator {
+        return BiometricAuthenticator { title, subtitle, onSuccess, onError, onCancelled ->
+            authenticate(
+                activity = activity,
+                title = title,
+                subtitle = subtitle,
+                onSuccess = onSuccess,
+                onError = onError,
+                onCancelled = onCancelled
+            )
         }
     }
 

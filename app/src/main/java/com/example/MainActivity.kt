@@ -121,6 +121,7 @@ fun KalinanApp(
         if (isPreLoginSettingsOpen) {
             BackHandler {
                 isPreLoginSettingsOpen = false
+                authViewModel.syncCredentialState(initialLoad = false)
                 AppLogger.logAction("Pre-login Settings closed via Back")
             }
 
@@ -129,9 +130,13 @@ fun KalinanApp(
                 onThemeChanged = onThemeChanged,
                 onNavigateBack = {
                     isPreLoginSettingsOpen = false
+                    authViewModel.syncCredentialState(initialLoad = false)
                     AppLogger.logAction("Pre-login Settings closed via Back button")
                 },
                 onCheckForUpdates = { updateViewModel.checkForUpdates(isManual = true) },
+                onSecuritySettingsChanged = {
+                    authViewModel.syncCredentialState(initialLoad = false)
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -366,6 +371,9 @@ fun KalinanApp(
                         onThemeChanged = onThemeChanged,
                         onNavigateBack = { selectedBottomTab = 0 },
                         onCheckForUpdates = { updateViewModel.checkForUpdates(isManual = true) },
+                        onSecuritySettingsChanged = {
+                            authViewModel.syncCredentialState(initialLoad = false)
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
