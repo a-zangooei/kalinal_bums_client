@@ -123,7 +123,7 @@ class CullinanCookieJar : CookieJar {
         }
     }
 
-    fun getCookieValue(host: String, cookieName: String): String? {
+    private fun getCookieValue(host: String, cookieName: String): String? {
         val cookies = cookieStore[host] ?: return null
         synchronized(cookies) {
             return cookies.firstOrNull { it.name == cookieName }?.value

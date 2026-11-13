@@ -8,6 +8,7 @@ import com.example.data.logger.AppLogger
 import com.example.data.model.LoginPageState
 import com.example.data.model.UserSession
 import com.example.data.repository.AuthRepository
+import com.example.data.security.BiometricHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,24 +17,35 @@ import kotlinx.coroutines.launch
 
 class AuthViewModel(
     application: Application,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val userPrefs: UserPreferences
 ) : AndroidViewModel(application) {
 
-    constructor(application: Application) : this(application, AuthRepository())
+    constructor(application: Application) : this(application, AuthRepository(), UserPreferences(application))
 
-    private val userPrefs = UserPreferences(application)
+    constructor(application: Application, authRepository: AuthRepository) : this(
+        application,
+        authRepository,
+        UserPreferences(application)
+    )
 
-    private val _username = MutableStateFlow(userPrefs.savedUsername)
+    private val _isEncryptionAvailable = MutableStateFlow(userPrefs.isEncryptionAvailable)
+    val isEncryptionAvailable: StateFlow<Boolean> = _isEncryptionAvailable.asStateFlow()
+
+    private val _rememberMe = MutableStateFlow(userPrefs.isEncryptionAvailable && userPrefs.rememberMe)
+    val rememberMe: StateFlow<Boolean> = _rememberMe.asStateFlow()
+
+    private val _requiresBiometricUnlock = MutableStateFlow(false)
+    val requiresBiometricUnlock: StateFlow<Boolean> = _requiresBiometricUnlock.asStateFlow()
+
+    private val _username = MutableStateFlow("")
     val username: StateFlow<String> = _username.asStateFlow()
 
-    private val _password = MutableStateFlow(userPrefs.savedPassword)
+    private val _password = MutableStateFlow("")
     val password: StateFlow<String> = _password.asStateFlow()
 
     private val _captchaInput = MutableStateFlow("")
     val captchaInput: StateFlow<String> = _captchaInput.asStateFlow()
-
-    private val _rememberMe = MutableStateFlow(userPrefs.rememberMe)
-    val rememberMe: StateFlow<Boolean> = _rememberMe.asStateFlow()
 
     private val _pageState = MutableStateFlow(LoginPageState())
     val pageState: StateFlow<LoginPageState> = _pageState.asStateFlow()
@@ -60,8 +72,72 @@ class AuthViewModel(
     private var loadPageJob: Job? = null
 
     init {
-        AppLogger.logDebug("AuthViewModel", "Init", "AuthViewModel initialized (rememberMe=${_rememberMe.value})")
+        syncCredentialState(initialLoad = true)
+        AppLogger.logDebug(
+            "AuthViewModel",
+            "Init",
+            "AuthViewModel initialized (rememberMe=${_rememberMe.value}, encryptionAvailable=${_isEncryptionAvailable.value}, biometricRequired=${_requiresBiometricUnlock.value})"
+        )
         loadLoginPage()
+    }
+
+    fun syncCredentialState(initialLoad: Boolean = false) {
+        val encryptionOk = userPrefs.isEncryptionAvailable
+        _isEncryptionAvailable.value = encryptionOk
+        if (!encryptionOk) {
+            _rememberMe.value = false
+            _requiresBiometricUnlock.value = false
+            if (initialLoad) {
+                _username.value = ""
+                _password.value = ""
+            }
+            return
+        }
+
+        val rem = userPrefs.rememberMe
+        _rememberMe.value = rem
+
+        if (!rem || !userPrefs.hasSavedCredentials()) {
+            _requiresBiometricUnlock.value = false
+            if (initialLoad) {
+                _username.value = ""
+                _password.value = ""
+            }
+            return
+        }
+
+        val biometricGateActive =
+            userPrefs.isBiometricLockEnabled && BiometricHelper.canAuthenticate(getApplication())
+
+        if (biometricGateActive) {
+            if (_password.value.isEmpty() || initialLoad) {
+                _username.value = ""
+                _password.value = ""
+                _requiresBiometricUnlock.value = true
+            }
+        } else {
+            _requiresBiometricUnlock.value = false
+            if (initialLoad || (_username.value.isBlank() && _password.value.isBlank())) {
+                _username.value = userPrefs.savedUsername
+                _password.value = userPrefs.savedPassword
+            }
+        }
+    }
+
+    fun unlockSavedCredentialsAfterBiometric() {
+        if (!userPrefs.isEncryptionAvailable || !userPrefs.hasSavedCredentials()) {
+            _requiresBiometricUnlock.value = false
+            return
+        }
+        _username.value = userPrefs.savedUsername
+        _password.value = userPrefs.savedPassword
+        _requiresBiometricUnlock.value = false
+        _errorMessage.value = null
+        AppLogger.logInfo("AuthViewModel", "BiometricUnlockSuccess", "Populated saved credentials after biometric verification")
+    }
+
+    fun onBiometricAuthError(message: String) {
+        _errorMessage.value = message
     }
 
     fun onUsernameChange(newVal: String) {
@@ -82,12 +158,19 @@ class AuthViewModel(
     }
 
     fun toggleRememberMe() {
+        if (!userPrefs.isEncryptionAvailable) {
+            _rememberMe.value = false
+            _requiresBiometricUnlock.value = false
+            _errorMessage.value = "رمزنگاری امن سخت‌افزاری روی این دستگاه در دسترس نیست؛ گزینه «مرا به خاطر بسپار» غیرفعال است."
+            return
+        }
         val next = !_rememberMe.value
         _rememberMe.value = next
         userPrefs.rememberMe = next
         AppLogger.logInfo("AuthViewModel", "RememberMeToggled", "rememberMe=$next")
         if (!next) {
             userPrefs.clearCredentials()
+            _requiresBiometricUnlock.value = false
         }
     }
 
@@ -171,17 +254,21 @@ class AuthViewModel(
             )
 
             result.onSuccess { session ->
-                if (_rememberMe.value) {
-                    userPrefs.savedUsername = user
-                    userPrefs.savedPassword = pass
+                if (_rememberMe.value && userPrefs.isEncryptionAvailable) {
+                    userPrefs.rememberMe = true
+                    userPrefs.saveCredentials(user, pass)
                 } else {
                     userPrefs.clearCredentials()
                     _password.value = ""
                 }
                 _captchaInput.value = ""
+                _requiresBiometricUnlock.value = false
                 AppLogger.logInfo("AuthViewModel", "LoginSuccess", "Login succeeded (hasUnreadMessages=${session.hasUnreadMessages})")
                 onSuccess(session)
             }.onFailure { error ->
+                if (!_rememberMe.value || !userPrefs.isEncryptionAvailable) {
+                    userPrefs.clearCredentials()
+                }
                 val msg = error.message ?: "ورود به سامانه با خطا مواجه شد"
                 _errorMessage.value = msg
                 AppLogger.logWarn(
@@ -197,6 +284,23 @@ class AuthViewModel(
 
             _isLoading.value = false
         }
+    }
+
+    fun onLogout() {
+        _captchaInput.value = ""
+        _errorMessage.value = null
+        if (!_rememberMe.value || !userPrefs.isEncryptionAvailable) {
+            userPrefs.clearCredentials()
+            _username.value = ""
+            _password.value = ""
+            _requiresBiometricUnlock.value = false
+        } else if (userPrefs.isBiometricLockEnabled && BiometricHelper.canAuthenticate(getApplication())) {
+            // Re-lock saved credentials so biometric/PIN prompt is required on next login
+            _username.value = ""
+            _password.value = ""
+            _requiresBiometricUnlock.value = userPrefs.hasSavedCredentials()
+        }
+        loadLoginPage()
     }
 
     fun clearError() {

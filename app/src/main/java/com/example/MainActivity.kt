@@ -1,10 +1,12 @@
 package com.example
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -56,7 +58,7 @@ import androidx.compose.ui.graphics.Color
 import com.example.ui.screens.MessagesScreen
 import com.example.ui.viewmodel.MessagesViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppLogger.init(applicationContext)
@@ -102,6 +104,17 @@ fun KalinanApp(
     val menuBlockedByUnread by menuViewModel.hasUnreadMessagesBlocked.collectAsStateWithLifecycle()
 
     val isMandatoryBlocking = (activeSession?.hasUnreadMessages == true || menuBlockedByUnread || messagesState.hasUnreadMessages) && !messagesState.isReservationUnlocked
+
+    val context = LocalContext.current
+    val shouldProtectWindow = activeSession == null || selectedBottomTab == 2
+    LaunchedEffect(shouldProtectWindow) {
+        val window = (context as? android.app.Activity)?.window
+        if (shouldProtectWindow) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
 
     val session = activeSession
     if (session == null) {
@@ -172,8 +185,8 @@ fun KalinanApp(
                             menuViewModel.clearUnreadBlocked()
                             // 2. Clear local cookies AFTER server request completed
                             com.example.data.network.CullinanHttpClient.cookieJar.clear()
-                            // 3. Fetch a fresh Login.aspx page (fresh ViewState, fresh RSA Pem key, and fresh Captcha)
-                            authViewModel.loadLoginPage()
+                            // 3. Reset credentials per Remember-Me/Biometric rules and fetch fresh Login.aspx
+                            authViewModel.onLogout()
                             isLoggingOut = false
                         }
                     }

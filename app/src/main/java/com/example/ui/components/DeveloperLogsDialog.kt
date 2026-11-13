@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -146,6 +148,7 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
     var categoryFilter by remember { mutableStateOf(LogCategoryFilter.ALL) }
     var onlyWithSnapshot by remember { mutableStateOf(false) }
     var activeSnapshot by remember { mutableStateOf<PageSnapshotRecord?>(null) }
+    var showSharePreviewDialog by remember { mutableStateOf(false) }
 
     val onOpenSnapshotCallback = remember(context) {
         { fileName: String ->
@@ -522,10 +525,7 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
                     ) {
                         Button(
                             onClick = {
-                                shareDiagnosticZip(
-                                    context = context,
-                                    sslCompatibilityActive = isCompatibilityModeActive
-                                )
+                                showSharePreviewDialog = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                             shape = RoundedCornerShape(10.dp),
@@ -565,6 +565,162 @@ fun DeveloperLogsDialog(onDismiss: () -> Unit) {
             snapshot = snapshot,
             onDismiss = { activeSnapshot = null }
         )
+    }
+
+    if (showSharePreviewDialog) {
+        LogSharePreviewDialog(
+            onConfirmShare = {
+                showSharePreviewDialog = false
+                shareDiagnosticZip(
+                    context = context,
+                    sslCompatibilityActive = isCompatibilityModeActive
+                )
+            },
+            onDismiss = { showSharePreviewDialog = false }
+        )
+    }
+}
+
+@Composable
+fun LogSharePreviewDialog(
+    onConfirmShare: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sanitizedPreview = remember {
+        AppLogger.getExportableText().ifBlank { "لاگی برای نمایش وجود ندارد." }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        PersianRtlLayout {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .heightIn(min = 320.dp, max = 640.dp)
+                    .testTag("log_share_preview_dialog"),
+                shape = DialogSurfaceShape,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "پیش‌نمایش ارسال لاگ",
+                            tint = TealPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "پیش‌نمایش لاگ سالم‌سازی‌شده پیش از ارسال",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "بستن")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = WarnBg),
+                        shape = LogCardShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("log_share_developer_warning")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "هشدار امنیتی",
+                                tint = WarnFg,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "هشدار: این گزارش را فقط برای توسعه‌دهنده ارسال کنید و از اشتراک‌گذاری عمومی آن در گروه‌ها یا شبکه‌های اجتماعی خودداری نمایید.",
+                                color = WarnFg,
+                                fontSize = 11.sp,
+                                lineHeight = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "پیش‌نمایش متن پالایش‌شده (فیلدهای حساس مانند رمز، کوکی و نام کاربری ماسک شده‌اند):",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Surface(
+                        shape = LogCardShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        SelectionContainer {
+                            Text(
+                                text = sanitizedPreview.take(12000),
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 16.sp,
+                                modifier = Modifier
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(10.dp)
+                                    .testTag("log_share_preview_text")
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("cancel_share_log_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("انصراف", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = onConfirmShare,
+                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("confirm_share_log_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("تایید و ارسال به توسعه‌دهنده", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

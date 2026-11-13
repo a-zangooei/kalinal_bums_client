@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
@@ -62,12 +65,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import com.example.BuildConfig
 import com.example.data.local.UserPreferences
 import com.example.data.logger.AppLogger
 import com.example.data.model.AppThemeMode
 import com.example.data.network.CullinanHttpClient
+import com.example.data.security.BiometricHelper
 import com.example.ui.components.DeveloperLogsDialog
+import com.example.ui.components.LogSharePreviewDialog
 import com.example.ui.components.PersianRtlLayout
 import com.example.ui.components.shareDiagnosticZip
 import com.example.ui.theme.TealPrimary
@@ -84,8 +90,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val userPrefs = remember { UserPreferences(context) }
     var isDevUnlocked by remember { mutableStateOf(userPrefs.isDeveloperModeUnlocked) }
+    var isBiometricEnabled by remember { mutableStateOf(userPrefs.isBiometricLockEnabled) }
+    val canUseBiometric = remember(context) { BiometricHelper.canAuthenticate(context) }
     var tapCounter by remember { mutableIntStateOf(0) }
     var showLogsDialog by remember { mutableStateOf(false) }
+    var showSharePreviewDialog by remember { mutableStateOf(false) }
 
     val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsState()
 
@@ -175,6 +184,78 @@ fun SettingsScreen(
                                 AppLogger.logAction("Theme changed to DARK")
                             }
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 1.5 Security & Biometric Lock Section
+                SettingsSectionTitle(
+                    title = "امنیت و قفل اعتبارنامه",
+                    icon = Icons.Default.Fingerprint
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "قفل بیومتریک / پین دستگاه برای رمز ذخیره‌شده",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = when {
+                                        !userPrefs.isEncryptionAvailable -> "رمزنگاری سخت‌افزاری دستگاه در دسترس نیست"
+                                        !canUseBiometric -> "در تنظیمات گوشی اثر انگشت یا قفل صفحه فعال نشده است"
+                                        else -> "پیش از پر شدن خودکار رمز ذخیره‌شده، اثر انگشت یا قفل دستگاه را مطالبه می‌کند"
+                                    },
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isBiometricEnabled && userPrefs.isEncryptionAvailable && canUseBiometric,
+                                enabled = userPrefs.isEncryptionAvailable && canUseBiometric,
+                                onCheckedChange = { enable ->
+                                    if (!enable) {
+                                        userPrefs.isBiometricLockEnabled = false
+                                        isBiometricEnabled = false
+                                        AppLogger.logAction("Biometric lock disabled")
+                                    } else {
+                                        val activity = context.findFragmentActivity()
+                                        if (activity == null) {
+                                            Toast.makeText(context, "پنجره بیومتریک در دسترس نیست", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            BiometricHelper.authenticate(
+                                                activity = activity,
+                                                title = "فعال‌سازی قفل امنیتی",
+                                                subtitle = "برای فعال‌سازی محافظت از رمز ذخیره‌شده احراز هویت کنید",
+                                                onSuccess = {
+                                                    userPrefs.isBiometricLockEnabled = true
+                                                    isBiometricEnabled = true
+                                                    Toast.makeText(context, "قفل بیومتریک فعال شد", Toast.LENGTH_SHORT).show()
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        }
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = TealPrimary),
+                                modifier = Modifier.testTag("biometric_lock_switch")
+                            )
+                        }
                     }
                 }
 
@@ -311,10 +392,7 @@ fun SettingsScreen(
 
                                     OutlinedButton(
                                         onClick = {
-                                            shareDiagnosticZip(
-                                                context = context,
-                                                sslCompatibilityActive = isCompatibilityModeActive
-                                            )
+                                            showSharePreviewDialog = true
                                         },
                                         modifier = Modifier
                                             .weight(1f)
@@ -472,6 +550,26 @@ fun SettingsScreen(
     if (showLogsDialog) {
         DeveloperLogsDialog(onDismiss = { showLogsDialog = false })
     }
+
+    // Sanitized Log Preview & Security Warning before ACTION_SEND
+    if (showSharePreviewDialog) {
+        LogSharePreviewDialog(
+            onConfirmShare = {
+                showSharePreviewDialog = false
+                shareDiagnosticZip(
+                    context = context,
+                    sslCompatibilityActive = isCompatibilityModeActive
+                )
+            },
+            onDismiss = { showSharePreviewDialog = false }
+        )
+    }
+}
+
+private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is ContextWrapper -> baseContext.findFragmentActivity()
+    else -> null
 }
 
 @Composable

@@ -24,30 +24,32 @@ object LogSanitizer {
     }
 
     /**
-     * Sanitizes raw log text, query strings, headers, and form parameters.
+     * Sanitizes raw log text, query strings, headers, JSON fragments, and form parameters.
      * Centralized redaction ensures credentials, tokens, session cookies, and student IDs
-     * never leak to disk or log outputs.
+     * never leak to disk or shareable log outputs.
      */
     fun sanitizeText(raw: String?): String {
         if (raw.isNullOrBlank()) return raw ?: ""
 
         val base = raw
-            // Mask Passwords
-            .replace(Regex("(txtPassword|txtPasswordPlain|password|pass)=([^&\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
-            // Mask Usernames (National ID / Student ID)
-            .replace(Regex("(txtUsername|txtUsernamePlain|username|studentNumber|nationalId)=([^&\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_USER]")
+            // Mask Passwords (=, %3D, :, JSON key-value)
+            .replace(Regex("(txtPassword|txtPasswordPlain|savedPassword|password|pass)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
+            .replace(Regex("\"(txtPassword|txtPasswordPlain|savedPassword|password|pass)\"\\s*:\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE), "\"$1\":\"[REDACTED]\"")
+            // Mask Usernames (National ID / Student ID) across =, %3D, :, and JSON formats
+            .replace(Regex("(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED_USER]")
+            .replace(Regex("\"(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId)\"\\s*:\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE), "\"$1\":\"[REDACTED_USER]\"")
             // Mask Captcha values
-            .replace(Regex("(txtCaptcha|captcha|captchaInput)=([^&\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_CAPTCHA]")
+            .replace(Regex("(txtCaptcha|captcha|captchaInput)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED_CAPTCHA]")
             // Mask ASP.NET Session Cookie
-            .replace(Regex("ASP\\.NET_SessionId=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "ASP.NET_SessionId=***")
+            .replace(Regex("ASP\\.NET_SessionId(?:=|%3D)([^;,\\s&]+)", RegexOption.IGNORE_CASE), "ASP.NET_SessionId=***")
             // Mask Anti-CSRF Token
-            .replace(Regex("__AntiXsrfToken=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "__AntiXsrfToken=***")
+            .replace(Regex("__AntiXsrfToken(?:=|%3D)([^;,\\s&]+)", RegexOption.IGNORE_CASE), "__AntiXsrfToken=***")
             // Mask keyId Cookie
-            .replace(Regex("keyId=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "keyId=***")
+            .replace(Regex("keyId(?:=|%3D)([^;,\\s&]+)", RegexOption.IGNORE_CASE), "keyId=***")
             // Mask accordianActiveIndex Cookie
-            .replace(Regex("accordianActiveIndex=([^;,\\s&]+)", RegexOption.IGNORE_CASE), "accordianActiveIndex=***")
+            .replace(Regex("accordianActiveIndex(?:=|%3D)([^;,\\s&]+)", RegexOption.IGNORE_CASE), "accordianActiveIndex=***")
             // Mask Security & Auth Tokens / Tickets in query strings (negative lookbehind ensures ASP.NET_SessionId is untouched)
-            .replace(Regex("(?<![a-zA-Z0-9_.])(token|ticket|auth|code|secret|sessionId)=([^&;\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_TOKEN]")
+            .replace(Regex("(?<![a-zA-Z0-9_.])(token|ticket|auth|code|secret|sessionId)(?:=|%3D)([^&;\\s]*)", RegexOption.IGNORE_CASE), "$1=[REDACTED_TOKEN]")
             // Mask Bearer & Basic auth tokens
             .replace(Regex("Authorization[:=]\\s*(Bearer|Basic)\\s+[^\\s]+", RegexOption.IGNORE_CASE), "Authorization=[REDACTED_AUTH]")
             // Truncate Public Key PEM in form body
