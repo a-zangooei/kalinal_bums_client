@@ -227,13 +227,13 @@ fun SettingsScreen(
                             }
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (isCompatibilityModeActive) Color(0xFFE0F2F1) else Color(0xFFE8F5E9)
+                                color = if (isCompatibilityModeActive) Color(0xFFFFF3E0) else Color(0xFFE8F5E9)
                             ) {
                                 Text(
-                                    text = if (isCompatibilityModeActive) "سازگار با SSL" else "اتصال مستقیم",
+                                    text = if (isCompatibilityModeActive) "بدون بررسی گواهی" else "اعتبارسنجی استاندارد",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isCompatibilityModeActive) TealPrimary else Color(0xFF2E7D32),
+                                    color = if (isCompatibilityModeActive) Color(0xFFE65100) else Color(0xFF2E7D32),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
@@ -248,12 +248,12 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "حالت سازگاری امنیتی SSL",
+                                    text = "حالت عبور از خطای SSL (موقت)",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = "رفع خودکار خطای زنجیره ناقص گواهی سرور دانشگاه",
+                                    text = "بدون اعتبارسنجی گواهی و نام میزبان؛ در شبکه‌های ناامن می‌تواند ناامن باشد",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -288,7 +288,7 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "🛡️ ثبت امن رویدادهای شبکه و خزش وب",
+                                    text = "🛡️ ثبت رویدادهای شبکه با پالایش گذرواژه و کوکی",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TealPrimary
@@ -389,7 +389,7 @@ fun SettingsScreen(
                             color = TealPrimary
                         )
                         Text(
-                            text = "کلاینت غیررسمی، امن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند",
+                            text = "کلاینت غیررسمی و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)

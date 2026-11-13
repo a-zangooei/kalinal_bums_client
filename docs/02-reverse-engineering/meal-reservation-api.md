@@ -52,3 +52,21 @@
    X-Requested-With: XMLHttpRequest
    ```
 4. پاسخ دریافتی توسط `DeltaParser` و `ReservationHtmlParser` تحلیل شده و موجودی ریالی و وضعیت جدید جدول فورا در صفحه به کاربر نمایش داده می‌شود.
+
+---
+
+## ۴. ناوبری بین هفته‌ها (Week Navigation Protocol)
+
+جابه‌جایی بین هفته قبل، هفته جاری و هفته بعد روی صفحه `/Reservation/Reservation.aspx` با ارسال **Delta POST** از طریق کنترل‌های تصویری وب‌فرم انجام می‌شود:
+
+| عملیات | کنترل دکمه تصویر (`ScriptManager`) | پارامترهای مختصات |
+|---|---|---|
+| **هفته قبل** | `ctl00$cphMain$imgbtnLastWeek` | `...$imgbtnLastWeek.x=8`, `...$imgbtnLastWeek.y=29` |
+| **هفته جاری** | `ctl00$cphMain$imgbtnCurrentWeek` | `...$imgbtnCurrentWeek.x=8`, `...$imgbtnCurrentWeek.y=29` |
+| **هفته بعد** | `ctl00$cphMain$imgbtnNextWeek` | `...$imgbtnNextWeek.x=8`, `...$imgbtnNextWeek.y=29` |
+
+### الزامات فرم و چرخه وضعیت در `MenuRepository.buildNavigateWeekBody`:
+1. **`ctl00$ScriptManager`:** با مقدار `<updatePanelName>|<buttonControlName>` (به‌طور پیش‌فرض `ctl00$UpdatePanel1|...`) ارسال می‌شود.
+2. **حفظ تمام کنترل‌های فرم و ردیف‌های گرید:** دقیقاً مشابه مرورگر، وضعیت تمام ردیف‌های صبحانه، ناهار و شام فعلی همراه با `ctl00$cphMain$hdnSelectedTab` (تب فعال)، `css3-tabstrip-0=on`، `__LASTFOCUS=`، `__VIEWSTATE`، `__VIEWSTATEGENERATOR` و `__EVENTVALIDATION` در درخواست گنجانده می‌شوند.
+3. **زنجیره‌سازی توکن‌های جدید و خطاها:** پس از دریافت پاسخ دلتا، مقادیر جدید `__VIEWSTATE` و `__EVENTVALIDATION` برای عملیات بعدی ذخیره می‌شوند، پیام‌های قابل‌نمایش جعبه هشدار (`#cphMain_alertBoxValue`) استخراج می‌گردند، و توکن‌های خطای دلتا (`error` / `asyncPostBackError`) به جای شکست بی‌صدا به لایه UI منتقل می‌شوند.
+

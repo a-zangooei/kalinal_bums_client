@@ -724,7 +724,7 @@ fun MenuScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "سامانه رزرو و لغو صبحانه، ناهار و شام فعال است. درخواست‌ها به صورت مستقیم و امن با سرور سامانه تغذیه کالینان (jeton.bums.ac.ir) مبادله می‌شوند.",
+                                        text = "سامانه رزرو و لغو صبحانه، ناهار و شام فعال است. درخواست‌ها به صورت مستقیم با سرور سامانه تغذیه کالینان (jeton.bums.ac.ir) مبادله می‌شوند.",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         lineHeight = 18.sp

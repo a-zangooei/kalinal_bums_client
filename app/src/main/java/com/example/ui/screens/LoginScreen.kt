@@ -224,12 +224,12 @@ fun LoginScreen(
                         if (isCompatibilityModeActive) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = TealPrimary.copy(alpha = 0.12f)
+                                color = Color(0xFFFFF3E0)
                             ) {
                                 Text(
-                                    text = "سازگار با SSL",
+                                    text = "بدون بررسی گواهی",
                                     fontSize = 10.sp,
-                                    color = TealPrimary,
+                                    color = Color(0xFFE65100),
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )

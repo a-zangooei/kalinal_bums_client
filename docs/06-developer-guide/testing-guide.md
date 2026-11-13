@@ -28,20 +28,23 @@
    - تست شناسایی انقضای نشست کاری با ریدایرکت سرور (`testDeltaParserDetectsSessionExpirationRedirect`).
    - تست مدیریت خطاهای ۵۰۰ سرور دانشگاه (`testMockWebServerHandles500InternalServerErrorGracefully`).
    - تست استریم باینری و دریافت تصویر کپچا (`testMockWebServerCaptchaFetchAndBinaryStream`).
-   - تست سوئیچ خودکار به کلاینت سازگار SSL (`testHttpClientCompatibilityModeToggleAndFallbackClient`).
+   - تست وضعیت سوئیچ حالت موقت `fallbackClient` در کلاینت شبکه (`testHttpClientCompatibilityModeToggleAndFallbackClient`).
 2. **`ReservationLiveHarUnitTest.kt`:**
    - تست پارس داده‌های واقعی ضبط‌شده در ترافیک زنده سرور دانشگاه (فایل‌های `docs/05-samples-and-fixtures/`).
    - اعتبارسنجی استخراج درست قیمت‌ها، روزها، گزینه‌های انتخابی غذا و نیم‌پرس‌ها.
 3. **`UnreadMessagesUnitTest.kt`:**
-   - تست طبقه‌بندی صفحه پیام‌های خوانده‌نشده از روی ضبط واقعی ترافیک (`testPageClassifierIdentifiesUnreadMessagesPage`).
-   - تست طبقه‌بندی صفحه پیام‌های خوانده‌شده و بازگشت منوی رزرو (`testPageClassifierIdentifiesAllReadMessagesPage`).
-   - تست کشف کنترل‌های صفحه‌بندی پیام‌ها (`testPageClassifierDetectsPaginationControls`).
-   - تست استخراج متن پیام از تگ `cphMain_pMessage` و توکن `__VIEWSTATE` در فریم‌های دلتا (`testDeltaParserExtractsMessageContentAndChainedViewState`).
-   - تست شبیه‌سازی زنجیره ترتیبی ViewState بین چند پیام متوالی (`testSerializedViewStateChainingSimulation`).
-   - تست اعتبارسنجی ریدایرکت‌های ورود ۳۰۲ به `MyMessage.aspx` در برابر `Default.aspx` (`testLoginRedirectInspectionLogic`).
-   - تست رفتار استثنای مسدودیت منوی رزرو (`testUnreadMessagesExceptionClassification`).
-4. **`KalinalUnitTests.kt`:**
-   - تست‌های تکمیلی منطق رزرو، اعتبارسنجی فرم‌ها و متدهای تبدیل مدل داده.
+   - تست طبقه‌بندی صفحه پیام‌های خوانده‌نشده و خوانده‌شده از روی ضبط واقعی ترافیک.
+   - تست کشف کنترل‌های صفحه‌بندی پیام‌ها (`PagerStyle`) و فیلتر ردیف‌های واقعی دارای دکمه پیام.
+   - تست استخراج متن پیام از تگ `cphMain_pMessage`، زنجیره ViewState و ریدایرکت‌های ۳۰۲ ورود.
+4. **`MessageRetrievalUnitTest.kt`:**
+   - تست پارامترهای دقیق `ScriptManager`، مختصات `.x` و `.y` دکمه تصویری پیام، زنجیره‌سازی ترتیبی `__VIEWSTATE` و `__EVENTVALIDATION` و مدیریت خطاهای پاسخ دلتا.
+5. **`WeekNavigationUnitTest.kt`:**
+   - تست ساخت فرم‌بادی ناوبری هفته (`imgbtnNextWeek`، `imgbtnLastWeek`، `imgbtnCurrentWeek`) همراه با حفظ ردیف‌های گرید و فیلدهای `__EVENTVALIDATION`.
+   - تست زنجیره‌سازی متوالی حالت بین هفته‌ها، استخراج `#cphMain_alertBoxValue` و نمایش خطای توکن `error` در پاسخ دلتا.
+6. **`LoggingHardeningUnitTest.kt` و `AppLoggerSanitizerUnitTest.kt`:**
+   - تست پالایش خودکار گذرواژه‌ها، کوکی‌ها و داده‌های حساس در `AppLogger` و `LogSanitizer`.
+7. **`UpdateRepositoryUnitTest.kt` و `KalinanUnitTests.kt`:**
+   - تست منطق بررسی نسخه جدید، مدل‌های دامنه و متدهای کمکی رزرو.
 
 ---
 
