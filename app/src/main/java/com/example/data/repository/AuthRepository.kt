@@ -5,19 +5,16 @@ import com.example.data.logger.AppLogger
 import com.example.data.logger.LogContext
 import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
-import com.example.data.logger.LogSanitizer
 import com.example.data.model.LoginPageState
-import com.example.data.model.MealType
 import com.example.data.model.UserSession
 import com.example.data.model.WeeklyMenu
 import com.example.data.network.CullinanHttpClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.FormBody
 import okhttp3.Request
-import org.jsoup.Jsoup
 
 class AuthRepository {
 
@@ -62,24 +59,6 @@ class AuthRepository {
                     return@withLock Result.failure(Exception("خطا در برقراری ارتباط با سرور دانشگاه ($responseCode)"))
                 }
 
-                val doc = Jsoup.parse(html)
-
-                val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
-                val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "C2EE9ABB" }
-                val publicKeyPem = doc.select("#publicKeytxt, textarea[name=publicKeytxt]").text().trim()
-
-                AppLogger.log(
-                    LogEntry(
-                        timestamp = "",
-                        level = if (viewState.isBlank() || publicKeyPem.isBlank()) LogLevel.WARN else LogLevel.INFO,
-                        component = "AuthRepository",
-                        operation = "FetchLoginPageSuccess",
-                        flowId = flowId,
-                        errorCategory = if (publicKeyPem.isBlank()) "MISSING_RSA_PUBLIC_KEY" else if (viewState.isBlank()) "MISSING_VIEWSTATE" else null,
-                        message = "Login page fetched (VS len=${viewState.length}, gen=$viewStateGenerator, PEM len=${publicKeyPem.length}, PEM fp=${LogSanitizer.computeFingerprint(publicKeyPem)})"
-                    )
-                )
-
                 // Fetch live captcha with the exact same session
                 val captchaBytes = fetchCaptchaBytesInternal(flowId)
                 if (captchaBytes == null || captchaBytes.isEmpty()) {
@@ -92,17 +71,9 @@ class AuthRepository {
                     )
                 }
 
-                Result.success(
-                    LoginPageState(
-                        viewState = viewState,
-                        viewStateGenerator = viewStateGenerator,
-                        publicKeyPem = publicKeyPem,
-                        captchaBytes = captchaBytes,
-                        isLoading = false
-                    )
-                )
+                Result.success(AuthHtmlParser.parseLoginPageState(html, captchaBytes, flowId))
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is CancellationException) throw e
                 AppLogger.logError("AuthRepository", "Fetch login page exception: ${e.message}", e, flowId = flowId, operation = "FetchLoginPageError", errorCategory = "AUTH_INIT_EXCEPTION")
                 Result.failure(e)
             }
@@ -121,7 +92,7 @@ class AuthRepository {
                     Result.failure(Exception("دریافت تصویر کد امنیتی از سرور ناموفق بود"))
                 }
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is CancellationException) throw e
                 AppLogger.logError("AuthRepository", "Captcha refresh exception: ${e.message}", e, flowId = flowId)
                 Result.failure(e)
             }
@@ -157,22 +128,12 @@ class AuthRepository {
                 val encryptedUsername = RsaEncryptor.encryptWithPem(usernamePlain.trim(), pageState.publicKeyPem)
                 val encryptedPassword = RsaEncryptor.encryptWithPem(passwordPlain.trim(), pageState.publicKeyPem)
 
-                val formBody = FormBody.Builder()
-                    .add("__EVENTTARGET", "")
-                    .add("__EVENTARGUMENT", "")
-                    .add("__VIEWSTATE", pageState.viewState)
-                    .add("__VIEWSTATEGENERATOR", pageState.viewStateGenerator)
-                    .add("__VIEWSTATEENCRYPTED", "")
-                    .add("txtUsernamePlain", "")
-                    .add("txtPasswordPlain", "")
-                    .add("txtUsername", encryptedUsername)
-                    .add("txtPassword", encryptedPassword)
-                    .add("txtCaptcha", captchaInput.trim())
-                    .add("btnLogin", "ورود سمت سرور ")
-                    .add("CanSaveloginPasstxt", "True")
-                    .add("loginSecurtxt", "True")
-                    .add("publicKeytxt", pageState.publicKeyPem)
-                    .build()
+                val formBody = AuthFormBuilder.buildLoginFormBody(
+                    encryptedUsername = encryptedUsername,
+                    encryptedPassword = encryptedPassword,
+                    captchaInput = captchaInput,
+                    pageState = pageState
+                )
 
                 val request = Request.Builder()
                     .url(CullinanHttpClient.LOGIN_URL)
@@ -195,8 +156,8 @@ class AuthRepository {
                 val isRedirect = statusCode in 300..399 || location.isNotBlank()
                 val isMessagesRedirect = location.contains("MyMessage.aspx", ignoreCase = true)
                 val isDashboardRedirect = location.contains("Default.aspx", ignoreCase = true) ||
-                        location.contains("Reservation", ignoreCase = true) ||
-                        location.contains("/Master/", ignoreCase = true)
+                    location.contains("Reservation", ignoreCase = true) ||
+                    location.contains("/Master/", ignoreCase = true)
 
                 if (isRedirect && (isMessagesRedirect || isDashboardRedirect)) {
                     AppLogger.log(
@@ -220,15 +181,7 @@ class AuthRepository {
                         )
                     )
                 } else {
-                    // If not redirected, login failed on server. Extract user-facing Persian error message from HTML response.
-                    val doc = Jsoup.parse(bodyString)
-                    val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
-                    val errorMsg = when {
-                        alertError.isNotBlank() -> alertError
-                        bodyString.contains("کد امنیتی") -> "کد امنیتی وارد شده اشتباه یا منقضی شده است"
-                        bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا گذرواژه اشتباه است"
-                        else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
-                    }
+                    val errorMsg = AuthHtmlParser.extractLoginRejectionMessage(bodyString)
 
                     AppLogger.log(
                         LogEntry(
@@ -245,7 +198,7 @@ class AuthRepository {
                     Result.failure(Exception(errorMsg))
                 }
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is CancellationException) throw e
                 AppLogger.logError("AuthRepository", "Login attempt exception: ${e.message}", e, flowId = flowId)
                 Result.failure(e)
             }
@@ -288,11 +241,10 @@ class AuthRepository {
                 CullinanHttpClient.executeCall(getReq).use { getResp ->
                     if (getResp.isSuccessful) {
                         val html = getResp.body?.string() ?: ""
-                        val doc = Jsoup.parse(html)
-                        viewState = doc.select("input[name=__VIEWSTATE]").`val`()
-                        val gen = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`()
-                        if (gen.isNotBlank()) viewStateGen = gen
-                        eventVal = doc.select("input[name=__EVENTVALIDATION]").`val`()
+                        val fields = AuthHtmlParser.extractHiddenFields(html, viewStateGen)
+                        viewState = fields.viewState
+                        viewStateGen = fields.viewStateGenerator
+                        eventVal = fields.eventValidation
                     } else {
                         AppLogger.logWarn(
                             component = "AuthRepository",
@@ -305,40 +257,11 @@ class AuthRepository {
                 }
             }
 
-            val formBuilder = FormBody.Builder()
-                .add("__EVENTTARGET", "ctl00\$logout")
-                .add("__EVENTARGUMENT", "")
-                .add("__LASTFOCUS", "")
-                .add("__VIEWSTATE", viewState)
-                .add("__VIEWSTATEGENERATOR", viewStateGen)
-                .add("__VIEWSTATEENCRYPTED", "")
-
-            if (eventVal.isNotEmpty()) {
-                formBuilder.add("__EVENTVALIDATION", eventVal)
-            }
-
-            formBuilder.add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
-            formBuilder.add("css3-tabstrip-0", "on")
-
-            // Replicate table row fields if present
-            currentMenu?.days?.forEachIndexed { dayIdx, day ->
-                day.meals[MealType.LUNCH]?.firstOrNull()?.let { meal ->
-                    val prefix = "ctl00\$cphMain\$grdReservationLunch\$ctl${String.format("%02d", dayIdx + 2)}"
-                    if (meal.status.isReserved) {
-                        formBuilder.add("$prefix\$chkReserve", "on")
-                    }
-                    if (meal.selectedSelfId.isNotEmpty() && meal.selectedSelfId != "-1") {
-                        formBuilder.add("$prefix\$drpSelf", meal.selectedSelfId)
-                    }
-                    if (meal.selectedFoodId.isNotEmpty() && meal.selectedFoodId != "-1") {
-                        formBuilder.add("$prefix\$drpFood", meal.selectedFoodId)
-                    }
-                }
-            }
+            val formBody = AuthFormBuilder.buildLogoutFormBody(viewState, viewStateGen, eventVal, currentMenu)
 
             val request = Request.Builder()
                 .url(CullinanHttpClient.RESERVATION_URL)
-                .post(formBuilder.build())
+                .post(formBody)
                 .header("Referer", CullinanHttpClient.RESERVATION_URL)
                 .header("Origin", CullinanHttpClient.BASE_URL)
                 .tag(LogContext::class.java, LogContext(flowId, "LogoutPost"))
@@ -356,9 +279,9 @@ class AuthRepository {
             }
 
             val isSuccess = responseCode == 302 ||
-                    location.contains("Login", ignoreCase = true) ||
-                    finalUrl.contains("Login", ignoreCase = true) ||
-                    bodyString.contains("txtUsername", ignoreCase = true)
+                location.contains("Login", ignoreCase = true) ||
+                finalUrl.contains("Login", ignoreCase = true) ||
+                bodyString.contains("txtUsername", ignoreCase = true)
 
             if (isSuccess) {
                 AppLogger.log(
@@ -387,7 +310,7 @@ class AuthRepository {
                 Result.failure(Exception("سرور ریدایرکت خروج صادر نکرد (کد: $responseCode)"))
             }
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             AppLogger.logError("AuthRepository", "Server logout exception: ${e.message}", e, flowId = flowId)
             Result.failure(e)
         }
@@ -436,7 +359,7 @@ class AuthRepository {
                 }
             }
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             AppLogger.logError(
                 tag = "AuthRepository",
                 message = "Captcha fetch exception: ${e.message}",
