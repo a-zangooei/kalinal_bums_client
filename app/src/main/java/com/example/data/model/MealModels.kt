@@ -83,7 +83,10 @@ data class WeeklyMenu(
     val viewState: String = "",
     val viewStateGenerator: String = "",
     val eventValidation: String = "",
-    val tableRows: List<TableRowSnapshot> = emptyList()
+    val tableRows: List<TableRowSnapshot> = emptyList(),
+    val scriptManagerName: String = "ctl00\$ScriptManager",
+    val updatePanelName: String = "ctl00\$UpdatePanel1",
+    val alertMessage: String? = null
 )
 
 enum class WeekNavigationDirection {

@@ -44,7 +44,8 @@ class MenuViewModel(
     private val _hasUnreadMessagesBlocked = MutableStateFlow(false)
     val hasUnreadMessagesBlocked: StateFlow<Boolean> = _hasUnreadMessagesBlocked.asStateFlow()
 
-    private var currentWeekOffset = 0
+    private val _weekOffset = MutableStateFlow(0)
+    val weekOffset: StateFlow<Int> = _weekOffset.asStateFlow()
 
     fun clearUnreadBlocked() {
         _hasUnreadMessagesBlocked.value = false
@@ -57,7 +58,7 @@ class MenuViewModel(
             val result = menuRepository.fetchInitialMenu()
             result.onSuccess { menu ->
                 _weeklyMenu.value = menu
-                currentWeekOffset = 0
+                _weekOffset.value = 0
                 _hasUnreadMessagesBlocked.value = false
             }.onFailure { error ->
                 if (error is com.example.data.model.UnreadMessagesException) {
@@ -73,22 +74,31 @@ class MenuViewModel(
 
     fun navigateWeek(direction: WeekNavigationDirection) {
         val current = _weeklyMenu.value ?: return
-        if (_isMutating.value) return
+        if (_isLoading.value || _isMutating.value) return
 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
+            val activeTabId = _selectedMealFilter.value?.tabId ?: MealType.LUNCH.tabId
             val result = menuRepository.navigateWeek(
                 direction = direction,
                 currentMenu = current,
-                currentOffset = currentWeekOffset
+                currentOffset = _weekOffset.value,
+                selectedTabId = activeTabId
             )
 
             result.onSuccess { (updatedMenu, newOffset) ->
                 _weeklyMenu.value = updatedMenu
-                currentWeekOffset = newOffset
+                _weekOffset.value = newOffset
+                val alert = updatedMenu.alertMessage
+                if (!alert.isNullOrBlank()) {
+                    _userFeedback.value = Pair(alert, true)
+                }
             }.onFailure { error ->
+                if (error is com.example.data.model.UnreadMessagesException) {
+                    _hasUnreadMessagesBlocked.value = true
+                }
                 _errorMessage.value = error.message ?: "خطا در جابه‌جایی هفته"
             }
 

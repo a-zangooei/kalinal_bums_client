@@ -7,6 +7,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +60,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
@@ -66,6 +69,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
@@ -87,11 +91,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import com.example.data.model.FoodOption
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
@@ -124,6 +130,7 @@ fun MenuScreen(
     val processingDayIndex by viewModel.processingDayIndex.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val userFeedback by viewModel.userFeedback.collectAsState()
+    val weekOffset by viewModel.weekOffset.collectAsState()
 
     var showProfileDialog by remember { mutableStateOf(false) }
     var mealToReserve by remember { mutableStateOf<MealItem?>(null) }
@@ -143,8 +150,15 @@ fun MenuScreen(
 
     LaunchedEffect(userFeedback) {
         userFeedback?.let { (msg, _) ->
-            snackbarHostState.showSnackbar(message = msg)
+            snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
             viewModel.clearFeedback()
+        }
+    }
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { msg ->
+            snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Long)
+            viewModel.clearError()
         }
     }
 
@@ -223,6 +237,35 @@ fun MenuScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .background(MaterialTheme.colorScheme.background)
+                    .pointerInput(isLoading, isMutating, weeklyMenu != null) {
+                        if (weeklyMenu == null) return@pointerInput
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var totalDx = 0f
+                            var totalDy = 0f
+                            var triggered = false
+                            val pointerId = down.id
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                                if (!change.pressed) break
+                                if (change.isConsumed) continue
+                                val delta = change.position - change.previousPosition
+                                totalDx += delta.x
+                                totalDy += delta.y
+                                if (!triggered && abs(totalDx) > 96f && abs(totalDx) > abs(totalDy) * 1.6f) {
+                                    if (!isLoading && !isMutating) {
+                                        triggered = true
+                                        if (totalDx > 0f) {
+                                            viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS)
+                                        } else {
+                                            viewModel.navigateWeek(WeekNavigationDirection.NEXT)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
             ) {
                 if (isLoading && weeklyMenu == null) {
                     Column(
@@ -265,70 +308,117 @@ fun MenuScreen(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Previous Week Button (on Right in RTL):
-                                    // Points RIGHT towards the past
-                                    IconButton(
-                                        onClick = { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) },
-                                        enabled = !isLoading && !isMutating,
-                                        modifier = Modifier.testTag("prev_week_button")
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ChevronRight,
-                                            contentDescription = "هفته قبلی",
-                                            tint = TealPrimary
-                                        )
-                                    }
-
-                                    // Week Date Range
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.DateRange,
-                                                contentDescription = "بازه زمانی هفته",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
+                                        // Previous Week Button (on Right in RTL):
+                                        // Points RIGHT towards the past
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            IconButton(
+                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) },
+                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
+                                                modifier = Modifier.testTag("prev_week_button")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ChevronRight,
+                                                    contentDescription = "هفته قبلی",
+                                                    tint = if (!isLoading && !isMutating && weeklyMenu != null) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                                )
+                                            }
                                             Text(
-                                                text = weeklyMenu?.weekDateRange ?: "در حال بارگذاری...",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                text = "قبلی",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
 
-                                        IconButton(
-                                            onClick = { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) },
-                                            enabled = !isLoading && !isMutating,
-                                            modifier = Modifier.size(28.dp).testTag("current_week_button")
+                                        // Week Date Range & Current Week Quick Jump
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                                         ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (isLoading) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(15.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = TealPrimary
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.DateRange,
+                                                        contentDescription = "بازه زمانی هفته",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = weeklyMenu?.weekDateRange ?: "در حال بارگذاری...",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+
+                                            Surface(
+                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) },
+                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (weekOffset != 0) TealPrimary.copy(alpha = 0.14f) else Color.Transparent,
+                                                modifier = Modifier.testTag("current_week_button")
+                                            ) {
+                                                Text(
+                                                    text = if (weekOffset != 0) "بازگشت به هفته جاری" else "هفته جاری (برای تغییر بکشید)",
+                                                    fontSize = 11.sp,
+                                                    color = if (weekOffset != 0) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontWeight = if (weekOffset != 0) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+
+                                        // Next Week Button (on Left in RTL):
+                                        // Points LEFT towards the future
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            IconButton(
+                                                onClick = { viewModel.navigateWeek(WeekNavigationDirection.NEXT) },
+                                                enabled = !isLoading && !isMutating && weeklyMenu != null,
+                                                modifier = Modifier.testTag("next_week_button")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ChevronLeft,
+                                                    contentDescription = "هفته بعدی",
+                                                    tint = if (!isLoading && !isMutating && weeklyMenu != null) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                                )
+                                            }
                                             Text(
-                                                text = "هفته جاری",
-                                                fontSize = 11.sp,
-                                                color = TealPrimary,
-                                                fontWeight = FontWeight.Bold
+                                                text = "بعدی",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
 
-                                    // Next Week Button (on Left in RTL):
-                                    // Points LEFT towards the future
-                                    IconButton(
-                                        onClick = { viewModel.navigateWeek(WeekNavigationDirection.NEXT) },
-                                        enabled = !isLoading && !isMutating,
-                                        modifier = Modifier.testTag("next_week_button")
+                                    AnimatedVisibility(
+                                        visible = isLoading,
+                                        enter = fadeIn(),
+                                        exit = fadeOut()
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ChevronLeft,
-                                            contentDescription = "هفته بعدی",
-                                            tint = TealPrimary
+                                        LinearProgressIndicator(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(3.dp),
+                                            color = TealPrimary,
+                                            trackColor = TealPrimary.copy(alpha = 0.18f)
                                         )
                                     }
                                 }

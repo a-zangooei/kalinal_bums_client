@@ -19,6 +19,8 @@ data class DeltaResponse(
     val toastType: String? = null,
     val toastMessage: String? = null,
     val toastTitle: String? = null,
+    val errorMessage: String? = null,
+    val errorStatusCode: String? = null,
     val isSessionExpired: Boolean = false
 )
 
@@ -35,6 +37,8 @@ object DeltaParser {
         val rawTokens = mutableListOf<DeltaToken>()
         var redirectUrl: String? = null
         var formAction: String? = null
+        var errorMessage: String? = null
+        var errorStatusCode: String? = null
 
         var pos = 0
         val len = deltaText.length
@@ -86,6 +90,10 @@ object DeltaParser {
                 "pageRedirect" -> redirectUrl = content
                 "formAction" -> formAction = content
                 "scriptStartupBlock" -> startupScripts.add(content)
+                "error", "asyncPostBackError" -> {
+                    errorStatusCode = id.ifBlank { null }
+                    errorMessage = content.ifBlank { errorMessage ?: "خطای ناشناخته در پردازش سرور" }
+                }
             }
         }
 
@@ -145,7 +153,7 @@ object DeltaParser {
         com.example.data.logger.AppLogger.log(
             com.example.data.logger.LogEntry(
                 timestamp = "",
-                level = com.example.data.logger.LogLevel.DEBUG,
+                level = if (errorMessage != null) com.example.data.logger.LogLevel.WARN else com.example.data.logger.LogLevel.DEBUG,
                 component = "DeltaParser",
                 operation = "ParseDelta",
                 aspnet = com.example.data.logger.AspNetDiagnostics(
@@ -153,7 +161,7 @@ object DeltaParser {
                     viewStateFingerprint = hiddenFields["__VIEWSTATE"]?.let { com.example.data.logger.LogSanitizer.computeFingerprint(it) },
                     viewStateGenerator = hiddenFields["__VIEWSTATEGENERATOR"]
                 ),
-                message = "Parsed ${rawTokens.size} delta tokens (Panels: ${updatePanels.keys.joinToString()}, Expired: $isSessionExpired, Toast: $extractedToastType)"
+                message = "Parsed ${rawTokens.size} delta tokens (Panels: ${updatePanels.keys.joinToString()}, Expired: $isSessionExpired, Toast: $extractedToastType, ErrorCode: $errorStatusCode)"
             )
         )
 
@@ -167,6 +175,8 @@ object DeltaParser {
             toastType = extractedToastType,
             toastMessage = extractedToastMessage,
             toastTitle = extractedToastTitle,
+            errorMessage = errorMessage,
+            errorStatusCode = errorStatusCode,
             isSessionExpired = isSessionExpired
         )
     }

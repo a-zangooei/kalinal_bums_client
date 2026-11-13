@@ -35,13 +35,28 @@ object ReservationHtmlParser {
      * Parses the HTML content of either the full Reservation.aspx page or the UpdatePanel1
      * fragment into a clean WeeklyMenu object, capturing exact TableRowSnapshots from the DOM.
      */
-    fun parse(html: String, existingViewState: String = "", existingGenerator: String = "", flowId: String? = null): WeeklyMenu {
+    fun parse(
+        html: String,
+        existingViewState: String = "",
+        existingGenerator: String = "",
+        flowId: String? = null,
+        existingEventValidation: String = "",
+        existingScriptManagerName: String = "ctl00\$ScriptManager",
+        existingUpdatePanelName: String = "ctl00\$UpdatePanel1"
+    ): WeeklyMenu {
         val doc: Document = Jsoup.parse(html)
         val isFragment = html.startsWith("1|#||4|") || doc.select("html, body").isEmpty()
 
         // 1. Week Date Range
         val weekDateText = doc.select("#cphMain_lblWeekDate").text().trim()
             .ifEmpty { "برنامه غذایی هفتگی" }
+
+        // 1b. Optional visible server alert box (#cphMain_alertBox / #cphMain_alertBoxValue)
+        val alertBoxEl = doc.select("#cphMain_alertBox").firstOrNull()
+        val alertStyle = alertBoxEl?.attr("style")?.replace(" ", "")?.lowercase() ?: ""
+        val isAlertHidden = alertStyle.contains("display:none")
+        val alertText = doc.select("#cphMain_alertBoxValue").text().trim()
+        val visibleAlert = if (!isAlertHidden && alertText.isNotEmpty()) alertText else null
 
         // 2. Credit Info (cphMain_lblCreditValue or lblUserCreditPrice)
         var rawCreditText = doc.select("#cphMain_lblCreditValue").text().trim()
@@ -72,7 +87,19 @@ object ReservationHtmlParser {
         // 4. Hidden fields for ASP.NET state
         val viewState = doc.select("input[name=__VIEWSTATE]").`val`().ifEmpty { existingViewState }
         val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { existingGenerator }
-        val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`()
+        val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`().ifEmpty { existingEventValidation }
+
+        val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull()
+        val scriptManagerName = scriptManagerInput?.attr("name")?.takeIf { it.isNotBlank() }
+            ?: existingScriptManagerName
+
+        val updatePanelDiv = doc.select("div[id*='UpdatePanel']").firstOrNull()
+        val updatePanelHtmlId = updatePanelDiv?.attr("id")
+        val updatePanelName = when {
+            updatePanelHtmlId != null && updatePanelHtmlId.contains("ctl00") -> updatePanelHtmlId.replace('_', '$')
+            updatePanelHtmlId != null && updatePanelHtmlId.isNotEmpty() -> "ctl00\$$updatePanelHtmlId"
+            else -> existingUpdatePanelName
+        }
 
         // 5. Initialize 7 Days of the week
         val daysList = (0..6).map { dayIdx ->
@@ -156,7 +183,10 @@ object ReservationHtmlParser {
             viewState = viewState,
             viewStateGenerator = viewStateGenerator,
             eventValidation = eventValidation,
-            tableRows = allTableRows
+            tableRows = allTableRows,
+            scriptManagerName = scriptManagerName,
+            updatePanelName = updatePanelName,
+            alertMessage = visibleAlert
         )
     }
 

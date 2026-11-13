@@ -105,7 +105,8 @@ class MenuRepository {
     suspend fun navigateWeek(
         direction: WeekNavigationDirection,
         currentMenu: WeeklyMenu,
-        currentOffset: Int
+        currentOffset: Int,
+        selectedTabId: String = "css3-tabstrip-0-1"
     ): Result<Pair<WeeklyMenu, Int>> = withContext(Dispatchers.IO) {
         val flowId = com.example.data.logger.AppLogger.generateFlowId("nav")
         com.example.data.logger.AppLogger.log(
@@ -115,7 +116,7 @@ class MenuRepository {
                 component = "MenuRepository",
                 operation = "NavigateWeek",
                 flowId = flowId,
-                message = "Navigating week direction: $direction (offset: $currentOffset)"
+                message = "Navigating week direction: $direction (offset: $currentOffset, prevRange: ${currentMenu.weekDateRange})"
             )
         )
         mutex.withLock {
@@ -126,30 +127,11 @@ class MenuRepository {
             }
 
             try {
-                val buttonName = when (direction) {
-                    WeekNavigationDirection.PREVIOUS -> "ctl00\$cphMain\$imgbtnLastWeek"
-                    WeekNavigationDirection.NEXT -> "ctl00\$cphMain\$imgbtnNextWeek"
-                    WeekNavigationDirection.CURRENT -> "ctl00\$cphMain\$imgbtnCurrentWeek"
-                }
-
-                val formBuilder = FormBody.Builder()
-                    .add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$buttonName")
-                    .add("ctl00\$cphMain\$hdnSelectedTab", "css3-tabstrip-0-1")
-                    .add("__EVENTTARGET", "")
-                    .add("__EVENTARGUMENT", "")
-                    .add("__VIEWSTATE", currentMenu.viewState)
-                    .add("__VIEWSTATEGENERATOR", currentMenu.viewStateGenerator.ifEmpty { "3ED98A75" })
-                    .add("__VIEWSTATEENCRYPTED", "")
-
-                if (currentMenu.eventValidation.isNotEmpty()) {
-                    formBuilder.add("__EVENTVALIDATION", currentMenu.eventValidation)
-                }
-
-                val formBody = formBuilder
-                    .add("__ASYNCPOST", "true")
-                    .add("$buttonName.x", "8")
-                    .add("$buttonName.y", "29")
-                    .build()
+                val formBody = buildNavigateWeekBody(
+                    direction = direction,
+                    currentMenu = currentMenu,
+                    selectedTabId = selectedTabId
+                )
 
                 val request = Request.Builder()
                     .url(CullinanHttpClient.RESERVATION_URL)
@@ -162,13 +144,41 @@ class MenuRepository {
                     .tag(LogContext::class.java, LogContext(flowId, "NavigateWeek"))
                     .build()
 
-                val response = CullinanHttpClient.executeCall(request)
-                if (!response.isSuccessful) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Week navigation failed HTTP ${response.code}", flowId = flowId)
-                    return@withContext Result.failure(Exception("خطا در جابه‌جایی هفته (${response.code})"))
+                var isSuccessful = false
+                var responseCode = 0
+                var finalUrl = ""
+                var deltaText = ""
+                CullinanHttpClient.executeCall(request).use { response ->
+                    isSuccessful = response.isSuccessful
+                    responseCode = response.code
+                    finalUrl = response.request.url.toString()
+                    deltaText = if (isSuccessful) response.body?.string() ?: "" else ""
+                }
+                if (!isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Week navigation failed HTTP $responseCode", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطا در جابه‌جایی هفته ($responseCode)"))
                 }
 
-                val deltaText = response.body?.string() ?: ""
+                // Detect unexpected full HTML page instead of ASP.NET AJAX Delta
+                val isFullHtml = (deltaText.contains("<!DOCTYPE", ignoreCase = true) || deltaText.contains("<html", ignoreCase = true)) &&
+                    !deltaText.contains("|updatePanel|") && !deltaText.contains("|hiddenField|")
+                if (isFullHtml) {
+                    val classification = PageClassifier.classify(deltaText, responseCode, finalUrl)
+                    com.example.data.logger.AppLogger.logError(
+                        "MenuRepository",
+                        "Full HTML returned instead of Delta during week navigation: ${classification.pageType}",
+                        flowId = flowId
+                    )
+                    return@withContext Result.failure(
+                        when (classification.pageType) {
+                            PageClassifier.TYPE_MESSAGES -> UnreadMessagesException(classification.unreadMessageCount)
+                            PageClassifier.TYPE_LOGIN -> Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید.")
+                            PageClassifier.TYPE_NOTICE -> Exception("اطلاعیه سامانه دسترسی به برنامه غذایی را مسدود کرده است.")
+                            else -> Exception("پاسخ سرور در قالب جدول نبود. لطفاً صفحه را تازه‌سازی کنید.")
+                        }
+                    )
+                }
+
                 val deltaResponse = DeltaParser.parse(deltaText)
 
                 if (deltaResponse.isSessionExpired) {
@@ -176,17 +186,48 @@ class MenuRepository {
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
+                if (!deltaResponse.errorMessage.isNullOrBlank()) {
+                    com.example.data.logger.AppLogger.logError(
+                        "MenuRepository",
+                        "Server delta error during week navigation (${deltaResponse.errorStatusCode}): ${deltaResponse.errorMessage}",
+                        flowId = flowId
+                    )
+                    return@withContext Result.failure(Exception("خطای سرور در تغییر هفته: ${deltaResponse.errorMessage}"))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
-                    ?: return@withContext Result.failure(Exception("پاسخ سرور شامل محتوای جدول هفته نبود"))
+                    ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
+                    ?: deltaResponse.updatePanels[currentMenu.updatePanelName]
+                    ?: deltaResponse.updatePanels.values.firstOrNull {
+                        it.contains("cphMain_lblWeekDate") || it.contains("grdReservation")
+                    }
+                    ?: run {
+                        com.example.data.logger.AppLogger.logError(
+                            "MenuRepository",
+                            "Missing UpdatePanel1 in week navigation response (tokens=${deltaResponse.rawTokens.size}, panels=${deltaResponse.updatePanels.keys.joinToString()})",
+                            flowId = flowId
+                        )
+                        return@withContext Result.failure(Exception("پاسخ سرور شامل محتوای جدول هفته نبود"))
+                    }
 
                 val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentMenu.viewState
                 val newGenerator = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: currentMenu.viewStateGenerator
+                val newEventValidation = deltaResponse.hiddenFields["__EVENTVALIDATION"] ?: currentMenu.eventValidation
 
-                val updatedMenu = ReservationHtmlParser.parse(
+                val parsedMenu = ReservationHtmlParser.parse(
                     html = updatePanelHtml,
                     existingViewState = newViewState,
-                    existingGenerator = newGenerator
+                    existingGenerator = newGenerator,
+                    flowId = flowId,
+                    existingEventValidation = newEventValidation,
+                    existingScriptManagerName = currentMenu.scriptManagerName,
+                    existingUpdatePanelName = currentMenu.updatePanelName
                 )
+
+                val alertMsg = parsedMenu.alertMessage?.takeIf { it.isNotBlank() }
+                    ?: deltaResponse.toastMessage?.takeIf { it.isNotBlank() }
+
+                val updatedMenu = parsedMenu.copy(alertMessage = alertMsg)
 
                 com.example.data.logger.AppLogger.log(
                     com.example.data.logger.LogEntry(
@@ -195,7 +236,7 @@ class MenuRepository {
                         component = "MenuRepository",
                         operation = "NavigateWeekSuccess",
                         flowId = flowId,
-                        message = "Week navigation successful (new range: ${updatedMenu.weekDateRange})"
+                        message = "Week navigation completed (new range: ${updatedMenu.weekDateRange}, meals: ${updatedMenu.days.sumOf { d -> d.meals.values.sumOf { it.size } }}, alert: ${alertMsg != null})"
                     )
                 )
 
@@ -262,17 +303,28 @@ class MenuRepository {
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
+                if (!deltaResponse.errorMessage.isNullOrBlank()) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal reservation: ${deltaResponse.errorMessage}", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطای سرور در ثبت رزرو: ${deltaResponse.errorMessage}"))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
+                    ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
+                    ?: deltaResponse.updatePanels[currentMenu.updatePanelName]
                     ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
 
                 val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentMenu.viewState
                 val newGenerator = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: currentMenu.viewStateGenerator
+                val newEventValidation = deltaResponse.hiddenFields["__EVENTVALIDATION"] ?: currentMenu.eventValidation
 
                 val updatedMenu = ReservationHtmlParser.parse(
                     html = updatePanelHtml,
                     existingViewState = newViewState,
                     existingGenerator = newGenerator,
-                    flowId = flowId
+                    flowId = flowId,
+                    existingEventValidation = newEventValidation,
+                    existingScriptManagerName = currentMenu.scriptManagerName,
+                    existingUpdatePanelName = currentMenu.updatePanelName
                 )
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
@@ -365,17 +417,28 @@ class MenuRepository {
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
+                if (!deltaResponse.errorMessage.isNullOrBlank()) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal cancellation: ${deltaResponse.errorMessage}", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطای سرور در لغو رزرو: ${deltaResponse.errorMessage}"))
+                }
+
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
+                    ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
+                    ?: deltaResponse.updatePanels[currentMenu.updatePanelName]
                     ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
 
                 val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentMenu.viewState
                 val newGenerator = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: currentMenu.viewStateGenerator
+                val newEventValidation = deltaResponse.hiddenFields["__EVENTVALIDATION"] ?: currentMenu.eventValidation
 
                 val updatedMenu = ReservationHtmlParser.parse(
                     html = updatePanelHtml,
                     existingViewState = newViewState,
                     existingGenerator = newGenerator,
-                    flowId = flowId
+                    flowId = flowId,
+                    existingEventValidation = newEventValidation,
+                    existingScriptManagerName = currentMenu.scriptManagerName,
+                    existingUpdatePanelName = currentMenu.updatePanelName
                 )
 
                 val isSuccess = deltaResponse.toastType.equals("success", ignoreCase = true)
@@ -446,6 +509,46 @@ class MenuRepository {
         isCancelling = isCancelling
     )
 
+    fun buildNavigateWeekBody(
+        direction: WeekNavigationDirection,
+        currentMenu: WeeklyMenu,
+        selectedTabId: String = "css3-tabstrip-0-1"
+    ): FormBody {
+        val buttonName = when (direction) {
+            WeekNavigationDirection.PREVIOUS -> "ctl00\$cphMain\$imgbtnLastWeek"
+            WeekNavigationDirection.NEXT -> "ctl00\$cphMain\$imgbtnNextWeek"
+            WeekNavigationDirection.CURRENT -> "ctl00\$cphMain\$imgbtnCurrentWeek"
+        }
+
+        val builder = FormBody.Builder()
+        val scriptManager = currentMenu.scriptManagerName.ifBlank { "ctl00\$ScriptManager" }
+        val updatePanel = currentMenu.updatePanelName.ifBlank { "ctl00\$UpdatePanel1" }
+
+        builder.add(scriptManager, "$updatePanel|$buttonName")
+        builder.add("ctl00\$cphMain\$hdnSelectedTab", selectedTabId)
+
+        // Include existing GridView form controls so ASP.NET WebForms sees a complete browser form postback
+        appendMealRows(builder, currentMenu, MealType.BREAKFAST, "Breakfast", targetMealType = null, targetDayIndex = -1, targetFoodId = "", targetSelfId = "", isCancelling = false)
+        builder.add("css3-tabstrip-0", "on")
+        appendMealRows(builder, currentMenu, MealType.LUNCH, "Lunch", targetMealType = null, targetDayIndex = -1, targetFoodId = "", targetSelfId = "", isCancelling = false)
+        appendMealRows(builder, currentMenu, MealType.DINNER, "Dinner", targetMealType = null, targetDayIndex = -1, targetFoodId = "", targetSelfId = "", isCancelling = false)
+
+        builder.add("__EVENTTARGET", "")
+        builder.add("__EVENTARGUMENT", "")
+        builder.add("__LASTFOCUS", "")
+        builder.add("__VIEWSTATE", currentMenu.viewState)
+        builder.add("__VIEWSTATEGENERATOR", currentMenu.viewStateGenerator.ifEmpty { "3ED98A75" })
+        builder.add("__VIEWSTATEENCRYPTED", "")
+        if (currentMenu.eventValidation.isNotEmpty()) {
+            builder.add("__EVENTVALIDATION", currentMenu.eventValidation)
+        }
+        builder.add("__ASYNCPOST", "true")
+        builder.add("$buttonName.x", "8")
+        builder.add("$buttonName.y", "29")
+
+        return builder.build()
+    }
+
     fun buildSaveMealBody(
         currentMenu: WeeklyMenu,
         mealType: MealType,
@@ -463,110 +566,22 @@ class MenuRepository {
         }
 
         // 1. ScriptManager & Selected Tab
-        builder.add("ctl00\$ScriptManager", "ctl00\$UpdatePanel1|$btnId")
+        val scriptManager = currentMenu.scriptManagerName.ifBlank { "ctl00\$ScriptManager" }
+        val updatePanel = currentMenu.updatePanelName.ifBlank { "ctl00\$UpdatePanel1" }
+        builder.add(scriptManager, "$updatePanel|$btnId")
         builder.add("ctl00\$cphMain\$hdnSelectedTab", tabId)
 
-        fun appendMealRows(type: MealType, mealTypeName: String) {
-            val rows = currentMenu.tableRows.filter { it.mealType == type }
-            val isTargetType = (type == mealType)
-
-            if (rows.isNotEmpty()) {
-                for (row in rows) {
-                    if (isTargetType && row.dayIndex == targetDayIndex) {
-                        val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
-                            targetSelfId
-                        } else {
-                            row.drpSelfValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "1"
-                        }
-
-                        val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
-                            targetFoodId
-                        } else {
-                            row.drpFoodValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "-1"
-                        }
-
-                        if (!isCancelling) {
-                            builder.add(row.chkReserveName, "on")
-                        }
-                        builder.add(row.drpSelfName, selfVal)
-                        builder.add(row.drpFoodName, foodVal)
-                        builder.add(row.drpFoodCountName, "1")
-                    } else {
-                        // Preserve existing state of other rows
-                        if (row.isChecked) {
-                            builder.add(row.chkReserveName, "on")
-                            builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
-                            builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
-                            builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
-                        } else {
-                            builder.add(row.drpSelfName, "-1")
-                            builder.add(row.drpFoodName, "-1")
-                            builder.add(row.drpFoodCountName, "0")
-                        }
-                    }
-                }
-            } else {
-                for (dayIdx in 0..6) {
-                    val ctl = "ctl%02d".format(dayIdx + 2)
-                    val meal = currentMenu.days.getOrNull(dayIdx)?.meals?.get(type)?.firstOrNull()
-
-                    if (isTargetType && dayIdx == targetDayIndex) {
-                        val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
-                            targetSelfId
-                        } else {
-                            meal?.selectedSelfId?.takeIf { it != "-1" } ?: "1"
-                        }
-
-                        val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
-                            targetFoodId
-                        } else {
-                            meal?.selectedFoodId?.takeIf { it != "-1" }
-                                ?: meal?.availableFoodOptions?.firstOrNull()?.id
-                                ?: "-1"
-                        }
-
-                        if (!isCancelling) {
-                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
-                        }
-                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", selfVal)
-                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", foodVal)
-                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "1")
-                    } else {
-                        if (meal != null && meal.status.isReserved) {
-                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
-                            builder.add(
-                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf",
-                                meal.selectedSelfId.takeIf { it != "-1" } ?: "1"
-                            )
-                            builder.add(
-                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood",
-                                meal.selectedFoodId.takeIf { it != "-1" } ?: "-1"
-                            )
-                            builder.add(
-                                "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount",
-                                meal.count.coerceAtLeast(1).toString()
-                            )
-                        } else {
-                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", "-1")
-                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", "-1")
-                            builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "0")
-                        }
-                    }
-                }
-            }
-        }
-
         // 2. Breakfast rows
-        appendMealRows(MealType.BREAKFAST, "Breakfast")
+        appendMealRows(builder, currentMenu, MealType.BREAKFAST, "Breakfast", mealType, targetDayIndex, targetFoodId, targetSelfId, isCancelling)
 
         // 3. Tab radio indicator
         builder.add("css3-tabstrip-0", "on")
 
         // 4. Lunch rows
-        appendMealRows(MealType.LUNCH, "Lunch")
+        appendMealRows(builder, currentMenu, MealType.LUNCH, "Lunch", mealType, targetDayIndex, targetFoodId, targetSelfId, isCancelling)
 
         // 5. Dinner rows
-        appendMealRows(MealType.DINNER, "Dinner")
+        appendMealRows(builder, currentMenu, MealType.DINNER, "Dinner", mealType, targetDayIndex, targetFoodId, targetSelfId, isCancelling)
 
         // 6. Fixed trailing fields
         builder.add("__EVENTTARGET", "")
@@ -582,5 +597,105 @@ class MenuRepository {
         builder.add(btnId, btnValue)
 
         return builder.build()
+    }
+
+    private fun appendMealRows(
+        builder: FormBody.Builder,
+        currentMenu: WeeklyMenu,
+        type: MealType,
+        mealTypeName: String,
+        targetMealType: MealType?,
+        targetDayIndex: Int,
+        targetFoodId: String,
+        targetSelfId: String,
+        isCancelling: Boolean
+    ) {
+        val rows = currentMenu.tableRows.filter { it.mealType == type }
+        val isTargetType = (targetMealType != null && type == targetMealType)
+
+        if (rows.isNotEmpty()) {
+            for (row in rows) {
+                if (isTargetType && row.dayIndex == targetDayIndex) {
+                    val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
+                        targetSelfId
+                    } else {
+                        row.drpSelfValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "1"
+                    }
+
+                    val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
+                        targetFoodId
+                    } else {
+                        row.drpFoodValue.takeIf { it != "-1" && it.isNotEmpty() } ?: "-1"
+                    }
+
+                    if (!isCancelling) {
+                        builder.add(row.chkReserveName, "on")
+                    }
+                    builder.add(row.drpSelfName, selfVal)
+                    builder.add(row.drpFoodName, foodVal)
+                    builder.add(row.drpFoodCountName, "1")
+                } else {
+                    // Preserve existing state of other rows
+                    if (row.isChecked) {
+                        builder.add(row.chkReserveName, "on")
+                        builder.add(row.drpSelfName, row.drpSelfValue.ifEmpty { "1" })
+                        builder.add(row.drpFoodName, row.drpFoodValue.ifEmpty { "-1" })
+                        builder.add(row.drpFoodCountName, row.drpFoodCountValue.ifEmpty { "1" })
+                    } else {
+                        builder.add(row.drpSelfName, "-1")
+                        builder.add(row.drpFoodName, "-1")
+                        builder.add(row.drpFoodCountName, "0")
+                    }
+                }
+            }
+        } else if (targetMealType != null) {
+            for (dayIdx in 0..6) {
+                val ctl = "ctl%02d".format(dayIdx + 2)
+                val meal = currentMenu.days.getOrNull(dayIdx)?.meals?.get(type)?.firstOrNull()
+
+                if (isTargetType && dayIdx == targetDayIndex) {
+                    val selfVal = if (targetSelfId.isNotEmpty() && targetSelfId != "-1") {
+                        targetSelfId
+                    } else {
+                        meal?.selectedSelfId?.takeIf { it != "-1" } ?: "1"
+                    }
+
+                    val foodVal = if (targetFoodId.isNotEmpty() && targetFoodId != "-1") {
+                        targetFoodId
+                    } else {
+                        meal?.selectedFoodId?.takeIf { it != "-1" }
+                            ?: meal?.availableFoodOptions?.firstOrNull()?.id
+                            ?: "-1"
+                    }
+
+                    if (!isCancelling) {
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
+                    }
+                    builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", selfVal)
+                    builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", foodVal)
+                    builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "1")
+                } else {
+                    if (meal != null && meal.status.isReserved) {
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$chkReserve", "on")
+                        builder.add(
+                            "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf",
+                            meal.selectedSelfId.takeIf { it != "-1" } ?: "1"
+                        )
+                        builder.add(
+                            "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood",
+                            meal.selectedFoodId.takeIf { it != "-1" } ?: "-1"
+                        )
+                        builder.add(
+                            "ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount",
+                            meal.count.coerceAtLeast(1).toString()
+                        )
+                    } else {
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpSelf", "-1")
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFood", "-1")
+                        builder.add("ctl00\$cphMain\$grdReservation${mealTypeName}\$$ctl\$drpFoodCount", "0")
+                    }
+                }
+            }
+        }
     }
 }
