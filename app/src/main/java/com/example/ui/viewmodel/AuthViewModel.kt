@@ -7,6 +7,7 @@ import com.example.data.local.UserPreferences
 import com.example.data.model.LoginPageState
 import com.example.data.model.UserSession
 import com.example.data.repository.AuthRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,6 +54,8 @@ class AuthViewModel(
         loadLoginPage()
     }
 
+    private var loadPageJob: Job? = null
+
     init {
         loadLoginPage()
     }
@@ -84,7 +87,8 @@ class AuthViewModel(
     }
 
     fun loadLoginPage() {
-        viewModelScope.launch {
+        loadPageJob?.cancel()
+        loadPageJob = viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             val result = authRepository.fetchLoginPage()

@@ -42,14 +42,24 @@ class MenuRepository {
                     .tag(LogContext::class.java, LogContext(flowId, "FetchInitialMenu"))
                     .build()
 
-                val response = CullinanHttpClient.executeCall(request)
-                if (!response.isSuccessful) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Initial menu fetch failed HTTP ${response.code}", flowId = flowId)
-                    return@withContext Result.failure(Exception("خطا در دریافت جدول برنامه غذایی (${response.code})"))
+                var isSuccessful = false
+                var responseCode = 0
+                var finalUrl = ""
+                var html = ""
+                CullinanHttpClient.executeCall(request).use { response ->
+                    isSuccessful = response.isSuccessful
+                    responseCode = response.code
+                    finalUrl = response.request.url.toString()
+                    if (isSuccessful) {
+                        html = response.body?.string() ?: ""
+                    }
+                }
+                if (!isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Initial menu fetch failed HTTP $responseCode", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطا در دریافت جدول برنامه غذایی ($responseCode)"))
                 }
 
-                val html = response.body?.string() ?: ""
-                val classification = PageClassifier.classify(html, response.code, response.request.url.toString())
+                val classification = PageClassifier.classify(html, responseCode, finalUrl)
 
                 if (classification.pageType != PageClassifier.TYPE_RESERVATION) {
                     com.example.data.logger.AppLogger.log(
@@ -289,13 +299,20 @@ class MenuRepository {
                     .tag(LogContext::class.java, LogContext(flowId, "ReserveMeal"))
                     .build()
 
-                val response = CullinanHttpClient.executeCall(request)
-                if (!response.isSuccessful) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Reserve meal HTTP failure ${response.code}", flowId = flowId)
-                    return@withContext Result.failure(Exception("خطا در ثبت رزرو غذا در سرور (${response.code})"))
+                var isSuccessful = false
+                var responseCode = 0
+                var deltaText = ""
+                CullinanHttpClient.executeCall(request).use { response ->
+                    isSuccessful = response.isSuccessful
+                    responseCode = response.code
+                    if (isSuccessful) {
+                        deltaText = response.body?.string() ?: ""
+                    }
                 }
-
-                val deltaText = response.body?.string() ?: ""
+                if (!isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Reserve meal HTTP failure $responseCode", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطا در ثبت رزرو غذا در سرور ($responseCode)"))
+                }
                 val deltaResponse = DeltaParser.parse(deltaText)
 
                 if (deltaResponse.isSessionExpired) {
@@ -403,13 +420,20 @@ class MenuRepository {
                     .tag(LogContext::class.java, LogContext(flowId, "CancelMeal"))
                     .build()
 
-                val response = CullinanHttpClient.executeCall(request)
-                if (!response.isSuccessful) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Cancel meal HTTP failure ${response.code}", flowId = flowId)
-                    return@withContext Result.failure(Exception("خطا در لغو رزرو غذا در سرور (${response.code})"))
+                var isSuccessful = false
+                var responseCode = 0
+                var deltaText = ""
+                CullinanHttpClient.executeCall(request).use { response ->
+                    isSuccessful = response.isSuccessful
+                    responseCode = response.code
+                    if (isSuccessful) {
+                        deltaText = response.body?.string() ?: ""
+                    }
                 }
-
-                val deltaText = response.body?.string() ?: ""
+                if (!isSuccessful) {
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Cancel meal HTTP failure $responseCode", flowId = flowId)
+                    return@withContext Result.failure(Exception("خطا در لغو رزرو غذا در سرور ($responseCode)"))
+                }
                 val deltaResponse = DeltaParser.parse(deltaText)
 
                 if (deltaResponse.isSessionExpired) {

@@ -182,4 +182,71 @@ class WeekNavigationUnitTest {
         assertFalse(msg.isNullOrBlank())
         assertTrue(msg!!.contains(errorText))
     }
+
+    @Test
+    fun testNavigateWeekSendsBrowserUserAgentOnStandardAndFallbackClients() = runBlocking {
+        val delta0 = DeltaParser.parse(loadHarEntry0())
+        val initialMenu = ReservationHtmlParser.parse(
+            html = delta0.updatePanels["UpdatePanel1"]!!,
+            existingViewState = "VS_UA_TEST",
+            existingGenerator = "3ED98A75"
+        )
+        val weekHtml = """<div><label id="cphMain_lblWeekDate">1405/08/23 الی 1405/08/29</label></div>"""
+        val okDelta = "1|#||4|${weekHtml.length}|updatePanel|UpdatePanel1|$weekHtml|8|hiddenField|__VIEWSTATE|VS_UA_2|"
+
+        val initialCompat = CullinanHttpClient.isCompatibilityModeActive.value
+        try {
+            CullinanHttpClient.setCompatibilityMode(false)
+            mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody(okDelta))
+            val resStd = repository.navigateWeek(WeekNavigationDirection.NEXT, initialMenu, 0)
+            assertTrue(resStd.isSuccess)
+            val stdReq = mockWebServer.takeRequest()
+            val stdUa = stdReq.getHeader("User-Agent") ?: ""
+            assertEquals(CullinanHttpClient.DEFAULT_USER_AGENT, stdUa)
+            assertFalse(stdUa.startsWith("okhttp/"))
+
+            CullinanHttpClient.setCompatibilityMode(true)
+            mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody(okDelta))
+            val resFb = repository.navigateWeek(WeekNavigationDirection.PREVIOUS, initialMenu, 1)
+            assertTrue(resFb.isSuccess)
+            val fbReq = mockWebServer.takeRequest()
+            val fbUa = fbReq.getHeader("User-Agent") ?: ""
+            assertEquals(CullinanHttpClient.DEFAULT_USER_AGENT, fbUa)
+        } finally {
+            CullinanHttpClient.setCompatibilityMode(initialCompat)
+        }
+    }
+
+    @Test
+    fun testFullPageHtmlIgnoresScriptManagerHiddenFieldAndUpdateProgress() {
+        val fullPageHtml = """
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <form id="MainForm" action="./Reservation.aspx">
+                    <input type="hidden" name="ctl00_ScriptManager_HiddenField" id="ctl00_ScriptManager_HiddenField" value="" />
+                    <input type="hidden" name="__VIEWSTATE" value="VS_FULL_PAGE" />
+                    <input type="hidden" name="__VIEWSTATEGENERATOR" value="3ED98A75" />
+                    <input type="hidden" name="__EVENTVALIDATION" value="EV_FULL_PAGE" />
+                    <div id="ctl00_UpdateProgress1">در حال بارگذاری...</div>
+                    <div id="UpdatePanel1">
+                        <label id="cphMain_lblWeekDate">1405/08/16 الی 1405/08/22</label>
+                    </div>
+                </form>
+            </body>
+            </html>
+        """.trimIndent()
+
+        val parsed = ReservationHtmlParser.parse(fullPageHtml)
+        assertEquals("ctl00\$ScriptManager", parsed.scriptManagerName)
+        assertEquals("ctl00\$UpdatePanel1", parsed.updatePanelName)
+
+        val navBody = repository.buildNavigateWeekBody(WeekNavigationDirection.NEXT, parsed)
+        val params = (0 until navBody.size).associate { navBody.name(it) to navBody.value(it) }
+        assertEquals(
+            "ctl00\$UpdatePanel1|ctl00\$cphMain\$imgbtnNextWeek",
+            params["ctl00\$ScriptManager"]
+        )
+        assertFalse(params.containsKey("ctl00_ScriptManager_HiddenField"))
+    }
 }

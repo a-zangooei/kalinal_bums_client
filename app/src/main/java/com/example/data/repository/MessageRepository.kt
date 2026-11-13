@@ -49,13 +49,21 @@ class MessageRepository {
                 .tag(LogContext::class.java, LogContext(flowId, "FetchMessagesPage"))
                 .build()
 
-            val response = CullinanHttpClient.executeCall(request)
-            if (!response.isSuccessful) {
-                AppLogger.logError("MessageRepository", "Failed to fetch messages page: HTTP ${response.code}", flowId = flowId)
-                return@withContext Result.failure(Exception("خطا در دریافت صفحه پیام‌های سامانه (${response.code})"))
+            var isSuccessful = false
+            var responseCode = 0
+            var html = ""
+            CullinanHttpClient.executeCall(request).use { response ->
+                isSuccessful = response.isSuccessful
+                responseCode = response.code
+                if (isSuccessful) {
+                    html = response.body?.string() ?: ""
+                }
+            }
+            if (!isSuccessful) {
+                AppLogger.logError("MessageRepository", "Failed to fetch messages page: HTTP $responseCode", flowId = flowId)
+                return@withContext Result.failure(Exception("خطا در دریافت صفحه پیام‌های سامانه ($responseCode)"))
             }
 
-            val html = response.body?.string() ?: ""
             val doc = Jsoup.parse(html)
 
             val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
@@ -63,11 +71,30 @@ class MessageRepository {
             val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`()
 
             // In ASP.NET WebForms, the default ScriptManager UniqueID is usually ctl00$ScriptManager
-            val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull()
-            val scriptManagerName = scriptManagerInput?.attr("name") ?: "ctl00\$ScriptManager"
+            val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull { input ->
+                val name = input.attr("name")
+                name.isNotBlank() &&
+                    !name.endsWith("_HiddenField", ignoreCase = true) &&
+                    !name.endsWith("_TSM", ignoreCase = true) &&
+                    !name.contains("HiddenField", ignoreCase = true)
+            }
+            val scriptManagerName = when (val rawSmName = scriptManagerInput?.attr("name")?.takeIf { it.isNotBlank() }) {
+                null -> {
+                    val hiddenSm = doc.select("input[name*='ScriptManager']").firstOrNull()?.attr("name") ?: ""
+                    if (hiddenSm.contains("ctl00") && hiddenSm.endsWith("_HiddenField", ignoreCase = true)) {
+                        hiddenSm.removeSuffix("_HiddenField").replace('_', '$')
+                    } else {
+                        "ctl00\$ScriptManager"
+                    }
+                }
+                else -> rawSmName
+            }
 
             // UpdatePanel UniqueID: Check for UpdatePanel div
-            val updatePanelDiv = doc.select("div[id*='UpdatePanel']").firstOrNull()
+            val updatePanelDiv = doc.select("div[id$='UpdatePanel1'], div[id*='UpdatePanel']").firstOrNull { div ->
+                val id = div.attr("id")
+                id.isNotBlank() && !id.contains("UpdateProgress", ignoreCase = true)
+            }
             val updatePanelHtmlId = updatePanelDiv?.attr("id")
             val updatePanelName = when {
                 updatePanelHtmlId != null && updatePanelHtmlId.contains("ctl00") -> updatePanelHtmlId.replace('_', '$')
@@ -223,15 +250,22 @@ class MessageRepository {
                 .tag(LogContext::class.java, LogContext(flowId, "OpenMessageDeltaPost"))
                 .build()
 
-            val response = CullinanHttpClient.executeCall(request)
-            if (!response.isSuccessful) {
-                AppLogger.logError("MessageRepository", "Open message failed HTTP ${response.code}", flowId = flowId)
+            var isSuccessful = false
+            var responseCode = 0
+            var deltaText = ""
+            CullinanHttpClient.executeCall(request).use { response ->
+                isSuccessful = response.isSuccessful
+                responseCode = response.code
+                if (isSuccessful) {
+                    deltaText = response.body?.string() ?: ""
+                }
+            }
+            if (!isSuccessful) {
+                AppLogger.logError("MessageRepository", "Open message failed HTTP $responseCode", flowId = flowId)
                 return@withContext MessageOpenResult.Failure(
-                    MessageError.ServerError(response.code, "پاسخ ناموفق از سرور با کد ${response.code}")
+                    MessageError.ServerError(responseCode, "پاسخ ناموفق از سرور با کد $responseCode")
                 )
             }
-
-            val deltaText = response.body?.string() ?: ""
 
             // Strict check 1: Check for full HTML page (redirect or error) instead of delta
             val isFullHtml = (deltaText.contains("<!DOCTYPE", ignoreCase = true) || deltaText.contains("<html", ignoreCase = true)) &&

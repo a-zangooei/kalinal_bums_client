@@ -89,11 +89,29 @@ object ReservationHtmlParser {
         val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { existingGenerator }
         val eventValidation = doc.select("input[name=__EVENTVALIDATION]").`val`().ifEmpty { existingEventValidation }
 
-        val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull()
-        val scriptManagerName = scriptManagerInput?.attr("name")?.takeIf { it.isNotBlank() }
-            ?: existingScriptManagerName
+        val scriptManagerInput = doc.select("input[name*='ScriptManager']").firstOrNull { input ->
+            val name = input.attr("name")
+            name.isNotBlank() &&
+                !name.endsWith("_HiddenField", ignoreCase = true) &&
+                !name.endsWith("_TSM", ignoreCase = true) &&
+                !name.contains("HiddenField", ignoreCase = true)
+        }
+        val scriptManagerName = when (val rawSmName = scriptManagerInput?.attr("name")?.takeIf { it.isNotBlank() }) {
+            null -> {
+                val hiddenSm = doc.select("input[name*='ScriptManager']").firstOrNull()?.attr("name") ?: ""
+                if (hiddenSm.contains("ctl00") && hiddenSm.endsWith("_HiddenField", ignoreCase = true)) {
+                    hiddenSm.removeSuffix("_HiddenField").replace('_', '$')
+                } else {
+                    existingScriptManagerName
+                }
+            }
+            else -> rawSmName
+        }
 
-        val updatePanelDiv = doc.select("div[id*='UpdatePanel']").firstOrNull()
+        val updatePanelDiv = doc.select("div[id$='UpdatePanel1'], div[id*='UpdatePanel']").firstOrNull { div ->
+            val id = div.attr("id")
+            id.isNotBlank() && !id.contains("UpdateProgress", ignoreCase = true)
+        }
         val updatePanelHtmlId = updatePanelDiv?.attr("id")
         val updatePanelName = when {
             updatePanelHtmlId != null && updatePanelHtmlId.contains("ctl00") -> updatePanelHtmlId.replace('_', '$')

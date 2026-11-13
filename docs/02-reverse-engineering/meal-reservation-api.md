@@ -66,7 +66,8 @@
 | **هفته بعد** | `ctl00$cphMain$imgbtnNextWeek` | `...$imgbtnNextWeek.x=8`, `...$imgbtnNextWeek.y=29` |
 
 ### الزامات فرم و چرخه وضعیت در `MenuRepository.buildNavigateWeekBody`:
-1. **`ctl00$ScriptManager`:** با مقدار `<updatePanelName>|<buttonControlName>` (به‌طور پیش‌فرض `ctl00$UpdatePanel1|...`) ارسال می‌شود.
-2. **حفظ تمام کنترل‌های فرم و ردیف‌های گرید:** دقیقاً مشابه مرورگر، وضعیت تمام ردیف‌های صبحانه، ناهار و شام فعلی همراه با `ctl00$cphMain$hdnSelectedTab` (تب فعال)، `css3-tabstrip-0=on`، `__LASTFOCUS=`، `__VIEWSTATE`، `__VIEWSTATEGENERATOR` و `__EVENTVALIDATION` در درخواست گنجانده می‌شوند.
-3. **زنجیره‌سازی توکن‌های جدید و خطاها:** پس از دریافت پاسخ دلتا، مقادیر جدید `__VIEWSTATE` و `__EVENTVALIDATION` برای عملیات بعدی ذخیره می‌شوند، پیام‌های قابل‌نمایش جعبه هشدار (`#cphMain_alertBoxValue`) استخراج می‌گردند، و توکن‌های خطای دلتا (`error` / `asyncPostBackError`) به جای شکست بی‌صدا به لایه UI منتقل می‌شوند.
+1. **`User-Agent` مرورگر مدرن (`CullinanHttpClient.DEFAULT_USER_AGENT`):** کلاینت شبکه باید هدر استاندارد مرورگر (و نه `okhttp/...`) را در تمام درخواست‌ها ارسال کند؛ در غیر این صورت سرور ASP.NET قابلیت `ScriptManager.SupportsPartialRendering` را برابر `false` در نظر می‌گیرد و تمام POSTهای دلتا را با خطای `InvalidOperationException` رد می‌کند.
+2. **`ctl00$ScriptManager`:** با مقدار `<updatePanelName>|<buttonControlName>` (به‌طور پیش‌فرض `ctl00$UpdatePanel1|...`) ارسال می‌شود و تحلیل‌گر HTML نباید فیلدهای مخفی کمکی مانند `ctl00_ScriptManager_HiddenField` یا `_TSM` را به جای شناسه اصلی `ScriptManager` انتخاب کند.
+3. **حفظ تمام کنترل‌های فرم و ردیف‌های گرید:** دقیقاً مشابه مرورگر، وضعیت تمام ردیف‌های صبحانه، ناهار و شام فعلی همراه با `ctl00$cphMain$hdnSelectedTab` (تب فعال)، `css3-tabstrip-0=on`، `__LASTFOCUS=`، `__VIEWSTATE`، `__VIEWSTATEGENERATOR` و `__EVENTVALIDATION` در درخواست گنجانده می‌شوند.
+4. **زنجیره‌سازی توکن‌های جدید و خطاها:** پس از دریافت پاسخ دلتا، مقادیر جدید `__VIEWSTATE` و `__EVENTVALIDATION` برای عملیات بعدی ذخیره می‌شوند، پیام‌های قابل‌نمایش جعبه هشدار (`#cphMain_alertBoxValue`) استخراج می‌گردند، و توکن‌های خطای دلتا (`error` / `asyncPostBackError`) به جای شکست بی‌صدا به لایه UI منتقل می‌شوند.
 

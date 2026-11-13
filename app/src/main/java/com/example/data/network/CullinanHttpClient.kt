@@ -51,8 +51,25 @@ object CullinanHttpClient {
 
     val cookieJar = CullinanCookieJar()
 
+    const val DEFAULT_USER_AGENT =
+        "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
     private val _isCompatibilityModeActive = MutableStateFlow(false)
     val isCompatibilityModeActive: StateFlow<Boolean> = _isCompatibilityModeActive.asStateFlow()
+
+    private val userAgentInterceptor: Interceptor by lazy {
+        Interceptor { chain ->
+            val original = chain.request()
+            if (original.header("User-Agent") != null) {
+                chain.proceed(original)
+            } else {
+                val updated = original.newBuilder()
+                    .header("User-Agent", DEFAULT_USER_AGENT)
+                    .build()
+                chain.proceed(updated)
+            }
+        }
+    }
 
     private val standardClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -60,6 +77,7 @@ object CullinanHttpClient {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor(userAgentInterceptor)
             .addInterceptor(loggingInterceptor)
             .build()
     }
@@ -83,6 +101,7 @@ object CullinanHttpClient {
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
                 .writeTimeout(20, TimeUnit.SECONDS)
+                .addInterceptor(userAgentInterceptor)
                 .addInterceptor(loggingInterceptor)
                 .build()
         } catch (e: Exception) {

@@ -23,7 +23,7 @@ class MessagesViewModel(
 
     constructor(application: Application) : this(application, MessageRepository())
 
-    private val _pageState = MutableStateFlow(MessagesPageState(isLoading = true))
+    private val _pageState = MutableStateFlow(MessagesPageState(isLoading = false))
     val pageState: StateFlow<MessagesPageState> = _pageState.asStateFlow()
 
     private val _isReadingSerialized = MutableStateFlow(false)
@@ -43,10 +43,6 @@ class MessagesViewModel(
 
     private val detailMutex = Mutex()
     private var detailJob: Job? = null
-
-    init {
-        loadMessages()
-    }
 
     fun loadMessages() {
         viewModelScope.launch {

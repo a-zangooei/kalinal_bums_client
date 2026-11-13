@@ -41,9 +41,12 @@
 5. **`WeekNavigationUnitTest.kt`:**
    - تست ساخت فرم‌بادی ناوبری هفته (`imgbtnNextWeek`، `imgbtnLastWeek`، `imgbtnCurrentWeek`) همراه با حفظ ردیف‌های گرید و فیلدهای `__EVENTVALIDATION`.
    - تست زنجیره‌سازی متوالی حالت بین هفته‌ها، استخراج `#cphMain_alertBoxValue` و نمایش خطای توکن `error` در پاسخ دلتا.
-6. **`LoggingHardeningUnitTest.kt` و `AppLoggerSanitizerUnitTest.kt`:**
+   - تست ارسال هدر مرورگر `User-Agent` روی کلاینت استاندارد و موقت و فیلتر شدن `ctl00_ScriptManager_HiddenField` در تحلیل صفحه کامل.
+6. **`LoginSessionIsolationUnitTest.kt`:**
+   - تست عدم ارسال درخواست پیش از ورود توسط `MessagesViewModel` در زمان راه‌اندازی اولیه و حفظ یکپارچگی کوکی نشست `AuthRepository` در اولین تلاش ورود.
+7. **`LoggingHardeningUnitTest.kt` و `AppLoggerSanitizerUnitTest.kt`:**
    - تست پالایش خودکار گذرواژه‌ها، کوکی‌ها و داده‌های حساس در `AppLogger` و `LogSanitizer`.
-7. **`UpdateRepositoryUnitTest.kt` و `KalinanUnitTests.kt`:**
+8. **`UpdateRepositoryUnitTest.kt` و `KalinanUnitTests.kt`:**
    - تست منطق بررسی نسخه جدید، مدل‌های دامنه و متدهای کمکی رزرو.
 
 ---

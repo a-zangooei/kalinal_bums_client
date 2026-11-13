@@ -12,12 +12,16 @@ import com.example.data.model.UserSession
 import com.example.data.model.WeeklyMenu
 import com.example.data.network.CullinanHttpClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.Request
 import org.jsoup.Jsoup
 
 class AuthRepository {
+
+    private val sessionMutex = Mutex()
 
     suspend fun fetchLoginPage(): Result<LoginPageState> = withContext(Dispatchers.IO) {
         val flowId = AppLogger.generateFlowId("auth_init")
@@ -32,70 +36,85 @@ class AuthRepository {
             )
         )
 
-        try {
-            val request = Request.Builder()
-                .url(CullinanHttpClient.LOGIN_URL)
-                .get()
-                .tag(LogContext::class.java, LogContext(flowId, "FetchLoginPage"))
-                .build()
+        sessionMutex.withLock {
+            try {
+                // Start with a clean session cookie so pre-login state cannot collide with old cookies
+                CullinanHttpClient.cookieJar.clear()
 
-            val response = CullinanHttpClient.executeCall(request)
-            if (!response.isSuccessful) {
-                AppLogger.logError("AuthRepository", "Fetch login page failed with HTTP ${response.code}", flowId = flowId)
-                return@withContext Result.failure(Exception("خطا در برقراری ارتباط با سرور دانشگاه (${response.code})"))
+                val request = Request.Builder()
+                    .url(CullinanHttpClient.LOGIN_URL)
+                    .get()
+                    .tag(LogContext::class.java, LogContext(flowId, "FetchLoginPage"))
+                    .build()
+
+                var isSuccessful = false
+                var responseCode = 0
+                var html = ""
+                CullinanHttpClient.executeCall(request).use { response ->
+                    isSuccessful = response.isSuccessful
+                    responseCode = response.code
+                    if (isSuccessful) {
+                        html = response.body?.string() ?: ""
+                    }
+                }
+                if (!isSuccessful) {
+                    AppLogger.logError("AuthRepository", "Fetch login page failed with HTTP $responseCode", flowId = flowId)
+                    return@withLock Result.failure(Exception("خطا در برقراری ارتباط با سرور دانشگاه ($responseCode)"))
+                }
+
+                val doc = Jsoup.parse(html)
+
+                val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
+                val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "C2EE9ABB" }
+                val publicKeyPem = doc.select("#publicKeytxt, textarea[name=publicKeytxt]").text().trim()
+
+                AppLogger.log(
+                    LogEntry(
+                        timestamp = "",
+                        level = LogLevel.INFO,
+                        component = "AuthRepository",
+                        operation = "FetchLoginPageSuccess",
+                        flowId = flowId,
+                        message = "Login page fetched (VS len=${viewState.length}, PEM len=${publicKeyPem.length}, PEM fp=${LogSanitizer.computeFingerprint(publicKeyPem)})"
+                    )
+                )
+
+                // Fetch live captcha with the exact same session
+                val captchaBytes = fetchCaptchaBytesInternal(flowId)
+
+                Result.success(
+                    LoginPageState(
+                        viewState = viewState,
+                        viewStateGenerator = viewStateGenerator,
+                        publicKeyPem = publicKeyPem,
+                        captchaBytes = captchaBytes,
+                        isLoading = false
+                    )
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppLogger.logError("AuthRepository", "Fetch login page exception: ${e.message}", e, flowId = flowId)
+                Result.failure(e)
             }
-
-            val html = response.body?.string() ?: ""
-            val doc = Jsoup.parse(html)
-
-            val viewState = doc.select("input[name=__VIEWSTATE]").`val`()
-            val viewStateGenerator = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`().ifEmpty { "C2EE9ABB" }
-            val publicKeyPem = doc.select("#publicKeytxt, textarea[name=publicKeytxt]").text().trim()
-
-            AppLogger.log(
-                LogEntry(
-                    timestamp = "",
-                    level = LogLevel.INFO,
-                    component = "AuthRepository",
-                    operation = "FetchLoginPageSuccess",
-                    flowId = flowId,
-                    message = "Login page fetched (VS len=${viewState.length}, PEM len=${publicKeyPem.length}, PEM fp=${LogSanitizer.computeFingerprint(publicKeyPem)})"
-                )
-            )
-
-            // Fetch live captcha with current session
-            val captchaBytes = fetchCaptchaBytesInternal(flowId)
-
-            Result.success(
-                LoginPageState(
-                    viewState = viewState,
-                    viewStateGenerator = viewStateGenerator,
-                    publicKeyPem = publicKeyPem,
-                    captchaBytes = captchaBytes,
-                    isLoading = false
-                )
-            )
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            AppLogger.logError("AuthRepository", "Fetch login page exception: ${e.message}", e, flowId = flowId)
-            Result.failure(e)
         }
     }
 
     suspend fun refreshCaptcha(): Result<ByteArray> = withContext(Dispatchers.IO) {
         val flowId = AppLogger.generateFlowId("captcha")
-        try {
-            val bytes = fetchCaptchaBytesInternal(flowId)
-            if (bytes != null) {
-                Result.success(bytes)
-            } else {
-                AppLogger.logError("AuthRepository", "Failed to retrieve fresh captcha bytes", flowId = flowId)
-                Result.failure(Exception("دریافت تصویر کد امنیتی از سرور ناموفق بود"))
+        sessionMutex.withLock {
+            try {
+                val bytes = fetchCaptchaBytesInternal(flowId)
+                if (bytes != null) {
+                    Result.success(bytes)
+                } else {
+                    AppLogger.logError("AuthRepository", "Failed to retrieve fresh captcha bytes", flowId = flowId)
+                    Result.failure(Exception("دریافت تصویر کد امنیتی از سرور ناموفق بود"))
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppLogger.logError("AuthRepository", "Captcha refresh exception: ${e.message}", e, flowId = flowId)
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            AppLogger.logError("AuthRepository", "Captcha refresh exception: ${e.message}", e, flowId = flowId)
-            Result.failure(e)
         }
     }
 
@@ -117,103 +136,109 @@ class AuthRepository {
             )
         )
 
-        try {
-            if (pageState.publicKeyPem.isBlank()) {
-                AppLogger.logError("AuthRepository", "Public key missing from page state", flowId = flowId)
-                return@withContext Result.failure(Exception("کلید عمومی رمزنگاری از سرور دریافت نشده است"))
-            }
-
-            // RSA encrypt username and password using public key from server
-            val encryptedUsername = RsaEncryptor.encryptWithPem(usernamePlain.trim(), pageState.publicKeyPem)
-            val encryptedPassword = RsaEncryptor.encryptWithPem(passwordPlain.trim(), pageState.publicKeyPem)
-
-            val formBody = FormBody.Builder()
-                .add("__EVENTTARGET", "")
-                .add("__EVENTARGUMENT", "")
-                .add("__VIEWSTATE", pageState.viewState)
-                .add("__VIEWSTATEGENERATOR", pageState.viewStateGenerator)
-                .add("__VIEWSTATEENCRYPTED", "")
-                .add("txtUsernamePlain", "")
-                .add("txtPasswordPlain", "")
-                .add("txtUsername", encryptedUsername)
-                .add("txtPassword", encryptedPassword)
-                .add("txtCaptcha", captchaInput.trim())
-                .add("btnLogin", "ورود سمت سرور ")
-                .add("CanSaveloginPasstxt", "True")
-                .add("loginSecurtxt", "True")
-                .add("publicKeytxt", pageState.publicKeyPem)
-                .build()
-
-            val request = Request.Builder()
-                .url(CullinanHttpClient.LOGIN_URL)
-                .post(formBody)
-                .header("Referer", CullinanHttpClient.LOGIN_URL)
-                .header("Origin", CullinanHttpClient.BASE_URL)
-                .tag(LogContext::class.java, LogContext(flowId, "LoginPost"))
-                .build()
-
-            val response = CullinanHttpClient.executeCallNoRedirect(request)
-            val statusCode = response.code
-            val location = response.header("Location") ?: ""
-            val bodyString = response.body?.string() ?: ""
-
-            // Detection of successful login strictly based on 302 Location header:
-            val isRedirect = statusCode in 300..399 || location.isNotBlank()
-            val isMessagesRedirect = location.contains("MyMessage.aspx", ignoreCase = true)
-            val isDashboardRedirect = location.contains("Default.aspx", ignoreCase = true) ||
-                    location.contains("Reservation", ignoreCase = true) ||
-                    location.contains("/Master/", ignoreCase = true)
-
-            if (isRedirect && (isMessagesRedirect || isDashboardRedirect)) {
-                AppLogger.log(
-                    LogEntry(
-                        timestamp = "",
-                        level = LogLevel.INFO,
-                        component = "AuthRepository",
-                        operation = "LoginSuccess",
-                        flowId = flowId,
-                        message = "User successfully authenticated (HTTP $statusCode -> Location: $location, hasUnreadMessages: $isMessagesRedirect)"
-                    )
-                )
-
-                Result.success(
-                    UserSession(
-                        isLoggedIn = true,
-                        username = usernamePlain,
-                        studentNumber = usernamePlain,
-                        nationalId = "",
-                        hasUnreadMessages = isMessagesRedirect
-                    )
-                )
-            } else {
-                // If not redirected, login failed on server. Extract user-facing Persian error message from HTML response.
-                val doc = Jsoup.parse(bodyString)
-                val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
-                val errorMsg = when {
-                    alertError.isNotBlank() -> alertError
-                    bodyString.contains("کد امنیتی") -> "کد امنیتی وارد شده اشتباه یا منقضی شده است"
-                    bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا گذرواژه اشتباه است"
-                    else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
+        sessionMutex.withLock {
+            try {
+                if (pageState.publicKeyPem.isBlank()) {
+                    AppLogger.logError("AuthRepository", "Public key missing from page state", flowId = flowId)
+                    return@withLock Result.failure(Exception("کلید عمومی رمزنگاری از سرور دریافت نشده است"))
                 }
 
-                AppLogger.log(
-                    LogEntry(
-                        timestamp = "",
-                        level = LogLevel.WARN,
-                        component = "AuthRepository",
-                        operation = "LoginFailed",
-                        flowId = flowId,
-                        errorCategory = "AUTH_REJECTED",
-                        message = "Authentication rejected (HTTP $statusCode, Location: $location): $errorMsg"
-                    )
-                )
+                // RSA encrypt username and password using public key from server
+                val encryptedUsername = RsaEncryptor.encryptWithPem(usernamePlain.trim(), pageState.publicKeyPem)
+                val encryptedPassword = RsaEncryptor.encryptWithPem(passwordPlain.trim(), pageState.publicKeyPem)
 
-                Result.failure(Exception(errorMsg))
+                val formBody = FormBody.Builder()
+                    .add("__EVENTTARGET", "")
+                    .add("__EVENTARGUMENT", "")
+                    .add("__VIEWSTATE", pageState.viewState)
+                    .add("__VIEWSTATEGENERATOR", pageState.viewStateGenerator)
+                    .add("__VIEWSTATEENCRYPTED", "")
+                    .add("txtUsernamePlain", "")
+                    .add("txtPasswordPlain", "")
+                    .add("txtUsername", encryptedUsername)
+                    .add("txtPassword", encryptedPassword)
+                    .add("txtCaptcha", captchaInput.trim())
+                    .add("btnLogin", "ورود سمت سرور ")
+                    .add("CanSaveloginPasstxt", "True")
+                    .add("loginSecurtxt", "True")
+                    .add("publicKeytxt", pageState.publicKeyPem)
+                    .build()
+
+                val request = Request.Builder()
+                    .url(CullinanHttpClient.LOGIN_URL)
+                    .post(formBody)
+                    .header("Referer", CullinanHttpClient.LOGIN_URL)
+                    .header("Origin", CullinanHttpClient.BASE_URL)
+                    .tag(LogContext::class.java, LogContext(flowId, "LoginPost"))
+                    .build()
+
+                var statusCode = 0
+                var location = ""
+                var bodyString = ""
+                CullinanHttpClient.executeCallNoRedirect(request).use { response ->
+                    statusCode = response.code
+                    location = response.header("Location") ?: ""
+                    bodyString = response.body?.string() ?: ""
+                }
+
+                // Detection of successful login strictly based on 302 Location header:
+                val isRedirect = statusCode in 300..399 || location.isNotBlank()
+                val isMessagesRedirect = location.contains("MyMessage.aspx", ignoreCase = true)
+                val isDashboardRedirect = location.contains("Default.aspx", ignoreCase = true) ||
+                        location.contains("Reservation", ignoreCase = true) ||
+                        location.contains("/Master/", ignoreCase = true)
+
+                if (isRedirect && (isMessagesRedirect || isDashboardRedirect)) {
+                    AppLogger.log(
+                        LogEntry(
+                            timestamp = "",
+                            level = LogLevel.INFO,
+                            component = "AuthRepository",
+                            operation = "LoginSuccess",
+                            flowId = flowId,
+                            message = "User successfully authenticated (HTTP $statusCode -> Location: $location, hasUnreadMessages: $isMessagesRedirect)"
+                        )
+                    )
+
+                    Result.success(
+                        UserSession(
+                            isLoggedIn = true,
+                            username = usernamePlain,
+                            studentNumber = usernamePlain,
+                            nationalId = "",
+                            hasUnreadMessages = isMessagesRedirect
+                        )
+                    )
+                } else {
+                    // If not redirected, login failed on server. Extract user-facing Persian error message from HTML response.
+                    val doc = Jsoup.parse(bodyString)
+                    val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
+                    val errorMsg = when {
+                        alertError.isNotBlank() -> alertError
+                        bodyString.contains("کد امنیتی") -> "کد امنیتی وارد شده اشتباه یا منقضی شده است"
+                        bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا گذرواژه اشتباه است"
+                        else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
+                    }
+
+                    AppLogger.log(
+                        LogEntry(
+                            timestamp = "",
+                            level = LogLevel.WARN,
+                            component = "AuthRepository",
+                            operation = "LoginFailed",
+                            flowId = flowId,
+                            errorCategory = "AUTH_REJECTED",
+                            message = "Authentication rejected (HTTP $statusCode, Location: $location): $errorMsg"
+                        )
+                    )
+
+                    Result.failure(Exception(errorMsg))
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppLogger.logError("AuthRepository", "Login attempt exception: ${e.message}", e, flowId = flowId)
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            AppLogger.logError("AuthRepository", "Login attempt exception: ${e.message}", e, flowId = flowId)
-            Result.failure(e)
         }
     }
 
@@ -243,14 +268,15 @@ class AuthRepository {
                     .header("Referer", CullinanHttpClient.BASE_URL)
                     .tag(LogContext::class.java, LogContext(flowId, "LogoutFetchState"))
                     .build()
-                val getResp = CullinanHttpClient.executeCall(getReq)
-                if (getResp.isSuccessful) {
-                    val html = getResp.body?.string() ?: ""
-                    val doc = Jsoup.parse(html)
-                    viewState = doc.select("input[name=__VIEWSTATE]").`val`()
-                    val gen = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`()
-                    if (gen.isNotBlank()) viewStateGen = gen
-                    eventVal = doc.select("input[name=__EVENTVALIDATION]").`val`()
+                CullinanHttpClient.executeCall(getReq).use { getResp ->
+                    if (getResp.isSuccessful) {
+                        val html = getResp.body?.string() ?: ""
+                        val doc = Jsoup.parse(html)
+                        viewState = doc.select("input[name=__VIEWSTATE]").`val`()
+                        val gen = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`()
+                        if (gen.isNotBlank()) viewStateGen = gen
+                        eventVal = doc.select("input[name=__EVENTVALIDATION]").`val`()
+                    }
                 }
             }
 
@@ -293,12 +319,18 @@ class AuthRepository {
                 .tag(LogContext::class.java, LogContext(flowId, "LogoutPost"))
                 .build()
 
-            val response = CullinanHttpClient.executeCallNoRedirect(request)
-            val location = response.header("Location") ?: ""
-            val bodyString = response.body?.string() ?: ""
-            val finalUrl = response.request.url.toString()
+            var responseCode = 0
+            var location = ""
+            var bodyString = ""
+            var finalUrl = ""
+            CullinanHttpClient.executeCallNoRedirect(request).use { response ->
+                responseCode = response.code
+                location = response.header("Location") ?: ""
+                bodyString = response.body?.string() ?: ""
+                finalUrl = response.request.url.toString()
+            }
 
-            val isSuccess = response.code == 302 ||
+            val isSuccess = responseCode == 302 ||
                     location.contains("Login", ignoreCase = true) ||
                     finalUrl.contains("Login", ignoreCase = true) ||
                     bodyString.contains("txtUsername", ignoreCase = true)
@@ -311,7 +343,7 @@ class AuthRepository {
                         component = "AuthRepository",
                         operation = "ServerLogoutSuccess",
                         flowId = flowId,
-                        message = "Server confirmed logout (code=${response.code}, Location=$location)"
+                        message = "Server confirmed logout (code=$responseCode, Location=$location)"
                     )
                 )
                 Result.success(true)
@@ -324,10 +356,10 @@ class AuthRepository {
                         operation = "ServerLogoutWarning",
                         flowId = flowId,
                         errorCategory = "LOGOUT_NON_302",
-                        message = "Server returned non-redirect status on logout: ${response.code}"
+                        message = "Server returned non-redirect status on logout: $responseCode"
                     )
                 )
-                Result.failure(Exception("سرور ریدایرکت خروج صادر نکرد (کد: ${response.code})"))
+                Result.failure(Exception("سرور ریدایرکت خروج صادر نکرد (کد: $responseCode)"))
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -346,11 +378,12 @@ class AuthRepository {
                 .tag(LogContext::class.java, LogContext(flowId ?: AppLogger.generateFlowId("cap"), "FetchCaptcha"))
                 .build()
 
-            val response = CullinanHttpClient.executeCall(request)
-            if (response.isSuccessful) {
-                response.body?.bytes()
-            } else {
-                null
+            CullinanHttpClient.executeCall(request).use { response ->
+                if (response.isSuccessful) {
+                    response.body?.bytes()
+                } else {
+                    null
+                }
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
