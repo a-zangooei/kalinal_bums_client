@@ -8,6 +8,7 @@ import com.example.data.logger.LogContext
 import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
 import com.example.data.logger.LogSanitizer
+import com.example.data.logger.SnapshotDiagnostics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -126,7 +127,7 @@ object CullinanHttpClient {
             val reqId = logContext?.parentReqId ?: AppLogger.generateRequestId()
 
             // Safe read-only inspection of request body without mutation or stream exhaustion
-            val (bodyString, aspNetDiag) = inspectRequestBodySafely(req)
+            val (formKeys, aspNetDiag) = inspectRequestBodySafely(req)
 
             try {
                 AppLogger.log(
@@ -142,6 +143,8 @@ object CullinanHttpClient {
                             url = url,
                             contentType = req.body?.contentType()?.toString(),
                             contentLength = req.body?.contentLength(),
+                            userAgent = req.header("User-Agent"),
+                            formKeys = formKeys.takeIf { it.isNotEmpty() },
                             isCompatibilitySsl = _isCompatibilityModeActive.value
                         ),
                         aspnet = aspNetDiag,
@@ -169,11 +172,13 @@ object CullinanHttpClient {
                             http = HttpDiagnostics(
                                 method = method,
                                 url = url,
+                                userAgent = req.header("User-Agent"),
                                 isCompatibilitySsl = _isCompatibilityModeActive.value
                             ),
                             errorCategory = cat,
                             exceptionType = e.javaClass.simpleName,
                             exceptionMessage = e.message,
+                            stackTrace = e.stackTraceToString().take(4000),
                             message = "HTTP $method $url failed with $cat: ${e.message}"
                         )
                     )
@@ -181,6 +186,50 @@ object CullinanHttpClient {
                 throw e
             }
             val duration = System.currentTimeMillis() - start
+
+            var redirectCount = 0
+            var prior = response.priorResponse
+            while (prior != null) {
+                redirectCount++
+                prior = prior.priorResponse
+            }
+            val redirectLocation = response.header("Location")
+            val setCookieNames = response.headers("Set-Cookie").mapNotNull { header ->
+                header.substringBefore('=', "").trim().takeIf { it.isNotEmpty() }
+            }.distinct()
+
+            val respContentType = response.body?.contentType()?.toString()
+            val isBinaryAsset = respContentType?.startsWith("image/", ignoreCase = true) == true && response.isSuccessful
+            val snapshotRecord = if (!isBinaryAsset && response.body != null) {
+                try {
+                    val peeked = response.peekBody(2 * 1024 * 1024L)
+                    val rawText = peeked.string()
+                    if (rawText.isNotEmpty()) {
+                        AppLogger.savePageSnapshot(
+                            operation = operation,
+                            method = method,
+                            url = response.request.url.toString(),
+                            statusCode = response.code,
+                            contentType = respContentType,
+                            rawContent = rawText,
+                            flowId = flowId,
+                            requestId = reqId
+                        )
+                    } else null
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+
+            val snapshotDiag = snapshotRecord?.let {
+                SnapshotDiagnostics(
+                    sequence = it.sequence,
+                    fileName = it.fileName,
+                    contentType = it.contentType,
+                    sizeBytes = it.sizeBytes,
+                    sha256Prefix = LogSanitizer.computeFingerprint(it.rawContent)
+                )
+            }
 
             val respLogLevel = if (response.isSuccessful || response.isRedirect) LogLevel.DEBUG else LogLevel.WARN
 
@@ -198,12 +247,18 @@ object CullinanHttpClient {
                             method = method,
                             url = url,
                             statusCode = response.code,
-                            contentType = response.body?.contentType()?.toString(),
+                            contentType = respContentType,
                             contentLength = response.body?.contentLength(),
+                            redirectCount = redirectCount.takeIf { it > 0 },
                             finalUrl = response.request.url.toString(),
-                            isCompatibilitySsl = _isCompatibilityModeActive.value
+                            redirectLocation = redirectLocation,
+                            setCookieNames = setCookieNames.takeIf { it.isNotEmpty() },
+                            isCompatibilitySsl = _isCompatibilityModeActive.value,
+                            isNoRedirect = response.isRedirect
                         ),
-                        message = "HTTP ${response.code} (${duration}ms) - $url"
+                        snapshot = snapshotDiag,
+                        message = "HTTP ${response.code} (${duration}ms) - $url" +
+                            (snapshotDiag?.let { " [Snapshot: ${it.fileName}]" } ?: "")
                     )
                 )
             } catch (_: Exception) {}
@@ -222,6 +277,15 @@ object CullinanHttpClient {
         } catch (e: IOException) {
             if (isSslHandshakeException(e)) {
                 Log.w(TAG, "SSL failure on standard client. Activating compatibility mode...", e)
+                val logCtx = request.tag(LogContext::class.java)
+                AppLogger.logWarn(
+                    component = "CullinanHttpClient",
+                    operation = "SslFallbackActivated",
+                    message = "TLS handshake failed on standard client for ${request.url}; switching to unverified compatibility SSL fallback",
+                    throwable = e,
+                    flowId = logCtx?.flowId,
+                    errorCategory = "TLS_FALLBACK"
+                )
                 _isCompatibilityModeActive.value = true
                 fallbackClient.newCall(request).execute()
             } else {
@@ -231,7 +295,15 @@ object CullinanHttpClient {
     }
 
     fun setCompatibilityMode(enabled: Boolean) {
+        val previous = _isCompatibilityModeActive.value
         _isCompatibilityModeActive.value = enabled
+        if (previous != enabled) {
+            AppLogger.logInfo(
+                component = "CullinanHttpClient",
+                operation = "CompatibilityModeChanged",
+                message = "SSL compatibility mode changed: $previous -> $enabled"
+            )
+        }
     }
 
     fun executeCallNoRedirect(request: Request): Response {
@@ -246,6 +318,15 @@ object CullinanHttpClient {
         } catch (e: IOException) {
             if (isSslHandshakeException(e) && !_isCompatibilityModeActive.value) {
                 Log.w(TAG, "SSL failure on standard client (no-redirect). Activating fallback...", e)
+                val logCtx = request.tag(LogContext::class.java)
+                AppLogger.logWarn(
+                    component = "CullinanHttpClient",
+                    operation = "SslFallbackActivatedNoRedirect",
+                    message = "TLS handshake failed on no-redirect client for ${request.url}; switching to unverified compatibility SSL fallback",
+                    throwable = e,
+                    flowId = logCtx?.flowId,
+                    errorCategory = "TLS_FALLBACK"
+                )
                 _isCompatibilityModeActive.value = true
                 val fallbackNoRedirect = fallbackClient.newBuilder()
                     .followRedirects(false)
@@ -262,8 +343,8 @@ object CullinanHttpClient {
      * Safely inspects the request body read-only without consuming or altering the original network stream.
      * Accurately parses URL-encoded parameters with support for Base64 and multi-chunk ViewStates.
      */
-    private fun inspectRequestBodySafely(request: Request): Pair<String?, AspNetDiagnostics?> {
-        val body = request.body ?: return Pair(null, null)
+    private fun inspectRequestBodySafely(request: Request): Pair<List<String>, AspNetDiagnostics?> {
+        val body = request.body ?: return Pair(emptyList(), null)
         val bodyString = try {
             val buffer = Buffer()
             body.writeTo(buffer)
@@ -271,7 +352,7 @@ object CullinanHttpClient {
             val bytesToRead = minOf(buffer.size, 128 * 1024L)
             buffer.readString(bytesToRead, Charsets.UTF_8)
         } catch (_: Exception) {
-            return Pair(null, null)
+            return Pair(emptyList(), null)
         }
 
         var vsTotalLen = 0
@@ -281,6 +362,7 @@ object CullinanHttpClient {
         var evLen: Int? = null
         var target: String? = null
         var fieldCountParam: Int? = null
+        val formKeys = mutableListOf<String>()
 
         val pairs = bodyString.split("&")
         for (pair in pairs) {
@@ -290,6 +372,10 @@ object CullinanHttpClient {
                 val rawVal = pair.substring(eqIdx + 1)
                 val key = try { URLDecoder.decode(rawKey, "UTF-8") } catch (_: Exception) { rawKey }
                 val value = try { URLDecoder.decode(rawVal, "UTF-8") } catch (_: Exception) { rawVal }
+
+                if (key.isNotBlank() && formKeys.size < 40) {
+                    formKeys.add(key)
+                }
 
                 when {
                     key == "__VIEWSTATE" -> {
@@ -309,6 +395,7 @@ object CullinanHttpClient {
                         evLen = value.length
                     }
                     key == "__EVENTTARGET" -> if (value.isNotBlank()) target = value
+                    key.endsWith("ScriptManager") && value.isNotBlank() && target == null -> target = value
                 }
             }
         }
@@ -330,7 +417,7 @@ object CullinanHttpClient {
             )
         } else null
 
-        return Pair(bodyString, aspNetDiag)
+        return Pair(formKeys, aspNetDiag)
     }
 
     private fun classifyNetworkingFailure(e: Throwable): String {

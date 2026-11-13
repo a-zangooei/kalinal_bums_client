@@ -28,7 +28,8 @@ object ReservationHtmlParser {
         val snapshots: List<TableRowSnapshot>,
         val tableFound: Boolean,
         val totalRows: Int,
-        val skippedRows: Int
+        val skippedRows: Int,
+        val malformedRows: Int
     )
 
     /**
@@ -150,20 +151,23 @@ object ReservationHtmlParser {
         val allTableRows = breakfastResult.snapshots + lunchResult.snapshots + dinnerResult.snapshots
         val totalMealsCount = daysList.sumOf { day -> day.meals.values.sumOf { it.size } }
         val totalSkippedRows = breakfastResult.skippedRows + lunchResult.skippedRows + dinnerResult.skippedRows
+        val totalMalformedRows = breakfastResult.malformedRows + lunchResult.malformedRows + dinnerResult.malformedRows
         val totalTablesWithMeals = (if (breakfastResult.meals.isNotEmpty()) 1 else 0) +
                 (if (lunchResult.meals.isNotEmpty()) 1 else 0) +
                 (if (dinnerResult.meals.isNotEmpty()) 1 else 0)
 
-        val classification = PageClassifier.classify(html)
+        val classification = PageClassifier.classify(html, flowId = flowId)
 
         try {
+            val parseAnomaly = (!isFragment && rawTablesInDom == 0) || totalMalformedRows > 0
             AppLogger.log(
                 LogEntry(
                     timestamp = "",
-                    level = LogLevel.DEBUG,
+                    level = if (parseAnomaly) LogLevel.WARN else LogLevel.DEBUG,
                     component = "Parser",
                     operation = "ParseWeeklyMenu",
                     flowId = flowId,
+                    errorCategory = if (!isFragment && rawTablesInDom == 0) "MISSING_MEAL_TABLES" else if (totalMalformedRows > 0) "MALFORMED_TABLE_ROWS" else null,
                     aspnet = AspNetDiagnostics(
                         viewStateLength = viewState.length,
                         viewStateFingerprint = LogSanitizer.computeFingerprint(viewState),
@@ -186,9 +190,18 @@ object ReservationHtmlParser {
                         noticeType = classification.noticeType,
                         actionUrl = classification.noticeActionUrl
                     ),
-                    message = "Parsed ${classification.pageType} (len: ${html.length}, tables: $rawTablesInDom, meals: $totalMealsCount, skippedRows: $totalSkippedRows)"
+                    message = "Parsed ${classification.pageType} (len=${html.length}, range='$weekDateText', credit=$creditRials, SM='$scriptManagerName', UP='$updatePanelName', tables=$rawTablesInDom [B=${breakfastResult.meals.size}, L=${lunchResult.meals.size}, D=${dinnerResult.meals.size}], malformed=$totalMalformedRows, alert=${visibleAlert != null})"
                 )
             )
+            if (visibleAlert != null) {
+                AppLogger.logWarn(
+                    component = "Parser",
+                    operation = "VisibleServerAlert",
+                    message = "Server displayed #cphMain_alertBoxValue: $visibleAlert",
+                    flowId = flowId,
+                    errorCategory = "PORTAL_ALERT_BOX"
+                )
+            }
         } catch (_: Exception) {}
 
         return WeeklyMenu(
@@ -213,12 +226,13 @@ object ReservationHtmlParser {
         mealType: MealType,
         daysList: MutableList<DayMenu>
     ): ParsedTableResult {
-        if (table == null) return ParsedTableResult(emptyList(), emptyList(), false, 0, 0)
+        if (table == null) return ParsedTableResult(emptyList(), emptyList(), false, 0, 0, 0)
         val items = mutableListOf<MealItem>()
         val snapshots = mutableListOf<TableRowSnapshot>()
 
         val rows = table.select("tr")
         var skippedCount = 0
+        var malformedCount = 0
 
         for (row in rows) {
             // Skip header and footer rows
@@ -230,6 +244,7 @@ object ReservationHtmlParser {
             val cells = row.select("td")
             if (cells.size < 4) {
                 skippedCount++
+                if (cells.isNotEmpty()) malformedCount++
                 continue
             }
 
@@ -390,7 +405,7 @@ object ReservationHtmlParser {
             items.add(mealItem)
         }
 
-        return ParsedTableResult(items, snapshots, true, rows.size, skippedCount)
+        return ParsedTableResult(items, snapshots, true, rows.size, skippedCount, malformedCount)
     }
 
     private fun parsePriceFromFoodOption(name: String): Long {

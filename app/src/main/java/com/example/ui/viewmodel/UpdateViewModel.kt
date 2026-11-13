@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.logger.AppLogger
 import com.example.data.model.AppUpdateInfo
 import com.example.data.repository.UpdateRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,16 +29,28 @@ class UpdateViewModel(
     }
 
     fun checkForUpdates(isManual: Boolean) {
+        AppLogger.logInfo("UpdateViewModel", "CheckForUpdates", "Initiating update check (isManual=$isManual)")
         viewModelScope.launch {
             _isChecking.value = true
             val result = updateRepository.checkForUpdate()
             result.onSuccess { info ->
                 if (info.isUpdateAvailable) {
                     _updateInfo.value = info
-                } else if (isManual) {
-                    _userMessage.value = "برنامه شما به‌روز است (نسخه ${info.currentVersionName})"
+                    AppLogger.logInfo("UpdateViewModel", "UpdateAvailable", "New version ${info.latestVersionName} available (current=${info.currentVersionName})")
+                } else {
+                    AppLogger.logDebug("UpdateViewModel", "AppUpToDate", "App is up to date (${info.currentVersionName})")
+                    if (isManual) {
+                        _userMessage.value = "برنامه شما به‌روز است (نسخه ${info.currentVersionName})"
+                    }
                 }
             }.onFailure { error ->
+                AppLogger.logWarn(
+                    component = "UpdateViewModel",
+                    operation = "UpdateCheckFailed",
+                    message = "Update check failed (isManual=$isManual): ${error.message}",
+                    throwable = error,
+                    errorCategory = "UPDATE_CHECK_ERROR"
+                )
                 if (isManual) {
                     _userMessage.value = "خطا در بررسی به‌روزرسانی: ${error.message}"
                 }

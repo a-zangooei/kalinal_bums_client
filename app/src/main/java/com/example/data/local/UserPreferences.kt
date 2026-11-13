@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import com.example.data.logger.AppLogger
 
 class UserPreferences(context: Context) {
 
@@ -17,7 +18,13 @@ class UserPreferences(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        AppLogger.logWarn(
+            component = "UserPreferences",
+            operation = "EncryptedPrefsFallback",
+            message = "EncryptedSharedPreferences unavailable; falling back to private SharedPreferences",
+            throwable = e
+        )
         // Fallback for Robolectric or test environments where KeyStore is not simulated
         context.getSharedPreferences("cullinan_user_prefs", Context.MODE_PRIVATE)
     }
@@ -37,10 +44,12 @@ class UserPreferences(context: Context) {
                         .putString(KEY_PASSWORD, legacyPass)
                         .putBoolean(KEY_REMEMBER_ME, true)
                         .apply()
+                    AppLogger.logInfo("UserPreferences", "LegacyMigration", "Migrated legacy saved credentials to active prefs store")
                 }
                 legacyPrefs.edit().clear().apply()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            AppLogger.logWarn("UserPreferences", "LegacyMigration", "Legacy preferences migration check failed: ${e.message}", e)
         }
     }
 
@@ -54,14 +63,18 @@ class UserPreferences(context: Context) {
 
     var rememberMe: Boolean
         get() = prefs.getBoolean(KEY_REMEMBER_ME, false)
-        set(value) = prefs.edit().putBoolean(KEY_REMEMBER_ME, value).apply()
+        set(value) {
+            prefs.edit().putBoolean(KEY_REMEMBER_ME, value).apply()
+            AppLogger.logDebug("UserPreferences", "RememberMeChanged", "Remember-me preference set to $value")
+        }
 
     var themeMode: com.example.data.model.AppThemeMode
         get() {
             val raw = prefs.getString(KEY_THEME_MODE, com.example.data.model.AppThemeMode.SYSTEM.name)
             return try {
                 com.example.data.model.AppThemeMode.valueOf(raw ?: com.example.data.model.AppThemeMode.SYSTEM.name)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                AppLogger.logWarn("UserPreferences", "InvalidThemeMode", "Invalid stored theme mode '$raw'; defaulting to SYSTEM", e)
                 com.example.data.model.AppThemeMode.SYSTEM
             }
         }
@@ -77,6 +90,7 @@ class UserPreferences(context: Context) {
             .remove(KEY_PASSWORD)
             .putBoolean(KEY_REMEMBER_ME, false)
             .apply()
+        AppLogger.logInfo("UserPreferences", "ClearCredentials", "Cleared saved credentials from local storage")
     }
 
     companion object {

@@ -155,6 +155,16 @@ class MessageRepository {
             val unreadCount = messages.count { !it.isRead }
             val hasUnread = unreadCount > 0
 
+            if (viewState.isBlank() || (messages.isEmpty() && doc.select("#cphMain_grdContent").isEmpty())) {
+                AppLogger.logWarn(
+                    component = "MessageRepository",
+                    operation = "FetchMessagesAnomalousDom",
+                    message = "Anomalous MyMessage DOM (VS len=${viewState.length}, grdPresent=${doc.select("#cphMain_grdContent").isNotEmpty()}, rows=${rows.size}, parsed=${messages.size})",
+                    flowId = flowId,
+                    errorCategory = "MESSAGES_DOM_ANOMALY"
+                )
+            }
+
             AppLogger.log(
                 LogEntry(
                     timestamp = "",
@@ -162,7 +172,7 @@ class MessageRepository {
                     component = "MessageRepository",
                     operation = "FetchMessagesPageSuccess",
                     flowId = flowId,
-                    message = "Messages parsed: total=${messages.size}, unread=$unreadCount, unlocked=$isReservationUnlocked, pager=$hasPager"
+                    message = "Messages parsed: total=${messages.size}, unread=$unreadCount, unlocked=$isReservationUnlocked, pager=$hasPager, SM='$scriptManagerName', UP='$updatePanelName'"
                 )
             )
 
@@ -280,7 +290,7 @@ class MessageRepository {
                 return@withContext MessageOpenResult.Failure(MessageError.InvalidDeltaResponse)
             }
 
-            val deltaResponse = DeltaParser.parse(deltaText)
+            val deltaResponse = DeltaParser.parse(deltaText, flowId = flowId)
 
             // Strict check 2: Session expired token
             if (deltaResponse.isSessionExpired) {
@@ -320,6 +330,13 @@ class MessageRepository {
                     val candidate = Jsoup.parse(pMatch.groupValues[1]).text().trim()
                     if (candidate.isNotBlank()) {
                         messageContent = candidate
+                        AppLogger.logWarn(
+                            component = "MessageRepository",
+                            operation = "OpenMessageRegexFallback",
+                            message = "Extracted message content via fallback regex instead of UpdatePanel DOM selector",
+                            flowId = flowId,
+                            errorCategory = "MESSAGE_SELECTOR_FALLBACK"
+                        )
                     }
                 }
             }
@@ -466,6 +483,12 @@ class MessageRepository {
                         freshMsg
                     }
                 }
+                AppLogger.logInfo(
+                    component = "MessageRepository",
+                    operation = "MarkAllUnreadVerified",
+                    message = "Serialized read verified via fresh GET: unlocked=${freshState.isReservationUnlocked}, remainingUnread=${mergedMessages.count { !it.isRead }}",
+                    flowId = flowId
+                )
                 Result.success(
                     freshState.copy(
                         messages = mergedMessages,
@@ -474,6 +497,14 @@ class MessageRepository {
                     )
                 )
             } else {
+                AppLogger.logWarn(
+                    component = "MessageRepository",
+                    operation = "MarkAllUnreadVerifyFallback",
+                    message = "Final verification GET failed after marking $loopLimit messages; returning locally chained state",
+                    throwable = verifyResult.exceptionOrNull(),
+                    flowId = flowId,
+                    errorCategory = "MESSAGES_VERIFY_FALLBACK"
+                )
                 Result.success(
                     currentState.withUpdatedWebFormsState(currentWebFormsState).copy(
                         messages = updatedMessages,

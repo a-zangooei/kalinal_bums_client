@@ -1,27 +1,20 @@
 package com.example.ui.screens
 
-import android.content.Context
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,16 +22,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -69,7 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,7 +67,9 @@ import com.example.data.local.UserPreferences
 import com.example.data.logger.AppLogger
 import com.example.data.model.AppThemeMode
 import com.example.data.network.CullinanHttpClient
+import com.example.ui.components.DeveloperLogsDialog
 import com.example.ui.components.PersianRtlLayout
+import com.example.ui.components.shareDiagnosticZip
 import com.example.ui.theme.TealPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -288,13 +279,13 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "🛡️ ثبت رویدادهای شبکه با پالایش گذرواژه و کوکی",
+                                    text = "ثبت کامل لاگ‌های توسعه + صفحات خام HTML و دلتا",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TealPrimary
                                 )
                                 Text(
-                                    text = "درخواست‌ها و پاسخ‌های سرور دانشگاه با حذف خودکار گذرواژه و توکن‌های سشن در بافر چرخشی (حداکثر ۳ مگابایت) ثبت می‌شوند.",
+                                    text = "رویدادهای شبکه، پارسرها، ViewModel، رمزنگاری و کرش‌ها با پالایش گذرواژه ثبت شده و صفحات خام HTML/Delta مرحله‌به‌مرحله تا ۸ مگابایت ذخیره می‌شوند.",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -306,7 +297,10 @@ fun SettingsScreen(
                                 ) {
                                     Button(
                                         onClick = { showLogsDialog = true },
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 48.dp)
+                                            .testTag("open_developer_logs_button"),
                                         colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
@@ -317,14 +311,20 @@ fun SettingsScreen(
 
                                     OutlinedButton(
                                         onClick = {
-                                            shareLogs(context)
+                                            shareDiagnosticZip(
+                                                context = context,
+                                                sslCompatibilityActive = isCompatibilityModeActive
+                                            )
                                         },
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 48.dp)
+                                            .testTag("export_developer_zip_button"),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.FolderZip, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("استخراج لاگ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("خروجی فایل ZIP", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
 
@@ -470,7 +470,7 @@ fun SettingsScreen(
 
     // Logs Dialog
     if (showLogsDialog) {
-        LogsViewerDialog(onDismiss = { showLogsDialog = false })
+        DeveloperLogsDialog(onDismiss = { showLogsDialog = false })
     }
 }
 
@@ -540,113 +540,4 @@ fun ThemeOptionRow(
             )
         }
     }
-}
-
-@Composable
-fun LogsViewerDialog(onDismiss: () -> Unit) {
-    val logs by AppLogger.recentLogs.collectAsState()
-    val context = LocalContext.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "📋 رویدادها و لاگ‌های اخیر سامانه",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(350.dp)
-            ) {
-                Text(
-                    text = "اطلاعات حساس (گذرواژه و سشن) به صورت خودکار ماسک شده‌اند.",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                if (logs.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "هنوز رویدادی ثبت نشده است.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp)
-                        ) {
-                            items(logs.reversed()) { logEntry ->
-                                Text(
-                                    text = logEntry,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    lineHeight = 14.sp,
-                                    color = if (logEntry.contains("[ERROR]")) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                )
-                                Spacer(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { shareLogs(context) },
-                colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("اشتراک‌گذاری لاگ")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("بستن")
-            }
-        }
-    )
-}
-
-private fun shareLogs(context: Context) {
-    val fullText = AppLogger.getExportableText()
-    val sendIntent = Intent().apply {
-        action = Intent.ACTION_SEND
-        putExtra(Intent.EXTRA_TITLE, "لاگ‌های عیب‌یابی سامانه کالینان")
-        putExtra(Intent.EXTRA_SUBJECT, "Kalinan Diagnostic Logs")
-        putExtra(Intent.EXTRA_TEXT, fullText)
-        type = "text/plain"
-    }
-    val shareIntent = Intent.createChooser(sendIntent, "ارسال لاگ‌های عیب‌یابی به توسعه‌دهنده")
-    context.startActivity(shareIntent)
 }

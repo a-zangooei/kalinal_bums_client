@@ -1,5 +1,10 @@
 package com.example.data.parser
 
+import com.example.data.logger.AppLogger
+import com.example.data.logger.LogEntry
+import com.example.data.logger.LogLevel
+import com.example.data.logger.NoticeDiagnostics
+import com.example.data.logger.ParserDiagnostics
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
@@ -28,7 +33,22 @@ object PageClassifier {
      * Pure, side-effect-free response classifier executed BEFORE menu parsing.
      * Guarantees a Notice or Login page is never falsely identified as an empty reservation menu.
      */
-    fun classify(html: String, httpStatusCode: Int = 200, finalUrl: String? = null): ClassificationResult {
+    fun classify(
+        html: String,
+        httpStatusCode: Int = 200,
+        finalUrl: String? = null,
+        flowId: String? = null
+    ): ClassificationResult {
+        val result = classifyInternal(html, httpStatusCode, finalUrl)
+        logClassification(result, html.length, httpStatusCode, finalUrl, flowId)
+        return result
+    }
+
+    private fun classifyInternal(
+        html: String,
+        httpStatusCode: Int,
+        finalUrl: String?
+    ): ClassificationResult {
         if (httpStatusCode >= 500) {
             return ClassificationResult(
                 pageType = TYPE_ERROR,
@@ -142,4 +162,44 @@ object PageClassifier {
         evidence.add("NO_MATCHING_SIGNATURE")
         return ClassificationResult(pageType = TYPE_UNKNOWN, evidence = evidence)
     }
+
+    private fun logClassification(
+        result: ClassificationResult,
+        htmlLength: Int,
+        httpStatusCode: Int,
+        finalUrl: String?,
+        flowId: String?
+    ) {
+        try {
+            val level = when (result.pageType) {
+                TYPE_ERROR, TYPE_UNKNOWN, TYPE_NOTICE -> LogLevel.WARN
+                else -> LogLevel.DEBUG
+            }
+            AppLogger.log(
+                LogEntry(
+                    timestamp = "",
+                    level = level,
+                    component = "PageClassifier",
+                    operation = "ClassifyResponse",
+                    flowId = flowId,
+                    errorCategory = if (result.pageType == TYPE_ERROR || result.pageType == TYPE_UNKNOWN) {
+                        "CLASSIFY_${result.pageType}"
+                    } else null,
+                    parser = ParserDiagnostics(
+                        pageType = result.pageType,
+                        htmlLength = htmlLength
+                    ),
+                    notice = if (result.pageType == TYPE_NOTICE) {
+                        NoticeDiagnostics(
+                            isNoticeDetected = true,
+                            noticeType = result.noticeType,
+                            actionUrl = result.noticeActionUrl
+                        )
+                    } else null,
+                    message = "Classified as ${result.pageType} (status=$httpStatusCode, len=$htmlLength, evidence=[${result.evidence.joinToString()}], unread=${result.unreadMessageCount}, url=${finalUrl ?: "N/A"})"
+                )
+            )
+        } catch (_: Exception) {}
+    }
 }
+

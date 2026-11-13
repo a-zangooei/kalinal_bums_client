@@ -32,6 +32,8 @@ class CullinanCookieJar : CookieJar {
             }
         }
 
+        val cookieNames = synchronized(currentCookies) { currentCookies.map { it.name }.distinct() }
+
         try {
             AppLogger.log(
                 LogEntry(
@@ -43,9 +45,10 @@ class CullinanCookieJar : CookieJar {
                         action = "SAVE_RESPONSE",
                         cookieCount = currentCookies.size,
                         hasSessionCookie = hasSession || getSessionFingerprint(host) != "NONE",
-                        sessionFingerprint = sessionFp ?: getSessionFingerprint(host)
+                        sessionFingerprint = sessionFp ?: getSessionFingerprint(host),
+                        cookieNames = cookieNames
                     ),
-                    message = "Saved ${cookies.size} cookies for host $host"
+                    message = "Saved ${cookies.size} cookies for host $host (total=${currentCookies.size})"
                 )
             )
         } catch (_: Exception) {
@@ -82,7 +85,8 @@ class CullinanCookieJar : CookieJar {
                         cookieCount = validCookies.size,
                         hasSessionCookie = hasSession,
                         sessionFingerprint = sessionFp,
-                        expiredRemovedCount = expiredCount
+                        expiredRemovedCount = expiredCount,
+                        cookieNames = validCookies.map { it.name }.distinct()
                     ),
                     message = "Loaded ${validCookies.size} cookies for ${url.encodedPath} (expired pruned: $expiredCount)"
                 )

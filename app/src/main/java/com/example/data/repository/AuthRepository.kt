@@ -71,16 +71,26 @@ class AuthRepository {
                 AppLogger.log(
                     LogEntry(
                         timestamp = "",
-                        level = LogLevel.INFO,
+                        level = if (viewState.isBlank() || publicKeyPem.isBlank()) LogLevel.WARN else LogLevel.INFO,
                         component = "AuthRepository",
                         operation = "FetchLoginPageSuccess",
                         flowId = flowId,
-                        message = "Login page fetched (VS len=${viewState.length}, PEM len=${publicKeyPem.length}, PEM fp=${LogSanitizer.computeFingerprint(publicKeyPem)})"
+                        errorCategory = if (publicKeyPem.isBlank()) "MISSING_RSA_PUBLIC_KEY" else if (viewState.isBlank()) "MISSING_VIEWSTATE" else null,
+                        message = "Login page fetched (VS len=${viewState.length}, gen=$viewStateGenerator, PEM len=${publicKeyPem.length}, PEM fp=${LogSanitizer.computeFingerprint(publicKeyPem)})"
                     )
                 )
 
                 // Fetch live captcha with the exact same session
                 val captchaBytes = fetchCaptchaBytesInternal(flowId)
+                if (captchaBytes == null || captchaBytes.isEmpty()) {
+                    AppLogger.logWarn(
+                        component = "AuthRepository",
+                        operation = "FetchLoginCaptchaMissing",
+                        message = "Login page loaded but initial captcha image was empty or failed",
+                        flowId = flowId,
+                        errorCategory = "CAPTCHA_EMPTY"
+                    )
+                }
 
                 Result.success(
                     LoginPageState(
@@ -93,7 +103,7 @@ class AuthRepository {
                 )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                AppLogger.logError("AuthRepository", "Fetch login page exception: ${e.message}", e, flowId = flowId)
+                AppLogger.logError("AuthRepository", "Fetch login page exception: ${e.message}", e, flowId = flowId, operation = "FetchLoginPageError", errorCategory = "AUTH_INIT_EXCEPTION")
                 Result.failure(e)
             }
         }
@@ -262,6 +272,13 @@ class AuthRepository {
 
             // If viewState is missing, fetch current page HTML to extract latest ViewState
             if (viewState.isBlank()) {
+                AppLogger.logWarn(
+                    component = "AuthRepository",
+                    operation = "LogoutFetchFallbackState",
+                    message = "Current menu missing ViewState during logout; fetching Reservation.aspx for fresh state",
+                    flowId = flowId,
+                    errorCategory = "LOGOUT_STATE_FALLBACK"
+                )
                 val getReq = Request.Builder()
                     .url(CullinanHttpClient.RESERVATION_URL)
                     .get()
@@ -276,6 +293,14 @@ class AuthRepository {
                         val gen = doc.select("input[name=__VIEWSTATEGENERATOR]").`val`()
                         if (gen.isNotBlank()) viewStateGen = gen
                         eventVal = doc.select("input[name=__EVENTVALIDATION]").`val`()
+                    } else {
+                        AppLogger.logWarn(
+                            component = "AuthRepository",
+                            operation = "LogoutFetchStateFailed",
+                            message = "Fallback Reservation GET during logout failed with HTTP ${getResp.code}",
+                            flowId = flowId,
+                            errorCategory = "LOGOUT_STATE_HTTP_${getResp.code}"
+                        )
                     }
                 }
             }
@@ -369,24 +394,57 @@ class AuthRepository {
     }
 
     private suspend fun fetchCaptchaBytesInternal(flowId: String? = null): ByteArray? = withContext(Dispatchers.IO) {
+        val effFlowId = flowId ?: AppLogger.generateFlowId("cap")
         try {
             val url = "${CullinanHttpClient.CAPTCHA_URL}?r=${System.currentTimeMillis()}"
             val request = Request.Builder()
                 .url(url)
                 .get()
                 .header("Referer", CullinanHttpClient.LOGIN_URL)
-                .tag(LogContext::class.java, LogContext(flowId ?: AppLogger.generateFlowId("cap"), "FetchCaptcha"))
+                .tag(LogContext::class.java, LogContext(effFlowId, "FetchCaptcha"))
                 .build()
 
             CullinanHttpClient.executeCall(request).use { response ->
                 if (response.isSuccessful) {
-                    response.body?.bytes()
+                    val bytes = response.body?.bytes()
+                    if (bytes == null || bytes.isEmpty()) {
+                        AppLogger.logWarn(
+                            component = "AuthRepository",
+                            operation = "FetchCaptchaEmpty",
+                            message = "Captcha HTTP ${response.code} returned empty byte array",
+                            flowId = effFlowId,
+                            errorCategory = "CAPTCHA_EMPTY_BODY"
+                        )
+                    } else {
+                        AppLogger.logDebug(
+                            component = "AuthRepository",
+                            operation = "FetchCaptchaSuccess",
+                            message = "Fetched captcha image (${bytes.size} bytes)",
+                            flowId = effFlowId
+                        )
+                    }
+                    bytes
                 } else {
+                    AppLogger.logWarn(
+                        component = "AuthRepository",
+                        operation = "FetchCaptchaHttpError",
+                        message = "Captcha request failed with HTTP ${response.code}",
+                        flowId = effFlowId,
+                        errorCategory = "CAPTCHA_HTTP_${response.code}"
+                    )
                     null
                 }
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            AppLogger.logError(
+                tag = "AuthRepository",
+                message = "Captcha fetch exception: ${e.message}",
+                throwable = e,
+                flowId = effFlowId,
+                operation = "FetchCaptchaException",
+                errorCategory = "CAPTCHA_NETWORK_ERROR"
+            )
             null
         }
     }

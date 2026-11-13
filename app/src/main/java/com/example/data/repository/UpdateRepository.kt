@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import com.example.BuildConfig
+import com.example.data.logger.AppLogger
 import com.example.data.model.AppUpdateInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,6 +27,8 @@ class UpdateRepository(
     suspend fun checkForUpdate(
         currentVersionName: String = BuildConfig.VERSION_NAME
     ): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {
+        val flowId = AppLogger.generateFlowId("upd")
+        AppLogger.logInfo("UpdateRepository", "CheckForUpdate", "Checking latest GitHub release (current=$currentVersionName)", flowId)
         try {
             val request = Request.Builder()
                 .url(RELEASES_API_URL)
@@ -34,15 +37,26 @@ class UpdateRepository(
                 .get()
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
+            var isSuccessful = false
+            var responseCode = 0
+            var bodyString = ""
+            client.newCall(request).execute().use { response ->
+                isSuccessful = response.isSuccessful
+                responseCode = response.code
+                if (isSuccessful) {
+                    bodyString = response.body?.string() ?: ""
+                }
+            }
+
+            if (!isSuccessful) {
+                AppLogger.logWarn("UpdateRepository", "CheckForUpdateHttpError", "GitHub releases API returned HTTP $responseCode", flowId = flowId)
                 return@withContext Result.failure(
-                    Exception("عدم دریافت اطلاعات نسخه از گیت‌هاب (کد خطا: ${response.code})")
+                    Exception("عدم دریافت اطلاعات نسخه از گیت‌هاب (کد خطا: $responseCode)")
                 )
             }
 
-            val bodyString = response.body?.string() ?: ""
             if (bodyString.isBlank()) {
+                AppLogger.logWarn("UpdateRepository", "CheckForUpdateEmpty", "GitHub releases API returned empty body", flowId = flowId)
                 return@withContext Result.failure(Exception("پاسخ سرور گیت‌هاب خالی بود"))
             }
 
@@ -67,6 +81,13 @@ class UpdateRepository(
             val changelogSnippet = extractChangelogSnippet(rawBody)
             val isNewer = isNewerVersion(latest = tagName, current = currentVersionName)
 
+            AppLogger.logInfo(
+                "UpdateRepository",
+                "CheckForUpdateSuccess",
+                "Latest tag='$tagName', current='$currentVersionName', updateAvailable=$isNewer",
+                flowId
+            )
+
             Result.success(
                 AppUpdateInfo(
                     isUpdateAvailable = isNewer,
@@ -79,6 +100,7 @@ class UpdateRepository(
             )
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            AppLogger.logError("UpdateRepository", "Update check failed: ${e.message}", e, flowId = flowId, operation = "CheckForUpdate")
             Result.failure(e)
         }
     }

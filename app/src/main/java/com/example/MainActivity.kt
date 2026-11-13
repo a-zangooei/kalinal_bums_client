@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppLogger.init(applicationContext)
+        AppLogger.installCrashHandler(applicationContext)
         AppLogger.logAction("Application Started")
 
         enableEdgeToEdge()
@@ -107,12 +108,16 @@ fun KalinanApp(
         if (isPreLoginSettingsOpen) {
             BackHandler {
                 isPreLoginSettingsOpen = false
+                AppLogger.logAction("Pre-login Settings closed via Back")
             }
 
             SettingsScreen(
                 currentThemeMode = currentThemeMode,
                 onThemeChanged = onThemeChanged,
-                onNavigateBack = { isPreLoginSettingsOpen = false },
+                onNavigateBack = {
+                    isPreLoginSettingsOpen = false
+                    AppLogger.logAction("Pre-login Settings closed via Back button")
+                },
                 onCheckForUpdates = { updateViewModel.checkForUpdates(isManual = true) },
                 modifier = Modifier.fillMaxSize()
             )
@@ -127,10 +132,11 @@ fun KalinanApp(
                     } else {
                         selectedBottomTab = 0
                     }
-                    AppLogger.logAction("User logged in: ${userSession.username} (hasUnreadMessages: ${userSession.hasUnreadMessages})")
+                    AppLogger.logAction("User logged in (hasUnreadMessages: ${userSession.hasUnreadMessages}, initialTab=$selectedBottomTab)")
                 },
                 onOpenSettings = {
                     isPreLoginSettingsOpen = true
+                    AppLogger.logAction("Opened pre-login Settings")
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -174,6 +180,7 @@ fun KalinanApp(
         }
 
         BackHandler {
+            AppLogger.logAction("System Back pressed (tab=$selectedBottomTab, blocking=$isMandatoryBlocking)")
             if (isMandatoryBlocking) {
                 handleLogout()
             } else if (selectedBottomTab != 0) {
@@ -293,6 +300,7 @@ fun KalinanApp(
                                 isBlockingMode = true,
                                 onNavigateBack = null,
                                 onUnlockedSuccess = {
+                                    AppLogger.logInfo("Navigation", "MessagesUnlocked", "Reservation unlocked from blocking MessagesScreen")
                                     activeSession = activeSession?.copy(hasUnreadMessages = false)
                                     menuViewModel.clearUnreadBlocked()
                                     menuViewModel.loadInitialMenu()
@@ -319,6 +327,7 @@ fun KalinanApp(
                         isBlockingMode = isMandatoryBlocking,
                         onNavigateBack = if (!isMandatoryBlocking) { { selectedBottomTab = 0 } } else null,
                         onUnlockedSuccess = {
+                            AppLogger.logInfo("Navigation", "MessagesUnlocked", "Reservation unlocked from Messages tab")
                             activeSession = activeSession?.copy(hasUnreadMessages = false)
                             menuViewModel.clearUnreadBlocked()
                             menuViewModel.loadInitialMenu()

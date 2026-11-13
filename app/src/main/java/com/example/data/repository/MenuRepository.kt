@@ -59,7 +59,7 @@ class MenuRepository {
                     return@withContext Result.failure(Exception("خطا در دریافت جدول برنامه غذایی ($responseCode)"))
                 }
 
-                val classification = PageClassifier.classify(html, responseCode, finalUrl)
+                val classification = PageClassifier.classify(html, responseCode, finalUrl, flowId = flowId)
 
                 if (classification.pageType != PageClassifier.TYPE_RESERVATION) {
                     com.example.data.logger.AppLogger.log(
@@ -173,11 +173,13 @@ class MenuRepository {
                 val isFullHtml = (deltaText.contains("<!DOCTYPE", ignoreCase = true) || deltaText.contains("<html", ignoreCase = true)) &&
                     !deltaText.contains("|updatePanel|") && !deltaText.contains("|hiddenField|")
                 if (isFullHtml) {
-                    val classification = PageClassifier.classify(deltaText, responseCode, finalUrl)
+                    val classification = PageClassifier.classify(deltaText, responseCode, finalUrl, flowId = flowId)
                     com.example.data.logger.AppLogger.logError(
                         "MenuRepository",
                         "Full HTML returned instead of Delta during week navigation: ${classification.pageType}",
-                        flowId = flowId
+                        flowId = flowId,
+                        operation = "NavigateWeekFullHtml",
+                        errorCategory = "UNEXPECTED_FULL_HTML"
                     )
                     return@withContext Result.failure(
                         when (classification.pageType) {
@@ -189,7 +191,7 @@ class MenuRepository {
                     )
                 }
 
-                val deltaResponse = DeltaParser.parse(deltaText)
+                val deltaResponse = DeltaParser.parse(deltaText, flowId = flowId)
 
                 if (deltaResponse.isSessionExpired) {
                     com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during week navigation", flowId = flowId)
@@ -313,22 +315,31 @@ class MenuRepository {
                     com.example.data.logger.AppLogger.logError("MenuRepository", "Reserve meal HTTP failure $responseCode", flowId = flowId)
                     return@withContext Result.failure(Exception("خطا در ثبت رزرو غذا در سرور ($responseCode)"))
                 }
-                val deltaResponse = DeltaParser.parse(deltaText)
+                val deltaResponse = DeltaParser.parse(deltaText, flowId = flowId)
 
                 if (deltaResponse.isSessionExpired) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during meal reservation", flowId = flowId)
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during meal reservation", flowId = flowId, operation = "ReserveMealSessionExpired", errorCategory = "SESSION_EXPIRED")
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
                 if (!deltaResponse.errorMessage.isNullOrBlank()) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal reservation: ${deltaResponse.errorMessage}", flowId = flowId)
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal reservation: ${deltaResponse.errorMessage}", flowId = flowId, operation = "ReserveMealServerError", errorCategory = "DELTA_SERVER_ERROR")
                     return@withContext Result.failure(Exception("خطای سرور در ثبت رزرو: ${deltaResponse.errorMessage}"))
                 }
 
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
                     ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
                     ?: deltaResponse.updatePanels[currentMenu.updatePanelName]
-                    ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
+                    ?: run {
+                        com.example.data.logger.AppLogger.logError(
+                            "MenuRepository",
+                            "Missing UpdatePanel1 in reserveMeal response (tokens=${deltaResponse.rawTokens.size}, panels=${deltaResponse.updatePanels.keys.joinToString()})",
+                            flowId = flowId,
+                            operation = "ReserveMealMissingPanel",
+                            errorCategory = "MISSING_UPDATE_PANEL"
+                        )
+                        return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
+                    }
 
                 val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentMenu.viewState
                 val newGenerator = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: currentMenu.viewStateGenerator
@@ -434,22 +445,31 @@ class MenuRepository {
                     com.example.data.logger.AppLogger.logError("MenuRepository", "Cancel meal HTTP failure $responseCode", flowId = flowId)
                     return@withContext Result.failure(Exception("خطا در لغو رزرو غذا در سرور ($responseCode)"))
                 }
-                val deltaResponse = DeltaParser.parse(deltaText)
+                val deltaResponse = DeltaParser.parse(deltaText, flowId = flowId)
 
                 if (deltaResponse.isSessionExpired) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during meal cancellation", flowId = flowId)
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Session expired during meal cancellation", flowId = flowId, operation = "CancelMealSessionExpired", errorCategory = "SESSION_EXPIRED")
                     return@withContext Result.failure(Exception("نشست کاری شما در سامانه منقضی شده است. لطفاً مجدداً وارد شوید."))
                 }
 
                 if (!deltaResponse.errorMessage.isNullOrBlank()) {
-                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal cancellation: ${deltaResponse.errorMessage}", flowId = flowId)
+                    com.example.data.logger.AppLogger.logError("MenuRepository", "Server error during meal cancellation: ${deltaResponse.errorMessage}", flowId = flowId, operation = "CancelMealServerError", errorCategory = "DELTA_SERVER_ERROR")
                     return@withContext Result.failure(Exception("خطای سرور در لغو رزرو: ${deltaResponse.errorMessage}"))
                 }
 
                 val updatePanelHtml = deltaResponse.updatePanels["UpdatePanel1"]
                     ?: deltaResponse.updatePanels["ctl00\$UpdatePanel1"]
                     ?: deltaResponse.updatePanels[currentMenu.updatePanelName]
-                    ?: return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
+                    ?: run {
+                        com.example.data.logger.AppLogger.logError(
+                            "MenuRepository",
+                            "Missing UpdatePanel1 in cancelMeal response (tokens=${deltaResponse.rawTokens.size}, panels=${deltaResponse.updatePanels.keys.joinToString()})",
+                            flowId = flowId,
+                            operation = "CancelMealMissingPanel",
+                            errorCategory = "MISSING_UPDATE_PANEL"
+                        )
+                        return@withContext Result.failure(Exception("پاسخ سرور ناقص بود یا جلسه کاری منقضی شده است"))
+                    }
 
                 val newViewState = deltaResponse.hiddenFields["__VIEWSTATE"] ?: currentMenu.viewState
                 val newGenerator = deltaResponse.hiddenFields["__VIEWSTATEGENERATOR"] ?: currentMenu.viewStateGenerator
@@ -673,6 +693,12 @@ class MenuRepository {
                 }
             }
         } else if (targetMealType != null) {
+            com.example.data.logger.AppLogger.logWarn(
+                component = "MenuRepository",
+                operation = "SyntheticRowFallback",
+                message = "No TableRowSnapshots present for ${type.name}; using synthetic ctl02..ctl08 postback fields",
+                errorCategory = "TABLE_SNAPSHOT_MISSING"
+            )
             for (dayIdx in 0..6) {
                 val ctl = "ctl%02d".format(dayIdx + 2)
                 val meal = currentMenu.days.getOrNull(dayIdx)?.meals?.get(type)?.firstOrNull()

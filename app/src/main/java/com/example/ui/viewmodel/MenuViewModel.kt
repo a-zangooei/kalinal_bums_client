@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.logger.AppLogger
 import com.example.data.model.MealType
 import com.example.data.model.WeekNavigationDirection
 import com.example.data.model.WeeklyMenu
@@ -52,6 +53,7 @@ class MenuViewModel(
     }
 
     fun loadInitialMenu() {
+        AppLogger.logInfo("MenuViewModel", "LoadInitialMenu", "Loading initial weekly reservation menu")
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -60,12 +62,16 @@ class MenuViewModel(
                 _weeklyMenu.value = menu
                 _weekOffset.value = 0
                 _hasUnreadMessagesBlocked.value = false
+                AppLogger.logInfo("MenuViewModel", "LoadInitialMenuSuccess", "Loaded week '${menu.weekDateRange}' with credit=${menu.creditValueRials}")
             }.onFailure { error ->
                 if (error is com.example.data.model.UnreadMessagesException) {
                     _hasUnreadMessagesBlocked.value = true
                     _errorMessage.value = error.message
+                    AppLogger.logWarn("MenuViewModel", "LoadInitialMenuBlocked", "Blocked by ${error.unreadCount} unread messages", errorCategory = "UNREAD_MESSAGES_BLOCK")
                 } else {
-                    _errorMessage.value = error.message ?: "خطا در دریافت جدول برنامه غذایی از سرور دانشگاه"
+                    val msg = error.message ?: "خطا در دریافت جدول برنامه غذایی از سرور دانشگاه"
+                    _errorMessage.value = msg
+                    AppLogger.logError("MenuViewModel", "LoadInitialMenu failed: $msg", error, operation = "LoadInitialMenuFailure", errorCategory = "MENU_LOAD_ERROR")
                 }
             }
             _isLoading.value = false
@@ -73,14 +79,22 @@ class MenuViewModel(
     }
 
     fun navigateWeek(direction: WeekNavigationDirection) {
-        val current = _weeklyMenu.value ?: return
-        if (_isLoading.value || _isMutating.value) return
+        val current = _weeklyMenu.value
+        if (current == null) {
+            AppLogger.logWarn("MenuViewModel", "NavigateWeekSkipped", "Cannot navigate $direction because weeklyMenu is null", errorCategory = "NULL_MENU_STATE")
+            return
+        }
+        if (_isLoading.value || _isMutating.value) {
+            AppLogger.logWarn("MenuViewModel", "NavigateWeekSkipped", "Ignored $direction while loading=${_isLoading.value} mutating=${_isMutating.value}", errorCategory = "BUSY_GUARD")
+            return
+        }
 
+        val activeTabId = _selectedMealFilter.value?.tabId ?: MealType.LUNCH.tabId
+        AppLogger.logInfo("MenuViewModel", "NavigateWeek", "Navigating $direction (currentOffset=${_weekOffset.value}, tabId=$activeTabId)")
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
-            val activeTabId = _selectedMealFilter.value?.tabId ?: MealType.LUNCH.tabId
             val result = menuRepository.navigateWeek(
                 direction = direction,
                 currentMenu = current,
@@ -95,11 +109,14 @@ class MenuViewModel(
                 if (!alert.isNullOrBlank()) {
                     _userFeedback.value = Pair(alert, true)
                 }
+                AppLogger.logInfo("MenuViewModel", "NavigateWeekSuccess", "Moved to '${updatedMenu.weekDateRange}' (offset=$newOffset, alert=${alert != null})")
             }.onFailure { error ->
                 if (error is com.example.data.model.UnreadMessagesException) {
                     _hasUnreadMessagesBlocked.value = true
                 }
-                _errorMessage.value = error.message ?: "خطا در جابه‌جایی هفته"
+                val msg = error.message ?: "خطا در جابه‌جایی هفته"
+                _errorMessage.value = msg
+                AppLogger.logError("MenuViewModel", "NavigateWeek failed: $msg", error, operation = "NavigateWeekFailure", errorCategory = "WEEK_NAV_ERROR")
             }
 
             _isLoading.value = false
@@ -107,9 +124,17 @@ class MenuViewModel(
     }
 
     fun reserveMeal(mealType: MealType, dayIndex: Int, foodId: String, selfId: String) {
-        val current = _weeklyMenu.value ?: return
-        if (_isMutating.value) return
+        val current = _weeklyMenu.value
+        if (current == null) {
+            AppLogger.logWarn("MenuViewModel", "ReserveMealSkipped", "Skipped reserveMeal(${mealType.name}, day=$dayIndex) because weeklyMenu is null", errorCategory = "NULL_MENU_STATE")
+            return
+        }
+        if (_isMutating.value) {
+            AppLogger.logWarn("MenuViewModel", "ReserveMealSkipped", "Skipped reserveMeal(${mealType.name}, day=$dayIndex) because another mutation is in progress", errorCategory = "MUTATION_GUARD")
+            return
+        }
 
+        AppLogger.logInfo("MenuViewModel", "ReserveMeal", "Requesting reserve ${mealType.name} day=$dayIndex foodId=$foodId selfId=$selfId")
         viewModelScope.launch {
             _isMutating.value = true
             _processingDayIndex.value = dayIndex
@@ -130,11 +155,15 @@ class MenuViewModel(
                 _userFeedback.value = Pair(res.message, res.isSuccess)
                 if (!res.isSuccess) {
                     _errorMessage.value = res.message
+                    AppLogger.logWarn("MenuViewModel", "ReserveMealRejected", "Server toast (${res.toastType}): ${res.message}", errorCategory = "RESERVE_REJECTED")
+                } else {
+                    AppLogger.logInfo("MenuViewModel", "ReserveMealSuccess", "Reserved ${mealType.name} day=$dayIndex: ${res.message}")
                 }
             }.onFailure { error ->
                 val msg = error.message ?: "خطا در ارسال درخواست رزرو ${mealType.titlePersian}"
                 _errorMessage.value = msg
                 _userFeedback.value = Pair(msg, false)
+                AppLogger.logError("MenuViewModel", "ReserveMeal exception: $msg", error, operation = "ReserveMealError", errorCategory = "RESERVE_ERROR")
             }
 
             _processingDayIndex.value = null
@@ -143,9 +172,17 @@ class MenuViewModel(
     }
 
     fun cancelMeal(mealType: MealType, dayIndex: Int) {
-        val current = _weeklyMenu.value ?: return
-        if (_isMutating.value) return
+        val current = _weeklyMenu.value
+        if (current == null) {
+            AppLogger.logWarn("MenuViewModel", "CancelMealSkipped", "Skipped cancelMeal(${mealType.name}, day=$dayIndex) because weeklyMenu is null", errorCategory = "NULL_MENU_STATE")
+            return
+        }
+        if (_isMutating.value) {
+            AppLogger.logWarn("MenuViewModel", "CancelMealSkipped", "Skipped cancelMeal(${mealType.name}, day=$dayIndex) because another mutation is in progress", errorCategory = "MUTATION_GUARD")
+            return
+        }
 
+        AppLogger.logInfo("MenuViewModel", "CancelMeal", "Requesting cancel ${mealType.name} day=$dayIndex")
         viewModelScope.launch {
             _isMutating.value = true
             _processingDayIndex.value = dayIndex
@@ -164,11 +201,15 @@ class MenuViewModel(
                 _userFeedback.value = Pair(res.message, res.isSuccess)
                 if (!res.isSuccess) {
                     _errorMessage.value = res.message
+                    AppLogger.logWarn("MenuViewModel", "CancelMealRejected", "Server toast (${res.toastType}): ${res.message}", errorCategory = "CANCEL_REJECTED")
+                } else {
+                    AppLogger.logInfo("MenuViewModel", "CancelMealSuccess", "Cancelled ${mealType.name} day=$dayIndex: ${res.message}")
                 }
             }.onFailure { error ->
                 val msg = error.message ?: "خطا در ارسال درخواست لغو رزرو ${mealType.titlePersian}"
                 _errorMessage.value = msg
                 _userFeedback.value = Pair(msg, false)
+                AppLogger.logError("MenuViewModel", "CancelMeal exception: $msg", error, operation = "CancelMealError", errorCategory = "CANCEL_ERROR")
             }
 
             _processingDayIndex.value = null
@@ -183,14 +224,18 @@ class MenuViewModel(
         cancelMeal(MealType.LUNCH, dayIndex)
 
     fun selectDay(index: Int) {
-        _selectedDayIndex.value = index.coerceIn(0, 4)
+        val clamped = index.coerceIn(0, 4)
+        _selectedDayIndex.value = clamped
+        AppLogger.logDebug("MenuViewModel", "SelectDay", "Selected dayIndex=$clamped")
     }
 
     fun selectMealFilter(filter: MealType?) {
         _selectedMealFilter.value = filter
+        AppLogger.logDebug("MenuViewModel", "SelectMealFilter", "Filter=${filter?.name ?: "ALL"}")
     }
 
     fun refresh() {
+        AppLogger.logAction("Manual menu refresh triggered")
         loadInitialMenu()
     }
 

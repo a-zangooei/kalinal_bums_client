@@ -77,9 +77,11 @@ object LogSanitizer {
             component = sanitizeText(entry.component),
             errorCategory = entry.errorCategory?.let { sanitizeText(it) },
             exceptionMessage = entry.exceptionMessage?.let { sanitizeText(it) },
+            stackTrace = entry.stackTrace?.let { sanitizeText(it) },
             http = entry.http?.copy(
                 url = sanitizeText(entry.http.url),
-                finalUrl = entry.http.finalUrl?.let { sanitizeText(it) }
+                finalUrl = entry.http.finalUrl?.let { sanitizeText(it) },
+                redirectLocation = entry.http.redirectLocation?.let { sanitizeText(it) }
             ),
             aspnet = entry.aspnet?.copy(
                 eventTarget = entry.aspnet.eventTarget?.let { sanitizeText(it) }

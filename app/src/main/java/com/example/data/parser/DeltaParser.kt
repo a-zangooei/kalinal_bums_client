@@ -30,7 +30,7 @@ object DeltaParser {
         """toastify\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]*)['"])?"""
     )
 
-    fun parse(deltaText: String): DeltaResponse {
+    fun parse(deltaText: String, flowId: String? = null): DeltaResponse {
         val updatePanels = mutableMapOf<String, String>()
         val hiddenFields = mutableMapOf<String, String>()
         val startupScripts = mutableListOf<String>()
@@ -39,6 +39,10 @@ object DeltaParser {
         var formAction: String? = null
         var errorMessage: String? = null
         var errorStatusCode: String? = null
+
+        var skippedLengthTokens = 0
+        var truncatedSegments = 0
+        var regexFallbacksUsed = mutableListOf<String>()
 
         var pos = 0
         val len = deltaText.length
@@ -50,16 +54,23 @@ object DeltaParser {
             val tokenLen = lengthStr.toIntOrNull()
 
             if (tokenLen == null) {
+                skippedLengthTokens++
                 pos = pipe1 + 1
                 continue
             }
 
             val pipe2 = deltaText.indexOf('|', pipe1 + 1)
-            if (pipe2 == -1) break
+            if (pipe2 == -1) {
+                truncatedSegments++
+                break
+            }
             val type = deltaText.substring(pipe1 + 1, pipe2)
 
             val pipe3 = deltaText.indexOf('|', pipe2 + 1)
-            if (pipe3 == -1) break
+            if (pipe3 == -1) {
+                truncatedSegments++
+                break
+            }
             val id = deltaText.substring(pipe2 + 1, pipe3)
 
             val contentStart = pipe3 + 1
@@ -70,6 +81,7 @@ object DeltaParser {
                 content = deltaText.substring(contentStart, expectedEnd)
                 pos = expectedEnd + 1
             } else {
+                regexFallbacksUsed.add("token_boundary:$type:$id")
                 val nextTokenPattern = Regex("""\|(\d+)\|([a-zA-Z0-9_#]+)\|""")
                 val match = nextTokenPattern.find(deltaText, contentStart)
                 if (match != null) {
@@ -101,18 +113,21 @@ object DeltaParser {
             val vsMatch = Regex("""\|hiddenField\|__VIEWSTATE\|([^|]+)\|""").find(deltaText)
             if (vsMatch != null) {
                 hiddenFields["__VIEWSTATE"] = vsMatch.groupValues[1]
+                regexFallbacksUsed.add("__VIEWSTATE")
             }
         }
         if (!hiddenFields.containsKey("__VIEWSTATEGENERATOR")) {
             val vsgMatch = Regex("""\|hiddenField\|__VIEWSTATEGENERATOR\|([^|]+)\|""").find(deltaText)
             if (vsgMatch != null) {
                 hiddenFields["__VIEWSTATEGENERATOR"] = vsgMatch.groupValues[1]
+                regexFallbacksUsed.add("__VIEWSTATEGENERATOR")
             }
         }
         if (!hiddenFields.containsKey("__EVENTVALIDATION")) {
             val evMatch = Regex("""\|hiddenField\|__EVENTVALIDATION\|([^|]+)\|""").find(deltaText)
             if (evMatch != null) {
                 hiddenFields["__EVENTVALIDATION"] = evMatch.groupValues[1]
+                regexFallbacksUsed.add("__EVENTVALIDATION")
             }
         }
 
@@ -123,6 +138,7 @@ object DeltaParser {
                 val panelId = match.groupValues[1]
                 val panelContent = match.groupValues[2]
                 updatePanels[panelId] = panelContent
+                regexFallbacksUsed.add("UpdatePanel:$panelId")
                 if (panelId.endsWith("UpdatePanel1")) {
                     updatePanels["UpdatePanel1"] = panelContent
                     updatePanels["ctl00\$UpdatePanel1"] = panelContent
@@ -150,18 +166,33 @@ object DeltaParser {
         val isSessionExpired = redirectUrl?.contains("Login.aspx", ignoreCase = true) == true ||
             (updatePanels.isEmpty() && (deltaText.contains("Login.aspx") || deltaText.contains("txtUsernamePlain")))
 
+        val tokenCounts = rawTokens.groupingBy { it.type }.eachCount()
+            .entries.joinToString(", ") { "${it.key}=${it.value}" }
+        val hasAnomaly = errorMessage != null || isSessionExpired || truncatedSegments > 0 ||
+            skippedLengthTokens > 0 || regexFallbacksUsed.isNotEmpty() || rawTokens.isEmpty()
+
         com.example.data.logger.AppLogger.log(
             com.example.data.logger.LogEntry(
                 timestamp = "",
-                level = if (errorMessage != null) com.example.data.logger.LogLevel.WARN else com.example.data.logger.LogLevel.DEBUG,
+                level = if (hasAnomaly) com.example.data.logger.LogLevel.WARN else com.example.data.logger.LogLevel.DEBUG,
                 component = "DeltaParser",
                 operation = "ParseDelta",
+                flowId = flowId,
+                errorCategory = when {
+                    errorMessage != null -> "DELTA_SERVER_ERROR"
+                    isSessionExpired -> "DELTA_SESSION_EXPIRED"
+                    truncatedSegments > 0 || rawTokens.isEmpty() -> "DELTA_MALFORMED"
+                    regexFallbacksUsed.isNotEmpty() -> "DELTA_FALLBACK_REGEX"
+                    else -> null
+                },
                 aspnet = com.example.data.logger.AspNetDiagnostics(
                     viewStateLength = hiddenFields["__VIEWSTATE"]?.length,
                     viewStateFingerprint = hiddenFields["__VIEWSTATE"]?.let { com.example.data.logger.LogSanitizer.computeFingerprint(it) },
-                    viewStateGenerator = hiddenFields["__VIEWSTATEGENERATOR"]
+                    viewStateGenerator = hiddenFields["__VIEWSTATEGENERATOR"],
+                    hasEventValidation = hiddenFields.containsKey("__EVENTVALIDATION"),
+                    eventValidationLength = hiddenFields["__EVENTVALIDATION"]?.length
                 ),
-                message = "Parsed ${rawTokens.size} delta tokens (Panels: ${updatePanels.keys.joinToString()}, Expired: $isSessionExpired, Toast: $extractedToastType, ErrorCode: $errorStatusCode)"
+                message = "Parsed ${rawTokens.size} delta tokens [$tokenCounts] (Panels: ${updatePanels.keys.joinToString()}, Redirect=$redirectUrl, Expired=$isSessionExpired, Toast=$extractedToastType, ErrorCode=$errorStatusCode, Fallbacks=${regexFallbacksUsed.take(5)}, Truncated=$truncatedSegments, SkippedLen=$skippedLengthTokens)"
             )
         )
 
