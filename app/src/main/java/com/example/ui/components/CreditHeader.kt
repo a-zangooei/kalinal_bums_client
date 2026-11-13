@@ -57,7 +57,7 @@ fun CreditHeader(
             .testTag("credit_header_card"),
         shape = CreditCardShape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
@@ -76,8 +76,7 @@ fun CreditHeader(
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
-                                .clip(CircleShape)
-                                .background(WhiteAvatarBg),
+                                .background(WhiteAvatarBg, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(

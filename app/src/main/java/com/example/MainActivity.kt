@@ -33,7 +33,7 @@ import com.example.data.logger.AppLogger
 import com.example.data.model.UserSession
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.PersianRtlLayout
 import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.LoginScreen
@@ -96,10 +96,10 @@ fun KalinanApp(
     val messagesViewModel: MessagesViewModel = viewModel()
     val updateViewModel: UpdateViewModel = viewModel()
 
-    val updateInfo by updateViewModel.updateInfo.collectAsState()
-    val userMessage by updateViewModel.userMessage.collectAsState()
-    val messagesState by messagesViewModel.pageState.collectAsState()
-    val menuBlockedByUnread by menuViewModel.hasUnreadMessagesBlocked.collectAsState()
+    val updateInfo by updateViewModel.updateInfo.collectAsStateWithLifecycle()
+    val userMessage by updateViewModel.userMessage.collectAsStateWithLifecycle()
+    val messagesState by messagesViewModel.pageState.collectAsStateWithLifecycle()
+    val menuBlockedByUnread by menuViewModel.hasUnreadMessagesBlocked.collectAsStateWithLifecycle()
 
     val isMandatoryBlocking = (activeSession?.hasUnreadMessages == true || menuBlockedByUnread || messagesState.hasUnreadMessages) && !messagesState.isReservationUnlocked
 
@@ -147,35 +147,56 @@ fun KalinanApp(
         val context = LocalContext.current
         val authRepo = remember { AuthRepository() }
 
-        val handleLogout: () -> Unit = {
-            if (!isLoggingOut) {
-                isLoggingOut = true
-                AppLogger.logAction("User initiated real server logout")
-                val currentMenu = menuViewModel.weeklyMenu.value
+        val handleLogout: () -> Unit = remember(authViewModel, menuViewModel, authRepo, context) {
+            {
+                if (!isLoggingOut) {
+                    isLoggingOut = true
+                    AppLogger.logAction("User initiated real server logout")
+                    val currentMenu = menuViewModel.weeklyMenu.value
 
-                coroutineScope.launch {
-                    try {
-                        val serverResult = authRepo.logoutFromServer(currentMenu)
-                        if (serverResult.isSuccess) {
-                            Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
-                        } else {
+                    coroutineScope.launch {
+                        try {
+                            val serverResult = authRepo.logoutFromServer(currentMenu)
+                            if (serverResult.isSuccess) {
+                                Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                            }
+                        } catch (e: Exception) {
+                            AppLogger.logError("Logout", "Logout request failed", e)
                             Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                        } finally {
+                            // 1. Purge active local session state
+                            activeSession = null
+                            selectedBottomTab = 0
+                            menuViewModel.clearUnreadBlocked()
+                            // 2. Clear local cookies AFTER server request completed
+                            com.example.data.network.CullinanHttpClient.cookieJar.clear()
+                            // 3. Fetch a fresh Login.aspx page (fresh ViewState, fresh RSA Pem key, and fresh Captcha)
+                            authViewModel.loadLoginPage()
+                            isLoggingOut = false
                         }
-                    } catch (e: Exception) {
-                        AppLogger.logError("Logout", "Logout request failed", e)
-                        Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
-                    } finally {
-                        // 1. Purge active local session state
-                        activeSession = null
-                        selectedBottomTab = 0
-                        menuViewModel.clearUnreadBlocked()
-                        // 2. Clear local cookies AFTER server request completed
-                        com.example.data.network.CullinanHttpClient.cookieJar.clear()
-                        // 3. Fetch a fresh Login.aspx page (fresh ViewState, fresh RSA Pem key, and fresh Captcha)
-                        authViewModel.loadLoginPage()
-                        isLoggingOut = false
                     }
                 }
+            }
+        }
+        val onReservationTabClick = remember {
+            {
+                selectedBottomTab = 0
+                AppLogger.logAction("Switched to Reservation tab")
+            }
+        }
+        val onMessagesTabClick = remember(messagesViewModel) {
+            {
+                selectedBottomTab = 1
+                messagesViewModel.loadMessages()
+                AppLogger.logAction("Switched to Messages tab")
+            }
+        }
+        val onSettingsTabClick = remember {
+            {
+                selectedBottomTab = 2
+                AppLogger.logAction("Switched to Settings tab")
             }
         }
 
@@ -199,10 +220,7 @@ fun KalinanApp(
                     ) {
                         NavigationBarItem(
                             selected = selectedBottomTab == 0,
-                            onClick = {
-                                selectedBottomTab = 0
-                                AppLogger.logAction("Switched to Reservation tab")
-                            },
+                            onClick = onReservationTabClick,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.RestaurantMenu,
@@ -225,11 +243,7 @@ fun KalinanApp(
 
                         NavigationBarItem(
                             selected = selectedBottomTab == 1,
-                            onClick = {
-                                selectedBottomTab = 1
-                                messagesViewModel.loadMessages()
-                                AppLogger.logAction("Switched to Messages tab")
-                            },
+                            onClick = onMessagesTabClick,
                             icon = {
                                 BadgedBox(
                                     badge = {
@@ -265,10 +279,7 @@ fun KalinanApp(
 
                         NavigationBarItem(
                             selected = selectedBottomTab == 2,
-                            onClick = {
-                                selectedBottomTab = 2
-                                AppLogger.logAction("Switched to Settings tab")
-                            },
+                            onClick = onSettingsTabClick,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Settings,

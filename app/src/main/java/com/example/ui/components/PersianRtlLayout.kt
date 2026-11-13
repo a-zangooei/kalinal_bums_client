@@ -7,7 +7,11 @@ import androidx.compose.ui.unit.LayoutDirection
 
 @Composable
 fun PersianRtlLayout(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    if (LocalLayoutDirection.current == LayoutDirection.Rtl) {
         content()
+    } else {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            content()
+        }
     }
 }

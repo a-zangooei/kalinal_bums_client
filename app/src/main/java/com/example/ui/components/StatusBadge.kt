@@ -49,8 +49,7 @@ fun StatusBadge(
 
     Box(
         modifier = modifier
-            .clip(BadgeShape)
-            .background(bgColor)
+            .background(bgColor, BadgeShape)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {

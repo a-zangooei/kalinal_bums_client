@@ -4,15 +4,20 @@ import com.example.data.logger.AppLogger
 import com.example.data.logger.LogEntry
 import com.example.data.logger.LogLevel
 import com.example.data.model.DayMenu
+import com.example.data.model.FoodOption
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
 import com.example.data.model.ReservationStatus
+import com.example.data.model.WeekNavigationDirection
 import com.example.data.model.WeeklyMenu
 import com.example.ui.screens.MenuListRow
 import com.example.ui.screens.buildFlattenedMenuList
 import com.example.ui.screens.filterMealsForDay
+import com.example.ui.screens.isMealActionable
+import com.example.ui.screens.resolveWeekSwipeDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -149,5 +154,47 @@ class MenuListModelsUnitTest {
         assertTrue(ids.all { it > 0L })
         assertEquals(ids.size, ids.toSet().size)
         assertTrue(ids.zipWithNext().all { (a, b) -> a < b })
+    }
+
+    @Test
+    fun resolveWeekSwipeDirection_reversesHorizontalGesturesAndIgnoresVerticalOrShortMoves() {
+        assertEquals(WeekNavigationDirection.PREVIOUS, resolveWeekSwipeDirection(totalDx = -120f, totalDy = 0f))
+        assertEquals(WeekNavigationDirection.NEXT, resolveWeekSwipeDirection(totalDx = 120f, totalDy = 0f))
+        assertNull(resolveWeekSwipeDirection(totalDx = 80f, totalDy = 0f))
+        assertNull(resolveWeekSwipeDirection(totalDx = -80f, totalDy = 0f))
+        assertNull(resolveWeekSwipeDirection(totalDx = 120f, totalDy = 90f))
+        assertNull(resolveWeekSwipeDirection(totalDx = -120f, totalDy = 90f))
+    }
+
+    @Test
+    fun mealCardRow_specializesContentTypeAndIsMealActionableByLayoutShape() {
+        val readOnly = sampleMeal("ro", 0, MealType.LUNCH, ReservationStatus.LOCKED)
+        assertFalse(isMealActionable(readOnly))
+        assertEquals("meal_card_readonly", MenuListRow.MealCardRow(readOnly).contentType)
+
+        val unreservedNoOption = sampleMeal("no_opt", 0, MealType.LUNCH, ReservationStatus.NOT_RESERVED)
+            .copy(selectedFoodId = "-1", foodName = "غذا انتخاب نشده است", availableFoodOptions = emptyList())
+        assertFalse(isMealActionable(unreservedNoOption))
+        assertEquals("meal_card_readonly", MenuListRow.MealCardRow(unreservedNoOption).contentType)
+
+        val unreservedActionable = sampleMeal("res_opt", 0, MealType.LUNCH, ReservationStatus.NOT_RESERVED)
+            .copy(availableFoodOptions = listOf(FoodOption("1", "چلوکباب", 50000L)))
+        assertTrue(isMealActionable(unreservedActionable))
+        assertEquals("meal_card_reserve", MenuListRow.MealCardRow(unreservedActionable).contentType)
+
+        val reservedSingleBtn = sampleMeal("r1", 0, MealType.LUNCH, ReservationStatus.RESERVED)
+            .copy(availableFoodOptions = listOf(FoodOption("1", "چلوکباب", 50000L)))
+        assertTrue(isMealActionable(reservedSingleBtn))
+        assertEquals("meal_card_reserved_1btn", MenuListRow.MealCardRow(reservedSingleBtn).contentType)
+
+        val reservedTwoBtns = sampleMeal("r2", 0, MealType.LUNCH, ReservationStatus.RESERVED)
+            .copy(
+                availableFoodOptions = listOf(
+                    FoodOption("1", "چلوکباب", 50000L),
+                    FoodOption("2", "قرمه‌سبزی", 45000L)
+                )
+            )
+        assertTrue(isMealActionable(reservedTwoBtns))
+        assertEquals("meal_card_reserved_2btn", MenuListRow.MealCardRow(reservedTwoBtns).contentType)
     }
 }

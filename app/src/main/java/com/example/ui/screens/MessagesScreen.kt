@@ -51,13 +51,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -84,12 +83,12 @@ fun MessagesScreen(
     onUnlockedSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pageState by viewModel.pageState.collectAsState()
-    val isReadingSerialized by viewModel.isReadingSerialized.collectAsState()
-    val readingProgress by viewModel.readingProgress.collectAsState()
-    val selectedDetail by viewModel.selectedMessageDetail.collectAsState()
-    val isDetailLoading by viewModel.isDetailLoading.collectAsState()
-    val userNotification by viewModel.userMessage.collectAsState()
+    val pageState by viewModel.pageState.collectAsStateWithLifecycle()
+    val isReadingSerialized by viewModel.isReadingSerialized.collectAsStateWithLifecycle()
+    val readingProgress by viewModel.readingProgress.collectAsStateWithLifecycle()
+    val selectedDetail by viewModel.selectedMessageDetail.collectAsStateWithLifecycle()
+    val isDetailLoading by viewModel.isDetailLoading.collectAsStateWithLifecycle()
+    val userNotification by viewModel.userMessage.collectAsStateWithLifecycle()
 
     val onSelectMessage = remember(viewModel) {
         { message: MessageItem -> viewModel.selectMessageForDetails(message) }
@@ -168,8 +167,7 @@ fun MessagesScreen(
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -508,8 +506,12 @@ fun MessageCard(
 ) {
     val onClick = remember(message, onSelect) { { onSelect(message) } }
     val errorColor = MaterialTheme.colorScheme.error
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
     val unreadBorder = remember(errorColor) {
         BorderStroke(1.dp, errorColor.copy(alpha = 0.4f))
+    }
+    val readBorder = remember(outlineColor) {
+        BorderStroke(1.dp, outlineColor.copy(alpha = 0.7f))
     }
 
     Card(
@@ -525,8 +527,8 @@ fun MessageCard(
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (message.isRead) 1.dp else 2.dp),
-        border = if (!message.isRead) unreadBorder else null
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = if (!message.isRead) unreadBorder else readBorder
     ) {
         Row(
             modifier = Modifier
@@ -537,9 +539,9 @@ fun MessageCard(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(CircleShape)
                     .background(
-                        if (message.isRead) TealAlpha12 else errorColor.copy(alpha = 0.15f)
+                        if (message.isRead) TealAlpha12 else errorColor.copy(alpha = 0.15f),
+                        CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {

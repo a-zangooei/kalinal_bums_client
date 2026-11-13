@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,7 +76,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,8 +84,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -136,15 +136,15 @@ fun MenuScreen(
     isLoggingOut: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val weeklyMenu by viewModel.weeklyMenu.collectAsState()
-    val selectedDayIndex by viewModel.selectedDayIndex.collectAsState()
-    val selectedMealFilter by viewModel.selectedMealFilter.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isMutating by viewModel.isMutating.collectAsState()
-    val processingDayIndex by viewModel.processingDayIndex.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val userFeedback by viewModel.userFeedback.collectAsState()
-    val weekOffset by viewModel.weekOffset.collectAsState()
+    val weeklyMenu by viewModel.weeklyMenu.collectAsStateWithLifecycle()
+    val selectedDayIndex by viewModel.selectedDayIndex.collectAsStateWithLifecycle()
+    val selectedMealFilter by viewModel.selectedMealFilter.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
+    val processingDayIndex by viewModel.processingDayIndex.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val userFeedback by viewModel.userFeedback.collectAsStateWithLifecycle()
+    val weekOffset by viewModel.weekOffset.collectAsStateWithLifecycle()
 
     var showProfileDialog by remember { mutableStateOf(false) }
     var mealToReserve by remember { mutableStateOf<MealItem?>(null) }
@@ -197,6 +197,7 @@ fun MenuScreen(
     PersianRtlLayout {
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
                 TopAppBar(
@@ -205,8 +206,7 @@ fun MenuScreen(
                             Box(
                                 modifier = Modifier
                                     .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(AccentGold),
+                                    .background(AccentGold, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -289,13 +289,10 @@ fun MenuScreen(
                                 if (abs(totalDy) > touchSlop && abs(totalDy) > abs(totalDx)) {
                                     break
                                 }
-                                if (abs(totalDx) > 96f && abs(totalDx) > abs(totalDy) * 1.6f) {
+                                val swipeDirection = resolveWeekSwipeDirection(totalDx, totalDy)
+                                if (swipeDirection != null) {
                                     if (!currentIsLoading && !currentIsMutating) {
-                                        if (totalDx > 0f) {
-                                            viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS)
-                                        } else {
-                                            viewModel.navigateWeek(WeekNavigationDirection.NEXT)
-                                        }
+                                        viewModel.navigateWeek(swipeDirection)
                                     }
                                     break
                                 }
@@ -342,14 +339,17 @@ fun MenuScreen(
 
                         // 2. Week Navigation Header Card
                         item(key = "week_navigation", contentType = "week_navigation") {
+                            val onPrevWeek = remember(viewModel) { { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) } }
+                            val onCurrentWeek = remember(viewModel) { { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) } }
+                            val onNextWeek = remember(viewModel) { { viewModel.navigateWeek(WeekNavigationDirection.NEXT) } }
                             WeekNavigationCard(
                                 weekDateRange = weeklyMenu?.weekDateRange ?: "در حال بارگذاری...",
                                 weekOffset = weekOffset,
                                 isLoading = isLoading,
                                 enabled = weekButtonsEnabled,
-                                onPrevWeek = { viewModel.navigateWeek(WeekNavigationDirection.PREVIOUS) },
-                                onCurrentWeek = { viewModel.navigateWeek(WeekNavigationDirection.CURRENT) },
-                                onNextWeek = { viewModel.navigateWeek(WeekNavigationDirection.NEXT) }
+                                onPrevWeek = onPrevWeek,
+                                onCurrentWeek = onCurrentWeek,
+                                onNextWeek = onNextWeek
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                         }
@@ -401,8 +401,7 @@ fun MenuScreen(
                                                             Box(
                                                                 modifier = Modifier
                                                                     .size(6.dp)
-                                                                    .clip(CircleShape)
-                                                                    .background(ReservedGreen)
+                                                                    .background(ReservedGreen, CircleShape)
                                                             )
                                                         }
                                                     }
@@ -678,8 +677,7 @@ private fun ReservationBottomSheet(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(CircleShape)
-                            .background(TealPrimary.copy(alpha = 0.12f)),
+                            .background(TealPrimary.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -749,8 +747,7 @@ private fun ReservationBottomSheet(
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Box(
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFFE0F2F1))
+                                                    .background(Color(0xFFE0F2F1), RoundedCornerShape(4.dp))
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
@@ -930,13 +927,18 @@ private fun WeekNavigationCard(
     onNextWeek: () -> Unit
 ) {
     val navTint = if (enabled) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val cardBorder = remember(outlineColor) {
+        BorderStroke(1.dp, outlineColor.copy(alpha = 0.7f))
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("week_navigation_card"),
         shape = WeekCardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = cardBorder
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1096,6 +1098,7 @@ private fun DayHeaderCard(
         colors = CardDefaults.cardColors(
             containerColor = if (day.isToday) TealAlpha08 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = if (day.isToday) TodayDayBorder else null
     ) {
         Row(
@@ -1109,8 +1112,7 @@ private fun DayHeaderCard(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (day.isToday) TealPrimary else MaterialTheme.colorScheme.primaryContainer),
+                        .background(if (day.isToday) TealPrimary else MaterialTheme.colorScheme.primaryContainer, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -1168,8 +1170,7 @@ private fun DayHeaderCard(
                         Box(
                             modifier = Modifier
                                 .size(6.dp)
-                                .clip(CircleShape)
-                                .background(ReservedGreen)
+                                .background(ReservedGreen, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(

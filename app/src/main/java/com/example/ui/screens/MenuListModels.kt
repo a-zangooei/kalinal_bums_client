@@ -4,7 +4,38 @@ import androidx.compose.runtime.Immutable
 import com.example.data.model.DayMenu
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
+import com.example.data.model.ReservationStatus
+import com.example.data.model.WeekNavigationDirection
 import com.example.data.model.WeeklyMenu
+import kotlin.math.abs
+
+fun isMealActionable(meal: MealItem): Boolean = meal.isEditable && (
+    meal.status == ReservationStatus.RESERVED ||
+    (meal.status == ReservationStatus.NOT_RESERVED && (
+        meal.availableFoodOptions.isNotEmpty() ||
+        (meal.selectedFoodId != "-1" && meal.foodName.isNotBlank() && meal.foodName != "غذا انتخاب نشده است")
+    ))
+)
+
+/**
+ * Resolves horizontal swipe gesture into week navigation direction.
+ * Adjusted to match natural RTL user expectation where swiping toward the right direction triggers PREVIOUS
+ * and swiping toward the left triggers NEXT.
+ */
+fun resolveWeekSwipeDirection(
+    totalDx: Float,
+    totalDy: Float,
+    minSwipeDistancePx: Float = 96f
+): WeekNavigationDirection? {
+    if (abs(totalDx) <= minSwipeDistancePx || abs(totalDx) <= abs(totalDy) * 1.6f) {
+        return null
+    }
+    return if (totalDx < 0f) {
+        WeekNavigationDirection.PREVIOUS
+    } else {
+        WeekNavigationDirection.NEXT
+    }
+}
 
 @Immutable
 data class DayPillModel(
@@ -49,7 +80,13 @@ sealed interface MenuListRow {
         val meal: MealItem
     ) : MenuListRow {
         override val key: String = "meal_${meal.id}_${meal.dayIndex}_${meal.mealType.name}"
-        override val contentType: String = "meal_card"
+        override val contentType: String = when {
+            !isMealActionable(meal) -> "meal_card_readonly"
+            meal.status == ReservationStatus.NOT_RESERVED -> "meal_card_reserve"
+            meal.status == ReservationStatus.RESERVED && meal.availableFoodOptions.size > 1 -> "meal_card_reserved_2btn"
+            meal.status == ReservationStatus.RESERVED -> "meal_card_reserved_1btn"
+            else -> "meal_card_readonly"
+        }
     }
 }
 

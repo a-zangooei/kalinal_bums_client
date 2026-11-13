@@ -61,9 +61,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -135,9 +135,9 @@ private enum class LogCategoryFilter(val label: String) {
 
 @Composable
 fun DeveloperLogsDialog(onDismiss: () -> Unit) {
-    val entries by AppLogger.recentEntries.collectAsState()
-    val snapshots by AppLogger.pageSnapshots.collectAsState()
-    val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsState()
+    val entries by AppLogger.recentEntries.collectAsStateWithLifecycle()
+    val snapshots by AppLogger.pageSnapshots.collectAsStateWithLifecycle()
+    val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -640,6 +640,7 @@ private fun LogEntryCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = border,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -812,6 +813,7 @@ private fun SnapshotCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
             .minimumInteractiveComponentSize()

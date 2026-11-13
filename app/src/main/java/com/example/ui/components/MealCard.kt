@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,7 +38,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -47,10 +47,12 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.MealItem
 import com.example.data.model.MealType
 import com.example.data.model.ReservationStatus
+import com.example.ui.screens.isMealActionable
 
 private val MealCardShape = RoundedCornerShape(16.dp)
 private val MealChipShape = RoundedCornerShape(6.dp)
 private val MealButtonShape = RoundedCornerShape(10.dp)
+private val ZeroCardElevationDp = 0.dp
 
 private val BreakfastColor = Color(0xFFF57C00)
 private val BreakfastBg = BreakfastColor.copy(alpha = 0.12f)
@@ -89,6 +91,11 @@ fun MealCard(
         MealType.DINNER -> DinnerBg
     }
 
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val cardBorder = remember(outlineColor) {
+        BorderStroke(1.dp, outlineColor.copy(alpha = 0.7f))
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -97,7 +104,8 @@ fun MealCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = ZeroCardElevationDp),
+        border = cardBorder
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header Row: Meal Type Icon & Title, and Status Badge
@@ -110,8 +118,7 @@ fun MealCard(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(mealIconBg),
+                            .background(mealIconBg, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -158,8 +165,7 @@ fun MealCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(MealChipShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, MealChipShape)
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Icon(
@@ -185,8 +191,7 @@ fun MealCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(MealChipShape)
-                                .background(CaloriesBg)
+                                .background(CaloriesBg, MealChipShape)
                                 .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
                             Icon(
@@ -211,8 +216,7 @@ fun MealCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clip(MealChipShape)
-                                .background(PriceBg)
+                                .background(PriceBg, MealChipShape)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Icon(
@@ -234,14 +238,9 @@ fun MealCard(
             }
 
             // Interactive Actions Section (for Breakfast, Lunch, Dinner when editable and available)
-            val isActionable = meal.isEditable && (
-                meal.status == ReservationStatus.RESERVED ||
-                (meal.status == ReservationStatus.NOT_RESERVED && (meal.availableFoodOptions.isNotEmpty() || (meal.selectedFoodId != "-1" && meal.foodName.isNotBlank() && meal.foodName != "غذا انتخاب نشده است")))
-            )
-
-            if (isActionable) {
+            if (isMealActionable(meal)) {
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = outlineColor.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val mealTag = meal.mealType.name.lowercase()
