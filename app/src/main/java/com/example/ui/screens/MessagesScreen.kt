@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -180,13 +181,13 @@ fun MessagesScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "قفل منوی رزرو غذا",
+                                    text = "محدودیت موقت دسترسی به منوی رزرو",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 Text(
-                                    text = "${pageState.unreadCount} پیام خوانده‌نشده در سامانه وجود دارد",
+                                    text = "${pageState.unreadCount} پیام خوانده‌نشده در حساب شما وجود دارد.",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -196,7 +197,7 @@ fun MessagesScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "طبق مقررات سامانه تغذیه کالینان، دسترسی به امکانات رزرو تا زمان مطالعه تمامی پیام‌های ارسالی دانشگاه مسدود می‌باشد. جهت فعال‌سازی مجدد منو، بر روی دکمه زیر کلیک فرمایید.",
+                            text = "مطابق مقررات سامانه تغذیه، استفاده از بخش رزرو غذا منوط به مطالعه تمامی پیام‌های اطلاع‌رسانی دانشگاه است. برای رفع محدودیت، گزینه زیر را انتخاب نمایید.",
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             color = MaterialTheme.colorScheme.onSurface
@@ -216,7 +217,7 @@ fun MessagesScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = readingProgress ?: "در حال پردازش پیام‌ها...",
+                                    text = readingProgress ?: "در حال ثبت مطالعه پیام‌ها...",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = TealPrimary,
@@ -228,6 +229,7 @@ fun MessagesScreen(
                                 onClick = { viewModel.markAllUnreadAsRead(onUnlockedSuccess) },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .minimumInteractiveComponentSize()
                                     .testTag("read_all_messages_button"),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
@@ -242,7 +244,7 @@ fun MessagesScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "خواندن پیام‌ها و فعال‌سازی رزرو",
+                                    text = "مطالعه پیام‌ها و فعال‌سازی منو",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -294,7 +296,7 @@ fun MessagesScreen(
                         CircularProgressIndicator(color = TealPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "در حال دریافت پیام‌ها از سرور دانشگاه...",
+                            text = "در حال دریافت پیام‌ها از سامانه...",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -324,7 +326,7 @@ fun MessagesScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "هیچ اطلاعیه یا پیام جدیدی در سامانه ثبت نشده است.",
+                            text = "در حال حاضر اطلاعیه یا پیامی برای نمایش وجود ندارد.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -371,7 +373,7 @@ fun MessagesScreen(
                         )
                         IconButton(
                             onClick = { viewModel.dismissMessageDetails() },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.minimumInteractiveComponentSize()
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -487,11 +489,12 @@ fun MessagesScreen(
                             viewModel.dismissUserMessage()
                             onUnlockedSuccess()
                         },
+                        modifier = Modifier.minimumInteractiveComponentSize(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TealPrimary
                         )
                     ) {
-                        Text("ورود به جدول رزرو غذا", fontWeight = FontWeight.Bold)
+                        Text("مشاهده برنامه غذایی", fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -517,6 +520,7 @@ fun MessageCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .minimumInteractiveComponentSize()
             .clickable(onClick = onClick)
             .testTag("message_card_${message.rowIndex}"),
         shape = MessageCardShape,

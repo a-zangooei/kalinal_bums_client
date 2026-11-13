@@ -414,17 +414,17 @@ class AuthViewModel(
 
         if (user.isEmpty()) {
             AppLogger.logWarn("AuthViewModel", "LoginValidationFailed", "Username empty", errorCategory = "VALIDATION_ERROR")
-            _errorMessage.value = "لطفاً نام کاربری (شماره دانشجویی) را وارد نمایید"
+            _errorMessage.value = "لطفاً نام کاربری را وارد نمایید."
             return
         }
         if (pass.isEmpty()) {
             AppLogger.logWarn("AuthViewModel", "LoginValidationFailed", "Password empty", errorCategory = "VALIDATION_ERROR")
-            _errorMessage.value = "لطفاً گذرواژه (کد ملی) را وارد نمایید"
+            _errorMessage.value = "لطفاً رمز عبور را وارد نمایید."
             return
         }
         if (captcha.isEmpty()) {
             AppLogger.logWarn("AuthViewModel", "LoginValidationFailed", "Captcha empty", errorCategory = "VALIDATION_ERROR")
-            _errorMessage.value = "لطفاً کد امنیتی تصویر را وارد نمایید"
+            _errorMessage.value = "لطفاً کد امنیتی را وارد نمایید."
             return
         }
 

@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +82,7 @@ fun CreditHeader(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = "مشخصات دانشجو",
+                                contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -89,14 +90,14 @@ fun CreditHeader(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = studentName.ifEmpty { "دانشجوی گرامی" },
+                                text = studentName.ifEmpty { "کاربر گرامی" },
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             if (studentNumber.isNotEmpty()) {
                                 Text(
-                                    text = "شماره دانشجویی: $studentNumber",
+                                    text = "شناسه کاربری: $studentNumber",
                                     color = WhiteSubtitle,
                                     fontSize = 12.sp
                                 )
@@ -106,11 +107,13 @@ fun CreditHeader(
 
                     IconButton(
                         onClick = onRefresh,
-                        modifier = Modifier.testTag("refresh_menu_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("refresh_menu_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "بروزرسانی",
+                            contentDescription = "به‌روزرسانی برنامه غذایی",
                             tint = Color.White
                         )
                     }

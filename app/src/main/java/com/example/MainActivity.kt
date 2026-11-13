@@ -176,13 +176,13 @@ fun KalinanApp(
                         try {
                             val serverResult = authRepo.logoutFromServer(currentMenu)
                             if (serverResult.isSuccess) {
-                                Toast.makeText(context, "خروج موفق از سامانه کالینان انجام شد", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "خروج از حساب کاربری با موفقیت انجام شد.", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "خروج در سمت سرور با خطا مواجه شد؛ نشست محلی پاک‌سازی گردید.", Toast.LENGTH_LONG).show()
                             }
                         } catch (e: Exception) {
                             AppLogger.logError("Logout", "Logout request failed", e)
-                            Toast.makeText(context, "خروج سمت سرور با خطا مواجه شد، اما نشست محلی دستگاه پاک‌سازی شد", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "خروج در سمت سرور با خطا مواجه شد؛ نشست محلی پاک‌سازی گردید.", Toast.LENGTH_LONG).show()
                         } finally {
                             // 1. Purge active local session state
                             activeSession = null
@@ -397,7 +397,7 @@ fun KalinanApp(
             onDismissRequest = { updateViewModel.dismissUserMessage() },
             title = {
                 Text(
-                    text = "اطلاعیه به‌روزرسانی",
+                    text = "وضعیت به‌روزرسانی برنامه",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )

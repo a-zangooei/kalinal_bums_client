@@ -123,7 +123,7 @@ fun MealCard(
                     ) {
                         Icon(
                             imageVector = mealIcon,
-                            contentDescription = meal.mealType.titlePersian,
+                            contentDescription = null,
                             tint = mealColor,
                             modifier = Modifier.size(20.dp)
                         )
@@ -196,7 +196,7 @@ fun MealCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.LocalFireDepartment,
-                                contentDescription = "کالری",
+                                contentDescription = null,
                                 modifier = Modifier.size(13.dp),
                                 tint = CaloriesFg
                             )
@@ -221,7 +221,7 @@ fun MealCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Payments,
-                                contentDescription = "قیمت",
+                                contentDescription = null,
                                 modifier = Modifier.size(13.dp),
                                 tint = PriceFg
                             )
@@ -261,7 +261,7 @@ fun MealCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "در حال ارتباط با سرور سلف...",
+                            text = "در حال ثبت درخواست در سامانه...",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -271,14 +271,14 @@ fun MealCard(
                         onClick = onReserve,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(48.dp)
                             .testTag("reserve_${mealTag}_button_${meal.dayIndex}"),
                         colors = ButtonDefaults.buttonColors(containerColor = mealColor),
                         shape = MealButtonShape
                     ) {
                         Icon(
                             imageVector = Icons.Default.RestaurantMenu,
-                            contentDescription = "رزرو",
+                            contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -297,7 +297,7 @@ fun MealCard(
                             onClick = onCancel,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(42.dp)
+                                .height(48.dp)
                                 .testTag("cancel_${mealTag}_button_${meal.dayIndex}"),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
@@ -306,7 +306,7 @@ fun MealCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Cancel,
-                                contentDescription = "لغو رزرو",
+                                contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -322,7 +322,7 @@ fun MealCard(
                                 onClick = onChangeFood,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .height(48.dp)
                                     .testTag("change_${mealTag}_button_${meal.dayIndex}"),
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = mealColor
@@ -331,7 +331,7 @@ fun MealCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
-                                    contentDescription = "تغییر غذا",
+                                    contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))

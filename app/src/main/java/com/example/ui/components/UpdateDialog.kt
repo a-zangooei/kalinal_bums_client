@@ -70,7 +70,7 @@ fun UpdateDialog(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "دانلود و نصب مستقیم",
+                    text = "دریافت و نصب نسخه جدید",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
@@ -176,7 +176,7 @@ fun UpdateDialog(
                         modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
-                            text = "📝 تغییرات و پیام این نسخه:",
+                            text = "تغییرات و توضیحات نسخه جدید:",
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.primary
