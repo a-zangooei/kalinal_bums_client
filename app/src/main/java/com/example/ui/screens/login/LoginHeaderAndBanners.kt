@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -58,6 +62,7 @@ internal fun LoginTopSettingsAction(onOpenSettings: (() -> Unit)?) {
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier
+                .minimumInteractiveComponentSize()
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                 .testTag("login_settings_button")
@@ -128,14 +133,14 @@ internal fun ServerConnectionBadge(isCompatibilityModeActive: Boolean) {
         ) {
             Icon(
                 imageVector = Icons.Default.CloudQueue,
-                contentDescription = "اتصال سرور",
+                contentDescription = null,
                 tint = TealPrimary,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "اتصال مستقیم به سامانه کالینان دانشگاه",
+                    text = "اتصال مستقیم به سامانه تغذیه دانشگاه",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = TealPrimary
@@ -152,7 +157,7 @@ internal fun ServerConnectionBadge(isCompatibilityModeActive: Boolean) {
                     color = Color(0xFFFFF3E0)
                 ) {
                     Text(
-                        text = "بدون بررسی گواهی",
+                        text = "اعتبارسنجی گواهی غیرفعال",
                         fontSize = 10.sp,
                         color = Color(0xFFE65100),
                         fontWeight = FontWeight.Bold,
@@ -171,6 +176,7 @@ internal fun EncryptionUnavailableBanner(visible: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite }
                 .testTag("encryption_unavailable_banner"),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
@@ -181,13 +187,13 @@ internal fun EncryptionUnavailableBanner(visible: Boolean) {
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = "هشدار رمزنگاری",
+                    contentDescription = "هشدار امنیتی",
                     tint = Color(0xFFE65100),
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "ذخیره‌ساز امن سخت‌افزاری (KeyStore) روی این دستگاه در دسترس نیست. برای حفظ امنیت، گزینه «مرا به خاطر بسپار» غیرفعال شده است و رمز شما ذخیره نمی‌شود.",
+                    text = "ذخیره‌ساز امن سخت‌افزاری (KeyStore) در این دستگاه در دسترس نیست. به منظور حفظ امنیت، قابلیت «ذخیره اطلاعات ورود» غیرفعال شده است و رمز عبور ذخیره نخواهد شد.",
                     color = Color(0xFFE65100),
                     fontSize = 11.sp,
                     lineHeight = 18.sp,
@@ -209,6 +215,7 @@ internal fun BiometricUnavailableLockedBanner(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite }
                 .testTag("biometric_unavailable_banner"),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
@@ -223,7 +230,7 @@ internal fun BiometricUnavailableLockedBanner(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "قفل بیومتریک برای رمز ذخیره‌شده فعال است اما اثر انگشت یا قفل صفحه روی دستگاه در دسترس نیست. برای حفظ امنیت، بازیابی خودکار مسدود شد.",
+                        text = "قفل بیومتریک برای اطلاعات ورود ذخیره‌شده فعال است اما اثر انگشت یا قفل صفحه در دستگاه در دسترس نیست. جهت حفظ امنیت، بازیابی خودکار مسدود گردید.",
                         color = Color(0xFFE65100),
                         fontSize = 11.sp,
                         lineHeight = 18.sp,
@@ -246,7 +253,7 @@ internal fun BiometricUnavailableLockedBanner(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE65100))
                     ) {
                         Text(
-                            text = "تنظیمات قفل گوشی",
+                            text = "تنظیمات امنیتی دستگاه",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -259,7 +266,7 @@ internal fun BiometricUnavailableLockedBanner(
                             .testTag("wipe_locked_credentials_button")
                     ) {
                         Text(
-                            text = "پاکسازی رمز ذخیره‌شده",
+                            text = "پاک‌سازی رمز ذخیره‌شده",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFC62828)
@@ -280,7 +287,8 @@ internal fun LoginErrorBanner(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 14.dp),
+                .padding(bottom = 14.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
         ) {
@@ -288,7 +296,7 @@ internal fun LoginErrorBanner(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Info,
-                        contentDescription = "خطا",
+                        contentDescription = "اعلان خطا",
                         tint = Color(0xFFC62828),
                         modifier = Modifier.size(20.dp)
                     )
@@ -306,9 +314,12 @@ internal fun LoginErrorBanner(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onRetryConnection) {
+                    TextButton(
+                        onClick = onRetryConnection,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Text(
-                            text = "تلاش مجدد اتصال",
+                            text = "تلاش مجدد",
                             fontSize = 11.sp,
                             color = Color(0xFFC62828),
                             fontWeight = FontWeight.Bold

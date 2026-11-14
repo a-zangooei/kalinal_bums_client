@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
@@ -49,16 +51,31 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.password
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -92,6 +109,10 @@ internal fun LoginCredentialsCard(
     onToggleRememberMe: () -> Unit,
     onSubmitLogin: () -> Unit
 ) {
+    val passwordFocusRequester = remember { FocusRequester() }
+    val captchaFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -115,13 +136,13 @@ internal fun LoginCredentialsCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Fingerprint,
-                        contentDescription = "تایید هویت بیومتریک",
+                        contentDescription = null,
                         tint = TealPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "بازیابی رمز ذخیره‌شده با اثر انگشت / قفل دستگاه",
+                        text = "بازیابی رمز عبور با اثر انگشت یا قفل دستگاه",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
@@ -142,13 +163,13 @@ internal fun LoginCredentialsCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
-                        contentDescription = "بازیابی اطلاعات ذخیره‌شده",
+                        contentDescription = null,
                         tint = TealPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "پرکردن خودکار اطلاعات ذخیره‌شده",
+                        text = "تکمیل خودکار اطلاعات ورود ذخیره‌شده",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
@@ -160,14 +181,31 @@ internal fun LoginCredentialsCard(
             OutlinedTextField(
                 value = username,
                 onValueChange = onUsernameChange,
-                label = { Text("نام کاربری (شماره دانشجویی)") },
+                label = { Text("نام کاربری") },
                 leadingIcon = {
-                    Icon(Icons.Default.Person, contentDescription = "نام کاربری")
+                    Icon(Icons.Default.Person, contentDescription = null)
                 },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    autoCorrectEnabled = false,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { passwordFocusRequester.requestFocus() }
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            passwordFocusRequester.requestFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .testTag("username_input"),
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -178,30 +216,58 @@ internal fun LoginCredentialsCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Password Field (visibility managed in ViewModel state)
+            // Password Field (strict password keyboard, non-autocorrect, semantics)
             OutlinedTextField(
                 value = password,
                 onValueChange = onPasswordChange,
-                label = { Text("گذرواژه (کد ملی)") },
+                label = { Text("رمز عبور") },
                 leadingIcon = {
-                    Icon(Icons.Default.Lock, contentDescription = "گذرواژه")
+                    Icon(Icons.Default.Lock, contentDescription = null)
                 },
                 trailingIcon = {
                     IconButton(
                         onClick = onTogglePasswordVisibility,
-                        modifier = Modifier.testTag("password_visibility_toggle")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .semantics {
+                                stateDescription = if (passwordVisible) "رمز عبور قابل مشاهده است" else "رمز عبور مخفی است"
+                            }
+                            .testTag("password_visibility_toggle")
                     ) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (passwordVisible) "مخفی کردن گذرواژه" else "نمایش گذرواژه"
+                            contentDescription = if (passwordVisible) "پنهان‌کردن رمز عبور" else "نمایش رمز عبور"
                         )
                     }
                 },
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    autoCorrectEnabled = false,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { captchaFocusRequester.requestFocus() }
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(passwordFocusRequester)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            captchaFocusRequester.requestFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    .semantics {
+                        if (!passwordVisible) {
+                            password()
+                        }
+                    }
                     .testTag("password_input"),
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -230,7 +296,7 @@ internal fun LoginCredentialsCard(
                     if (captchaBitmap != null) {
                         Image(
                             bitmap = captchaBitmap.asImageBitmap(),
-                            contentDescription = "کد امنیتی",
+                            contentDescription = "تصویر کد امنیتی",
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(4.dp)
@@ -242,9 +308,12 @@ internal fun LoginCredentialsCard(
                             color = TealPrimary
                         )
                     } else {
-                        TextButton(onClick = onRefreshCaptcha) {
+                        TextButton(
+                            onClick = onRefreshCaptcha,
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
                             Text(
-                                text = "بارگذاری مجدد کد",
+                                text = "دریافت کد امنیتی",
                                 fontSize = 11.sp,
                                 color = TealPrimary,
                                 fontWeight = FontWeight.Medium
@@ -276,7 +345,7 @@ internal fun LoginCredentialsCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "تازه‌سازی کد امنیتی",
+                        contentDescription = "دریافت مجدد کد امنیتی",
                         tint = TealPrimary,
                         modifier = Modifier.rotate(if (isCaptchaRefreshing) rotation else 0f)
                     )
@@ -289,15 +358,41 @@ internal fun LoginCredentialsCard(
             OutlinedTextField(
                 value = captchaInput,
                 onValueChange = onCaptchaChange,
-                label = { Text("کد امنیتی تصویر") },
-                placeholder = { Text("۴ رقم") },
+                label = { Text("کد امنیتی") },
+                placeholder = { Text("کد ۴ رقمی") },
                 leadingIcon = {
-                    Icon(Icons.Default.Security, contentDescription = "کد امنیتی")
+                    Icon(Icons.Default.Security, contentDescription = null)
                 },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    autoCorrectEnabled = false,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        if (!isLoading) {
+                            onSubmitLogin()
+                        }
+                    }
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(captchaFocusRequester)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            focusManager.clearFocus()
+                            if (!isLoading) {
+                                onSubmitLogin()
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .testTag("captcha_input"),
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -312,22 +407,29 @@ internal fun LoginCredentialsCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = isEncryptionAvailable, onClick = onToggleRememberMe),
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .toggleable(
+                        value = rememberMe,
+                        enabled = isEncryptionAvailable,
+                        role = Role.Checkbox,
+                        onValueChange = { onToggleRememberMe() }
+                    )
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .testTag("remember_me_checkbox"),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
                     checked = rememberMe,
                     enabled = isEncryptionAvailable,
-                    onCheckedChange = { onToggleRememberMe() },
-                    modifier = Modifier.testTag("remember_me_checkbox")
+                    onCheckedChange = null
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (isEncryptionAvailable) {
-                        "مرا به خاطر بسپار (ذخیره رمزنگاری‌شده)"
+                        "ذخیره اطلاعات ورود"
                     } else {
-                        "مرا به خاطر بسپار (غیرفعال به علت نبود رمزنگاری)"
+                        "ذخیره اطلاعات ورود (غیرفعال به علت نبود رمزنگاری)"
                     },
                     fontSize = 13.sp,
                     color = if (isEncryptionAvailable) {

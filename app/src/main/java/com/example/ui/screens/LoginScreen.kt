@@ -20,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,6 +31,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.UserSession
 import com.example.data.security.BiometricHelper
 import com.example.ui.components.PersianRtlLayout
@@ -40,7 +40,6 @@ import com.example.ui.screens.login.EncryptionUnavailableBanner
 import com.example.ui.screens.login.LoginBrandingHeader
 import com.example.ui.screens.login.LoginCredentialsCard
 import com.example.ui.screens.login.LoginErrorBanner
-import com.example.ui.screens.login.LoginSupportNoticeCard
 import com.example.ui.screens.login.LoginTopSettingsAction
 import com.example.ui.screens.login.ServerConnectionBadge
 import com.example.ui.theme.CullinanTheme
@@ -53,20 +52,20 @@ fun LoginScreen(
     onOpenSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val username by viewModel.username.collectAsState()
-    val password by viewModel.password.collectAsState()
-    val passwordVisible by viewModel.isPasswordVisible.collectAsState()
-    val captchaInput by viewModel.captchaInput.collectAsState()
-    val rememberMe by viewModel.rememberMe.collectAsState()
-    val isEncryptionAvailable by viewModel.isEncryptionAvailable.collectAsState()
-    val requiresBiometricUnlock by viewModel.requiresBiometricUnlock.collectAsState()
-    val biometricUnavailableWhileLocked by viewModel.biometricUnavailableWhileLocked.collectAsState()
-    val canQuickFillSavedCredentials by viewModel.canQuickFillSavedCredentials.collectAsState()
-    val pageState by viewModel.pageState.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isCaptchaRefreshing by viewModel.isCaptchaRefreshing.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val isCompatibilityModeActive by viewModel.isCompatibilityModeActive.collectAsState()
+    val username by viewModel.username.collectAsStateWithLifecycle()
+    val password by viewModel.password.collectAsStateWithLifecycle()
+    val passwordVisible by viewModel.isPasswordVisible.collectAsStateWithLifecycle()
+    val captchaInput by viewModel.captchaInput.collectAsStateWithLifecycle()
+    val rememberMe by viewModel.rememberMe.collectAsStateWithLifecycle()
+    val isEncryptionAvailable by viewModel.isEncryptionAvailable.collectAsStateWithLifecycle()
+    val requiresBiometricUnlock by viewModel.requiresBiometricUnlock.collectAsStateWithLifecycle()
+    val biometricUnavailableWhileLocked by viewModel.biometricUnavailableWhileLocked.collectAsStateWithLifecycle()
+    val canQuickFillSavedCredentials by viewModel.canQuickFillSavedCredentials.collectAsStateWithLifecycle()
+    val pageState by viewModel.pageState.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isCaptchaRefreshing by viewModel.isCaptchaRefreshing.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val isCompatibilityModeActive by viewModel.isCompatibilityModeActive.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -225,9 +224,7 @@ internal fun LoginScreenContent(
                     onSubmitLogin = onSubmitLogin
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
-
-                LoginSupportNoticeCard()
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -240,7 +237,7 @@ private fun openDeviceSecuritySettings(context: Context) {
         }
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "بخش تنظیمات امنیتی گوشی از این صفحه قابل باز شدن نیست", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "تنظیمات امنیتی دستگاه از این صفحه قابل بازگشایی نیست.", Toast.LENGTH_SHORT).show()
     }
 }
 

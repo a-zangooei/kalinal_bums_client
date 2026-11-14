@@ -113,7 +113,9 @@ fun MessagesScreen(
                     if (onNavigateBack != null && !isBlockingMode) {
                         IconButton(
                             onClick = onNavigateBack,
-                            modifier = Modifier.testTag("messages_back_button")
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("messages_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -126,7 +128,9 @@ fun MessagesScreen(
                     IconButton(
                         onClick = { viewModel.loadMessages() },
                         enabled = !isReadingSerialized && !pageState.isLoading,
-                        modifier = Modifier.testTag("messages_refresh_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("messages_refresh_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -173,7 +177,7 @@ fun MessagesScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
-                                    contentDescription = "قفل منوی سامانه",
+                                    contentDescription = null,
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -450,7 +454,10 @@ fun MessagesScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { viewModel.dismissMessageDetails() }) {
+                    TextButton(
+                        onClick = { viewModel.dismissMessageDetails() },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Text("بستن", fontWeight = FontWeight.Bold)
                     }
                 }

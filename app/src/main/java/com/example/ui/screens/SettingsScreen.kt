@@ -24,9 +24,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +42,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.data.local.UserPreferences
 import com.example.data.logger.AppLogger
@@ -97,7 +98,7 @@ fun SettingsScreen(
         }
     }
 
-    val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsState()
+    val isCompatibilityModeActive by CullinanHttpClient.isCompatibilityModeActive.collectAsStateWithLifecycle()
 
     SettingsScreenContent(
         currentThemeMode = currentThemeMode,
@@ -126,14 +127,14 @@ fun SettingsScreen(
                         isBiometricEnabled = outcome.isEnabled
                         onSecuritySettingsChanged?.invoke()
                         val msg = if (outcome.isEnabled) {
-                            "قفل بیومتریک فعال شد"
+                            "قفل بیومتریک با موفقیت فعال شد."
                         } else {
-                            "قفل بیومتریک غیرفعال شد"
+                            "قفل بیومتریک غیرفعال شد."
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                     BiometricToggleOutcome.Cancelled -> {
-                        Toast.makeText(context, "احراز هویت لغو شد؛ وضعیت قفل تغییری نکرد", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "احراز هویت لغو شد؛ وضعیت قفل تغییری نکرد.", Toast.LENGTH_SHORT).show()
                     }
                     is BiometricToggleOutcome.Failed -> {
                         Toast.makeText(context, outcome.message, Toast.LENGTH_LONG).show()
@@ -148,14 +149,14 @@ fun SettingsScreen(
                 }
                 context.startActivity(intent)
             } catch (_: ActivityNotFoundException) {
-                Toast.makeText(context, "تنظیمات امنیتی گوشی از این صفحه قابل باز شدن نیست", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "تنظیمات امنیتی دستگاه از این صفحه قابل بازگشایی نیست.", Toast.LENGTH_SHORT).show()
             }
         },
         onRecoveryWipeAndDisableLock = {
             lockCoordinator.clearCredentialsAndDisableLock()
             isBiometricEnabled = false
             onSecuritySettingsChanged?.invoke()
-            Toast.makeText(context, "رمزهای ذخیره‌شده پاک شد و قفل بیومتریک غیرفعال گردید", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "اطلاعات ورود ذخیره‌شده پاک‌سازی و قفل بیومتریک غیرفعال شد.", Toast.LENGTH_LONG).show()
         },
         onToggleCompatibilityMode = { enable ->
             CullinanHttpClient.setCompatibilityMode(enable)
@@ -165,13 +166,13 @@ fun SettingsScreen(
         onExportZip = { showSharePreviewDialog = true },
         onClearLogs = {
             AppLogger.clearLogs()
-            Toast.makeText(context, "تاریخچه لاگ‌ها با موفقیت پاکسازی شد", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "تاریخچه گزارش‌ها با موفقیت پاک‌سازی شد.", Toast.LENGTH_SHORT).show()
         },
         onExitDeveloperMode = {
             isDevUnlocked = false
             userPrefs.isDeveloperModeUnlocked = false
             tapCounter = 0
-            Toast.makeText(context, "حالت توسعه‌دهنده غیرفعال شد", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "بخش عیب‌یابی و توسعه‌دهنده غیرفعال شد.", Toast.LENGTH_SHORT).show()
         },
         onVersionClick = {
             if (!isDevUnlocked) {
@@ -179,14 +180,14 @@ fun SettingsScreen(
                 if (tapCounter >= 7) {
                     isDevUnlocked = true
                     userPrefs.isDeveloperModeUnlocked = true
-                    Toast.makeText(context, "🎉 تبریک! حالت توسعه‌دهنده فعال شد.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "بخش عیب‌یابی و لاگ‌های توسعه‌دهنده فعال شد.", Toast.LENGTH_LONG).show()
                     AppLogger.logAction("Developer Mode unlocked via 7-tap Easter Egg")
                 } else if (tapCounter in 3..6) {
                     val remaining = 7 - tapCounter
-                    Toast.makeText(context, "تنها $remaining ضربه دیگر تا فعال‌سازی حالت توسعه‌دهنده...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "$remaining لمس دیگر تا فعال‌سازی بخش عیب‌یابی باقی مانده است.", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(context, "حالت توسعه‌دهنده از قبل فعال است", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "بخش عیب‌یابی هم‌اکنون فعال است.", Toast.LENGTH_SHORT).show()
             }
         },
         onCheckForUpdates = onCheckForUpdates,
@@ -252,7 +253,10 @@ internal fun SettingsScreenContent(
                     },
                     navigationIcon = {
                         if (onNavigateBack != null) {
-                            IconButton(onClick = onNavigateBack) {
+                            IconButton(
+                                onClick = onNavigateBack,
+                                modifier = Modifier.minimumInteractiveComponentSize()
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "بازگشت"

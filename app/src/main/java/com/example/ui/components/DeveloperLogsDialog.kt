@@ -611,18 +611,21 @@ fun LogSharePreviewDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
-                            contentDescription = "پیش‌نمایش ارسال لاگ",
+                            contentDescription = null,
                             tint = TealPrimary,
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "پیش‌نمایش لاگ سالم‌سازی‌شده پیش از ارسال",
+                            text = "پیش‌نمایش گزارش سالم‌سازی‌شده پیش از ارسال",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
-                        IconButton(onClick = onDismiss) {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
                             Icon(Icons.Default.Close, contentDescription = "بستن")
                         }
                     }
@@ -642,13 +645,13 @@ fun LogSharePreviewDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = "هشدار امنیتی",
+                                contentDescription = null,
                                 tint = WarnFg,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "هشدار: این گزارش را فقط برای توسعه‌دهنده ارسال کنید و از اشتراک‌گذاری عمومی آن در گروه‌ها یا شبکه‌های اجتماعی خودداری نمایید.",
+                                text = "هشدار امنیتی: این گزارش را صرفاً برای توسعه‌دهنده ارسال کنید و از انتشار عمومی آن خودداری نمایید.",
                                 color = WarnFg,
                                 fontSize = 11.sp,
                                 lineHeight = 18.sp,
@@ -660,7 +663,7 @@ fun LogSharePreviewDialog(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "پیش‌نمایش متن پالایش‌شده (فیلدهای حساس مانند رمز، کوکی و نام کاربری ماسک شده‌اند):",
+                        text = "پیش‌نمایش متن پالایش‌شده (فیلدهای حساس مانند رمز عبور، کوکی و شناسه کاربری حذف یا جایگزین شده‌اند):",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -715,7 +718,7 @@ fun LogSharePreviewDialog(
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("تایید و ارسال به توسعه‌دهنده", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("تأیید و ارسال به توسعه‌دهنده", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

@@ -130,7 +130,7 @@ fun CreditHeader(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = "اعتبار",
+                            contentDescription = null,
                             tint = AccentGold,
                             modifier = Modifier.size(20.dp)
                         )

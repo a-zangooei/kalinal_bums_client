@@ -2,7 +2,6 @@ package com.example.ui.screens.menu
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,8 +51,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -176,7 +180,7 @@ internal fun ReservationBottomSheetContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Fastfood,
-                    contentDescription = "غذا",
+                    contentDescription = null,
                     tint = TealPrimary,
                     modifier = Modifier.size(22.dp)
                 )
@@ -189,7 +193,7 @@ internal fun ReservationBottomSheetContent(
 
         // 1. Food Options Selection
         Text(
-            text = "انتخاب غذا و پرس:",
+            text = "انتخاب غذا و مقدار:",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -198,68 +202,76 @@ internal fun ReservationBottomSheetContent(
 
         if (foodOptions.isEmpty()) {
             Text(
-                text = "هیچ گزینه غذایی برای این روز یافت نشد.",
+                text = "گزینه غذایی برای این روز تعریف نشده است.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.error
             )
         } else {
-            foodOptions.forEach { option ->
-                val isSelected = option.id == selectedFoodId
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { selectedFoodId = option.id }
-                        .testTag("food_option_${option.id}"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected) TealPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    ),
-                    border = if (isSelected) BorderStroke(1.5.dp, TealPrimary) else null
-                ) {
-                    Row(
+            Column(modifier = Modifier.selectableGroup()) {
+                foodOptions.forEach { option ->
+                    val isSelected = option.id == selectedFoodId
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 4.dp)
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = { selectedFoodId = option.id }
+                            )
+                            .testTag("food_option_${option.id}"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) TealPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        ),
+                        border = if (isSelected) BorderStroke(1.5.dp, TealPrimary) else null
                     ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { selectedFoodId = option.id },
-                            colors = RadioButtonDefaults.colors(selectedColor = TealPrimary)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = option.name,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (option.isHalfPortion) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFFE0F2F1), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "نیم‌پرس",
-                                            fontSize = 10.sp,
-                                            color = TealPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = TealPrimary)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = option.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (option.isHalfPortion) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFFE0F2F1), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "نیم‌پرس",
+                                                fontSize = 10.sp,
+                                                color = TealPrimary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            Text(
+                                text = ReservationHtmlParser.formatRials(option.priceRials),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2E7D32)
+                            )
                         }
-                        Text(
-                            text = ReservationHtmlParser.formatRials(option.priceRials),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
                     }
                 }
             }
@@ -287,7 +299,7 @@ internal fun ReservationBottomSheetContent(
                 onValueChange = {},
                 readOnly = true,
                 leadingIcon = {
-                    Icon(Icons.Default.LocationOn, contentDescription = "سلف", tint = TealPrimary)
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = TealPrimary)
                 },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = selfDropdownExpanded) },
                 modifier = Modifier
@@ -374,7 +386,7 @@ internal fun ReservationBottomSheetContent(
                 onClick = onDismiss,
                 modifier = Modifier
                     .weight(1f)
-                    .height(46.dp)
+                    .height(48.dp)
             ) {
                 Text("انصراف")
             }
@@ -384,14 +396,14 @@ internal fun ReservationBottomSheetContent(
                 enabled = selectedFoodId != "-1",
                 modifier = Modifier
                     .weight(2f)
-                    .height(46.dp)
+                    .height(48.dp)
                     .testTag("submit_reservation_button"),
                 colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("تأیید و ذخیره رزرو", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("ثبت و تأیید رزرو", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }
@@ -411,7 +423,7 @@ internal fun CancelMealConfirmationDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = "هشدار",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -421,7 +433,7 @@ internal fun CancelMealConfirmationDialog(
         text = {
             Column {
                 Text(
-                    text = "آیا از لغو رزرو وعده $mealTitle «$dayName» اطمینان دارید؟",
+                    text = "آیا از لغو رزرو وعده $mealTitle روز «$dayName» اطمینان دارید؟",
                     fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -445,13 +457,18 @@ internal fun CancelMealConfirmationDialog(
             Button(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.testTag("confirm_cancel_lunch_button")
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("confirm_cancel_lunch_button")
             ) {
-                Text("بله، لغو رزرو شود", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("تأیید لغو رزرو", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.minimumInteractiveComponentSize()
+            ) {
                 Text("انصراف")
             }
         }
@@ -471,7 +488,7 @@ internal fun StudentProfileDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = "مشخصات",
+                    contentDescription = null,
                     tint = TealPrimary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -481,13 +498,16 @@ internal fun StudentProfileDialog(
         text = {
             Column(modifier = Modifier.padding(top = 8.dp)) {
                 ProfileDetailRow("نام و نام خانوادگی", studentName)
-                ProfileDetailRow("شماره دانشجویی", studentNumber)
+                ProfileDetailRow("شناسه کاربری", studentNumber)
                 ProfileDetailRow("وضعیت مانده اعتبار", creditFormatted)
-                ProfileDetailRow("سامانه متصل", "سامانه کالینان (jeton.bums.ac.ir)")
+                ProfileDetailRow("سامانه متصل", "سامانه تغذیه دانشگاه (jeton.bums.ac.ir)")
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.minimumInteractiveComponentSize()
+            ) {
                 Text("بستن", color = TealPrimary, fontWeight = FontWeight.Bold)
             }
         }

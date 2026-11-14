@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudQueue
@@ -21,10 +22,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -64,7 +68,7 @@ internal fun NetworkStatusSection(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "سامانه تغذیه کالینان",
+                        text = "سامانه تغذیه دانشگاه (کالینان)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -79,7 +83,7 @@ internal fun NetworkStatusSection(
                     color = if (isCompatibilityModeActive) Color(0xFFFFF3E0) else Color(0xFFE8F5E9)
                 ) {
                     Text(
-                        text = if (isCompatibilityModeActive) "بدون بررسی گواهی" else "اعتبارسنجی استاندارد",
+                        text = if (isCompatibilityModeActive) "اعتبارسنجی گواهی غیرفعال" else "اتصال امن استاندارد",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isCompatibilityModeActive) Color(0xFFE65100) else Color(0xFF2E7D32),
@@ -91,25 +95,34 @@ internal fun NetworkStatusSection(
             Spacer(modifier = Modifier.height(14.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .toggleable(
+                        value = isCompatibilityModeActive,
+                        role = Role.Switch,
+                        onValueChange = onToggleCompatibilityMode
+                    )
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
-                        text = "حالت عبور از خطای SSL (موقت)",
+                        text = "حالت سازگاری موقت گواهی SSL",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "بدون اعتبارسنجی گواهی و نام میزبان؛ در شبکه‌های ناامن می‌تواند ناامن باشد",
+                        text = "در صورت فعال‌بودن، اعتبارسنجی گواهی امنیتی موقتاً نادیده گرفته می‌شود؛ استفاده در شبکه‌های عمومی توصیه نمی‌شود.",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
                     checked = isCompatibilityModeActive,
-                    onCheckedChange = onToggleCompatibilityMode,
+                    onCheckedChange = null,
                     colors = SwitchDefaults.colors(checkedThumbColor = TealPrimary)
                 )
             }

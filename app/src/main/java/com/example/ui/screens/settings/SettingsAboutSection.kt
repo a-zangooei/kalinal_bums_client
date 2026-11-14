@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,10 +21,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -57,32 +60,33 @@ internal fun AboutVersionSection(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "کالینان (Kalinan)",
+                text = "کالینان",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = TealPrimary
             )
             Text(
-                text = "کلاینت غیررسمی و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند",
+                text = "سامانه همراه مدیریت تغذیه دانشگاه علوم پزشکی بیرجند",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
 
-            // Version Click Target for Easter Egg
+            // Version Click Target
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier
+                    .minimumInteractiveComponentSize()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onVersionClick)
+                    .clickable(role = Role.Button, onClick = onVersionClick)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "نسخه v$versionName (بیلد #$versionCode)",
+                        text = "نسخه $versionName (شماره ساخت $versionCode)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -95,7 +99,7 @@ internal fun AboutVersionSection(
                 OutlinedButton(
                     onClick = onCheckForUpdates,
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudQueue,
@@ -105,7 +109,7 @@ internal fun AboutVersionSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "بررسی به‌روزرسانی نسخه جدید",
+                        text = "بررسی به‌روزرسانی جدید",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
@@ -114,7 +118,7 @@ internal fun AboutVersionSection(
             }
 
             Text(
-                text = "توسعه‌یافته با عشق توسط جامعه دانشجویی • مجوز GPLv3",
+                text = "منتشرشده تحت مجوز متن‌باز GPLv3",
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 10.dp)

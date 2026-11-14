@@ -35,6 +35,7 @@ import com.example.data.logger.AppLogger
 import com.example.data.model.UserSession
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.PersianRtlLayout
 import com.example.ui.components.UpdateDialog
@@ -242,7 +243,7 @@ fun KalinanApp(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.RestaurantMenu,
-                                    contentDescription = "برنامه غذایی و رزرو"
+                                    contentDescription = null
                                 )
                             },
                             label = {
@@ -277,7 +278,7 @@ fun KalinanApp(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Mail,
-                                        contentDescription = "صندوق پیام‌ها"
+                                        contentDescription = null
                                     )
                                 }
                             },
@@ -301,7 +302,7 @@ fun KalinanApp(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Settings,
-                                    contentDescription = "تنظیمات برنامه"
+                                    contentDescription = null
                                 )
                             },
                             label = {
@@ -410,7 +411,10 @@ fun KalinanApp(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { updateViewModel.dismissUserMessage() }) {
+                TextButton(
+                    onClick = { updateViewModel.dismissUserMessage() },
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
                     Text("متوجه شدم", fontWeight = FontWeight.Bold)
                 }
             }

@@ -51,7 +51,6 @@ import com.example.ui.screens.menu.MenuLoadingState
 import com.example.ui.screens.menu.MenuQuickJumpAndFilterBar
 import com.example.ui.screens.menu.MenuTopBar
 import com.example.ui.screens.menu.ReservationBottomSheet
-import com.example.ui.screens.menu.ReservationNoticeCard
 import com.example.ui.screens.menu.StudentProfileDialog
 import com.example.ui.screens.menu.WeekNavigationCard
 import com.example.ui.theme.CullinanTheme
@@ -362,11 +361,6 @@ internal fun MenuScreenContent(
                                 }
                             }
                         }
-
-                        // 5. Reservation System Notice
-                        item(key = "reservation_notice", contentType = "reservation_notice") {
-                            ReservationNoticeCard()
-                        }
                     }
                 }
             }
@@ -378,7 +372,7 @@ internal fun MenuScreenContent(
 private fun MenuScreenPreviewHost(darkTheme: Boolean) {
     val sampleMenu = WeeklyMenu(
         weekDateRange = "۱۴۰۵/۰۸/۱۶ الی ۱۴۰۵/۰۸/۲۲",
-        studentName = "دانشجوی نمونه",
+        studentName = "کاربر نمونه",
         studentNumber = "۴۰۳۱۰۰۱۲۳۴",
         creditText = "۵۹۰,۰۰۰ ریال",
         creditValueRials = 590000L,
@@ -415,7 +409,7 @@ private fun MenuScreenPreviewHost(darkTheme: Boolean) {
             userSession = UserSession(
                 isLoggedIn = true,
                 username = "4031001234",
-                studentName = "دانشجوی نمونه",
+                studentName = "کاربر نمونه",
                 studentNumber = "۴۰۳۱۰۰۱۲۳۴",
                 creditFormatted = "۵۹۰,۰۰۰ ریال"
             ),

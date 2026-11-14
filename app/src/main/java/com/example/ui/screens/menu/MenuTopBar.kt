@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +52,7 @@ internal fun MenuTopBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.RestaurantMenu,
-                        contentDescription = "کالینان",
+                        contentDescription = null,
                         tint = TealPrimaryDark,
                         modifier = Modifier.size(20.dp)
                     )
@@ -68,18 +69,22 @@ internal fun MenuTopBar(
         actions = {
             IconButton(
                 onClick = onOpenProfile,
-                modifier = Modifier.testTag("profile_button")
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("profile_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = "مشخصات دانشجو",
+                    contentDescription = "اطلاعات حساب کاربری",
                     tint = Color.White
                 )
             }
             IconButton(
                 onClick = onLogout,
                 enabled = !isLoggingOut,
-                modifier = Modifier.testTag("logout_button")
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("logout_button")
             ) {
                 if (isLoggingOut) {
                     CircularProgressIndicator(
@@ -90,7 +95,7 @@ internal fun MenuTopBar(
                 } else {
                     Icon(
                         imageVector = Icons.AutoMirrored.Default.ExitToApp,
-                        contentDescription = "خروج از حساب",
+                        contentDescription = "خروج از حساب کاربری",
                         tint = Color.White
                     )
                 }

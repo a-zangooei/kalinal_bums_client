@@ -53,7 +53,7 @@ class BiometricLockCoordinator(
                     operation = "LockEnableBlockedNoAuth",
                     message = "Cannot enable biometric lock: device authentication unavailable"
                 )
-                onResult(BiometricToggleOutcome.Failed("ابتدا اثر انگشت یا قفل صفحه را در تنظیمات گوشی فعال کنید."))
+                onResult(BiometricToggleOutcome.Failed("ابتدا اثر انگشت یا قفل صفحه را در تنظیمات امنیتی دستگاه فعال نمایید."))
             } else {
                 AppLogger.logWarn(
                     component = "BiometricLockCoordinator",
@@ -62,7 +62,7 @@ class BiometricLockCoordinator(
                 )
                 onResult(
                     BiometricToggleOutcome.Failed(
-                        message = "امکان تأیید هویت برای خاموش کردن قفل وجود ندارد؛ برای امنیت بیشتر باید اعتبارنامه‌های ذخیره‌شده را پاک کنید.",
+                        message = "امکان تأیید هویت برای غیرفعال‌سازی قفل وجود ندارد؛ جهت حفظ امنیت، لازم است اطلاعات ورود ذخیره‌شده پاک‌سازی گردد.",
                         requiresRecoveryWipe = true
                     )
                 )
@@ -71,15 +71,15 @@ class BiometricLockCoordinator(
         }
 
         if (authenticator == null) {
-            onResult(BiometricToggleOutcome.Failed("پنجره احراز هویت بیومتریک در دسترس نیست"))
+            onResult(BiometricToggleOutcome.Failed("پنجره احراز هویت بیومتریک در دسترس نیست."))
             return
         }
 
         val title = if (targetEnabled) "فعال‌سازی قفل امنیتی" else "غیرفعال‌سازی قفل امنیتی"
         val subtitle = if (targetEnabled) {
-            "برای فعال‌سازی محافظت از رمز ذخیره‌شده احراز هویت کنید"
+            "جهت فعال‌سازی محافظت از رمز عبور ذخیره‌شده، هویت خود را تأیید نمایید."
         } else {
-            "برای خاموش کردن قفل امنیتی رمز ذخیره‌شده احراز هویت کنید"
+            "جهت غیرفعال‌سازی قفل امنیتی، هویت خود را تأیید نمایید."
         }
 
         authenticator.authenticate(

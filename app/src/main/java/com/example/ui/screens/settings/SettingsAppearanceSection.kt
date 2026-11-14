@@ -1,6 +1,5 @@
 package com.example.ui.screens.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -19,11 +20,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -73,10 +76,14 @@ internal fun ThemeSelectionSection(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .selectableGroup()
+        ) {
             ThemeOptionRow(
-                title = "پیش‌فرض سیستم (خودکار)",
-                subtitle = "هماهنگ با حالت تیره یا روشن گوشی شما",
+                title = "هماهنگ با سیستم (خودکار)",
+                subtitle = "تطبیق خودکار پوسته روشن یا تیره با تنظیمات دستگاه",
                 selected = currentThemeMode == AppThemeMode.SYSTEM,
                 onClick = { onSelectTheme(AppThemeMode.SYSTEM) }
             )
@@ -84,8 +91,8 @@ internal fun ThemeSelectionSection(
             Spacer(modifier = Modifier.height(6.dp))
 
             ThemeOptionRow(
-                title = "حالت روشن (Light)",
-                subtitle = "پوسته روشن فیروزه‌ای استاندارد",
+                title = "حالت روشن",
+                subtitle = "پوسته روشن با طراحی استاندارد",
                 selected = currentThemeMode == AppThemeMode.LIGHT,
                 onClick = { onSelectTheme(AppThemeMode.LIGHT) }
             )
@@ -93,8 +100,8 @@ internal fun ThemeSelectionSection(
             Spacer(modifier = Modifier.height(6.dp))
 
             ThemeOptionRow(
-                title = "حالت تاریک (Dark)",
-                subtitle = "پوسته تیره مناسب برای شب و کاهش مصرف باتری",
+                title = "حالت تیره",
+                subtitle = "پوسته تیره مناسب برای محیط‌های کم‌نور و کاهش خستگی چشم",
                 selected = currentThemeMode == AppThemeMode.DARK,
                 onClick = { onSelectTheme(AppThemeMode.DARK) }
             )
@@ -112,14 +119,19 @@ fun ThemeOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = onClick
+            onClick = null
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {

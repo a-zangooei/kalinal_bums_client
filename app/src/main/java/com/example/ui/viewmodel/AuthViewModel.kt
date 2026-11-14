@@ -207,13 +207,13 @@ class AuthViewModel(
         }
 
         if (authenticator == null) {
-            onBiometricAuthError("پنجره احراز هویت بیومتریک در این بافت قابل نمایش نیست.")
+            onBiometricAuthError("امکان نمایش پنجره احراز هویت بیومتریک در این صفحه وجود ندارد.")
             return
         }
 
         authenticator.authenticate(
-            title = "تایید هویت امنیتی",
-            subtitle = "برای دسترسی به اعتبارنامه ذخیره‌شده از اثر انگشت یا رمز دستگاه استفاده کنید",
+            title = "تأیید هویت امنیتی",
+            subtitle = "برای استفاده از اطلاعات ورود ذخیره‌شده، هویت خود را با اثر انگشت یا رمز دستگاه تأیید کنید.",
             onSuccess = { unlockSavedCredentialsAfterBiometric() },
             onError = { errMsg -> onBiometricAuthError(errMsg) },
             onCancelled = { onBiometricAuthCancelled() }
@@ -376,7 +376,7 @@ class AuthViewModel(
                     "Login page ready (hasCaptcha=${state.captchaBytes != null}, pemLen=${state.publicKeyPem.length})"
                 )
             }.onFailure { error ->
-                val msg = error.message ?: "خطا در ارتباط با سرور سامانه کالینان"
+                val msg = error.message ?: "خطا در برقراری ارتباط با سرور سامانه تغذیه"
                 _errorMessage.value = msg
                 AppLogger.logError("AuthViewModel", "LoadLoginPage failed: $msg", error, operation = "LoadLoginPageFailure", errorCategory = "LOGIN_PAGE_FETCH_ERROR")
             }

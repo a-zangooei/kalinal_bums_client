@@ -4,11 +4,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
@@ -21,11 +20,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -44,7 +46,7 @@ internal fun SecurityBiometricSection(
     onRecoveryWipeAndDisableLock: () -> Unit = {}
 ) {
     SettingsSectionTitle(
-        title = "امنیت و قفل اعتبارنامه",
+        title = "امنیت و حفاظت از اطلاعات ورود",
         icon = Icons.Default.Fingerprint
     )
 
@@ -56,23 +58,34 @@ internal fun SecurityBiometricSection(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .toggleable(
+                        value = isBiometricEnabled && isEncryptionAvailable,
+                        enabled = isEncryptionAvailable && canUseBiometric,
+                        role = Role.Switch,
+                        onValueChange = onToggleBiometric
+                    )
+                    .padding(vertical = 4.dp)
+                    .testTag("biometric_lock_switch"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
-                        text = "قفل بیومتریک / پین دستگاه برای رمز ذخیره‌شده",
+                        text = "قفل بیومتریک یا رمز دستگاه برای رمز عبور ذخیره‌شده",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = when {
-                            !isEncryptionAvailable -> "رمزنگاری سخت‌افزاری دستگاه در دسترس نیست"
+                            !isEncryptionAvailable -> "رمزنگاری سخت‌افزاری دستگاه در دسترس نیست."
                             isBiometricEnabled && !canUseBiometric ->
-                                "قفل فعال است اما اثر انگشت یا قفل صفحه روی گوشی یافت نشد؛ برای خاموش کردن قفل باید احراز هویت برقرار شود یا رمز ذخیره‌شده پاک گردد."
-                            !canUseBiometric -> "در تنظیمات گوشی اثر انگشت یا قفل صفحه فعال نشده است"
-                            else -> "پیش از پر شدن خودکار رمز ذخیره‌شده و هنگام خاموش‌کردن این گزینه، احراز هویت دستگاه مطالبه می‌شود"
+                                "قفل امنیتی فعال است اما اثر انگشت یا قفل صفحه روی دستگاه تنظیم نشده؛ برای غیرفعال‌سازی، احراز هویت دستگاه را فعال یا رمز عبور ذخیره‌شده را پاک‌سازی کنید."
+                            !canUseBiometric -> "در تنظیمات دستگاه، قفل صفحه یا اثر انگشت فعال نشده است."
+                            else -> "پیش از پر شدن خودکار رمز عبور ذخیره‌شده و هنگام غیرفعال‌کردن این گزینه، احراز هویت دستگاه درخواست می‌شود."
                         },
                         fontSize = 10.sp,
                         color = if (isBiometricEnabled && !canUseBiometric && isEncryptionAvailable) {
@@ -85,9 +98,8 @@ internal fun SecurityBiometricSection(
                 Switch(
                     checked = isBiometricEnabled && isEncryptionAvailable,
                     enabled = isEncryptionAvailable && canUseBiometric,
-                    onCheckedChange = onToggleBiometric,
-                    colors = SwitchDefaults.colors(checkedThumbColor = TealPrimary),
-                    modifier = Modifier.testTag("biometric_lock_switch")
+                    onCheckedChange = null,
+                    colors = SwitchDefaults.colors(checkedThumbColor = TealPrimary)
                 )
             }
 
@@ -107,7 +119,7 @@ internal fun SecurityBiometricSection(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = TealPrimary)
                         ) {
                             Text(
-                                text = "تنظیمات قفل گوشی",
+                                text = "تنظیمات امنیتی دستگاه",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -120,7 +132,7 @@ internal fun SecurityBiometricSection(
                                 .testTag("settings_wipe_biometric_recovery_button")
                         ) {
                             Text(
-                                text = "پاکسازی رمز و غیرفعالسازی",
+                                text = "پاک‌سازی رمز عبور و غیرفعال‌سازی",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFC62828)

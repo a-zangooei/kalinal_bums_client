@@ -54,7 +54,7 @@ internal fun MenuQuickJumpAndFilterBar(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "روزهای هفته (مشاهده پیوسته یا پرش مستقیم):",
+            text = "انتخاب روز هفته:",
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

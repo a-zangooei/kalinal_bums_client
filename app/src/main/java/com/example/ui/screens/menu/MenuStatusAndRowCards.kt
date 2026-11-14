@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,7 +41,6 @@ import com.example.ui.theme.TealPrimary
 private val WeekCardShape = RoundedCornerShape(16.dp)
 private val DayHeaderShape = RoundedCornerShape(14.dp)
 private val DayEmptyCardShape = RoundedCornerShape(12.dp)
-private val NoticeCardShape = RoundedCornerShape(12.dp)
 private val TodayBadgeShape = RoundedCornerShape(6.dp)
 private val ReservedBadgeShape = RoundedCornerShape(8.dp)
 
@@ -61,7 +59,7 @@ internal fun MenuLoadingState(modifier: Modifier = Modifier) {
         CircularProgressIndicator(color = TealPrimary)
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "در حال دریافت برنامه غذایی از سرور دانشگاه...",
+            text = "در حال دریافت برنامه غذایی از سامانه...",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp
         )
@@ -85,13 +83,13 @@ internal fun EmptyWeekCard() {
         ) {
             Icon(
                 imageVector = Icons.Default.CalendarToday,
-                contentDescription = "بدون برنامه",
+                contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "هیچ برنامه‌ای برای این هفته دریافت نشد",
+                text = "برنامه غذایی برای این هفته ثبت نشده است.",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -213,9 +211,9 @@ internal fun DayEmptyCard(filterTitlePersian: String?) {
     ) {
         Text(
             text = if (filterTitlePersian != null) {
-                "هیچ وعده $filterTitlePersian برای این روز ثبت نشده است"
+                "وعده $filterTitlePersian برای این روز تعریف نشده است."
             } else {
-                "هیچ وعده غذایی برای این روز ثبت نشده است"
+                "هیچ وعده غذایی برای این روز ثبت نشده است."
             },
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -223,36 +221,6 @@ internal fun DayEmptyCard(filterTitlePersian: String?) {
             textAlign = TextAlign.Center
         )
     }
-}
-
-@Composable
-internal fun ReservationNoticeCard() {
-    Spacer(modifier = Modifier.height(16.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = NoticeCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "اطلاعیه",
-                tint = TealPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "سامانه رزرو و لغو صبحانه، ناهار و شام فعال است. درخواست‌ها به صورت مستقیم با سرور سامانه تغذیه کالینان (jeton.bums.ac.ir) مبادله می‌شوند.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
-            )
-        }
-    }
-    Spacer(modifier = Modifier.height(16.dp))
 }
 
 @Composable
@@ -267,7 +235,6 @@ private fun MenuRowsPreviewContent() {
         DayHeaderCard(day = sampleDay, isFirstDay = true, hasReserved = true)
         DayEmptyCard(filterTitlePersian = "ناهار")
         EmptyWeekCard()
-        ReservationNoticeCard()
     }
 }
 

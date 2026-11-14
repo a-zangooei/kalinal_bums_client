@@ -62,9 +62,9 @@ internal object AuthHtmlParser {
         val alertError = doc.select(".alertBox, #cphMain_alertBoxValue, #lblUserNameError, #lblCaptchaError").text().trim()
         return when {
             alertError.isNotBlank() -> alertError
-            bodyString.contains("کد امنیتی") -> "کد امنیتی وارد شده اشتباه یا منقضی شده است"
-            bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا گذرواژه اشتباه است"
-            else -> "ورود ناموفق بود. لطفاً نام کاربری، گذرواژه و کد امنیتی را بررسی نمایید"
+            bodyString.contains("کد امنیتی") -> "کد امنیتی واردشده نادرست است یا منقضی شده است."
+            bodyString.contains("کلمه عبور اشتباه") || bodyString.contains("نام کاربری") -> "نام کاربری یا رمز عبور نادرست است."
+            else -> "ورود ناموفق بود؛ لطفاً نام کاربری، رمز عبور و کد امنیتی را بررسی نمایید."
         }
     }
 }

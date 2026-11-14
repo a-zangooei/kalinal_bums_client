@@ -27,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -83,16 +84,18 @@ internal fun WeekNavigationCard(
                     IconButton(
                         onClick = onPrevWeek,
                         enabled = enabled,
-                        modifier = Modifier.testTag("prev_week_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("prev_week_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "هفته قبلی",
+                            contentDescription = "هفته قبل",
                             tint = navTint
                         )
                     }
                     Text(
-                        text = "قبلی",
+                        text = "هفته قبل",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -114,7 +117,7 @@ internal fun WeekNavigationCard(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.DateRange,
-                                contentDescription = "بازه زمانی هفته",
+                                contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -136,14 +139,16 @@ internal fun WeekNavigationCard(
                         enabled = enabled,
                         shape = CurrentWeekBtnShape,
                         color = if (weekOffset != 0) TealAlpha14 else Color.Transparent,
-                        modifier = Modifier.testTag("current_week_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("current_week_button")
                     ) {
                         Text(
-                            text = if (weekOffset != 0) "بازگشت به هفته جاری" else "هفته جاری (برای تغییر بکشید)",
+                            text = if (weekOffset != 0) "بازگشت به هفته جاری" else "هفته جاری (برای تغییر به طرفین بکشید)",
                             fontSize = 11.sp,
                             color = if (weekOffset != 0) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (weekOffset != 0) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -152,16 +157,18 @@ internal fun WeekNavigationCard(
                     IconButton(
                         onClick = onNextWeek,
                         enabled = enabled,
-                        modifier = Modifier.testTag("next_week_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("next_week_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronLeft,
-                            contentDescription = "هفته بعدی",
+                            contentDescription = "هفته بعد",
                             tint = navTint
                         )
                     }
                     Text(
-                        text = "بعدی",
+                        text = "هفته بعد",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +49,7 @@ internal fun DeveloperToolsSection(
 ) {
     Column {
         SettingsSectionTitle(
-            title = "ابزارهای توسعه‌دهنده و لاگ‌های وب (Developer)",
+            title = "ابزارهای توسعه‌دهنده و گزارش‌های فنی",
             icon = Icons.Default.BugReport
         )
 
@@ -60,13 +61,13 @@ internal fun DeveloperToolsSection(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "ثبت کامل لاگ‌های توسعه + صفحات خام HTML و دلتا",
+                    text = "ثبت کامل رویدادهای فنی و خروجی صفحات HTML",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = TealPrimary
                 )
                 Text(
-                    text = "رویدادهای شبکه، پارسرها، ViewModel، رمزنگاری و کرش‌ها با پالایش گذرواژه ثبت شده و صفحات خام HTML/Delta مرحله‌به‌مرحله تا ۸ مگابایت ذخیره می‌شوند.",
+                    text = "رویدادهای شبکه، مفسرها، وضعیت رابط کاربری، رمزنگاری و خطاهای سیستمی با حذف کامل رمز عبور ثبت شده و صفحات HTML/Delta به‌صورت مرحله‌ای تا ۸ مگابایت نگهداری می‌شوند.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -87,7 +88,7 @@ internal fun DeveloperToolsSection(
                     ) {
                         Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("مشاهده لاگ‌ها", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("مشاهده گزارش‌ها", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     OutlinedButton(
@@ -111,14 +112,20 @@ internal fun DeveloperToolsSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onClearLogs) {
+                    TextButton(
+                        onClick = onClearLogs,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFC62828))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("پاکسازی لاگ‌ها", fontSize = 11.sp, color = Color(0xFFC62828))
+                        Text("پاک‌سازی گزارش‌ها", fontSize = 11.sp, color = Color(0xFFC62828))
                     }
 
-                    TextButton(onClick = onExitDeveloperMode) {
-                        Text("خروج از حالت توسعه‌دهنده", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(
+                        onClick = onExitDeveloperMode,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Text("غیرفعال‌سازی بخش توسعه‌دهنده", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
