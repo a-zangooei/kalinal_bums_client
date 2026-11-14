@@ -40,7 +40,7 @@ Write-Host "کلید با موفقیت به فرمت Base64 تبدیل و در �
 
 ## ۲. تنظیم سکرت‌های گیت‌هاب (GitHub Repository Secrets)
 
-وارد صفحه مخزن خود در گیت‌هاب شوید (`github.com/a-zangooei/kalinan_bums_client`):
+وارد صفحه مخزن خود در گیت‌هاب شوید (`github.com/<OWNER>/kalinan_bums_client`):
 1. به مسیر **Settings** -> **Secrets and variables** -> **Actions** بروید.
 2. روی دکمه سبز رنگ **New repository secret** کلیک کرده و ۴ مقدار زیر را اضافه کنید:
 

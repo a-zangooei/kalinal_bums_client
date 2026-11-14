@@ -37,6 +37,6 @@
 ## ۲. گزارش آسیب‌پذیری‌های امنیتی (Reporting a Vulnerability)
 
 اگر آسیب‌پذیری امنیتی جدید یا رفتار مشکوکی در کدهای برنامه شناسایی کردید:
-- لطفاً آن را از طریق بخش **[GitHub Security Advisories](https://github.com/a-zangooei/kalinan_bums_client/security/advisories/new)** به صورت محرمانه گزارش کنید.
-- همچنین می‌توانید با ایمیل توسعه‌دهنده به آدرس `alirezazangooei122@gmail.com` در ارتباط باشید.
+- لطفاً آن را از طریق زبانه **Security → Advisories** در مخزن گیت‌هاب پروژه به‌صورت محرمانه گزارش کنید.
 - برای پیگیری جزئیات فنی و برنامه اصلاح فاز بعدی SSL، سند [`docs/03-security-and-ssl/ssl-certificate-chain.md`](./docs/03-security-and-ssl/ssl-certificate-chain.md) را مطالعه کنید.
+

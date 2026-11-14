@@ -43,9 +43,10 @@
   - `MessageRepository`: واکشی لیست پیام‌ها از جدول `cphMain_grdContent`، ارسال درخواست‌های دلتا برای باز کردن پیام‌ها، مدیریت زنجیره ViewState ترتیبی و بررسی باز شدن منوی رزرو.
 - **کلاینت شبکه (`CullinanHttpClient`):** کلاینت تک‌نمونه (Singleton) مبتنی بر OkHttp با مدیریت خودکار کوکی‌ها؛ در وضعیت فعلی هنگام بروز `SSLException` (از جمله نبود ریشه Certum در برخی دستگاه‌ها) به‌طور موقت به `fallbackClient` بدون اعتبارسنجی گواهی و نام میزبان سوییچ می‌کند (دارای ریسک MITM تا اصلاح آتی در فاز SSL).
 - **تحلیل‌گرها (Parsers):**
-  - `PageClassifier`: تفکیک دقیق انواع صفحات وب‌فرم دانشگاه (`TYPE_RESERVATION`، `TYPE_MESSAGES`، `TYPE_NOTICE`، `TYPE_LOGIN`، `TYPE_ERROR`) و شمارش پیام‌های خوانده‌نشده.
+  - `PageClassifier`: تفکیک دقیق انواع صفحات وب‌فرم دانشگاه (`TYPE_RESERVATION`، `TYPE_MESSAGES`، `TYPE_NOTICE`، `TYPE_LOGIN`، `TYPE_ERROR`) و شمارش پیام‌های خوانده‌نشده. *(در نقشه راه ادغام پروفایل من: افزودن `TYPE_PROFILE` و `ProfileParser` مطابق [مستندات پروفایل من](../02-reverse-engineering/my-profile-and-user-image.md))*.
   - `ReservationHtmlParser`: استخراج اعتبارات ریالی، روزهای هفته، وضعیت رزرو هر وعده، غذاهای جایگزین و سلف‌ها با کتابخانه قدرتمند Jsoup.
   - `DeltaParser`: پارسر اختصاصی فریم‌های ناهمگام وب‌فرم‌های ASP.NET AJAX (فرمت `length|type|id|content`).
+- **وضعیت فعلی پروفایل کاربر:** در نسخه فعلی، دیالوگ `StudentProfileDialog` در صفحه منو تنها نام، شناسه کاربری و اعتبار برگرفته از `WeeklyMenu` را نمایش می‌دهد و هنوز درخواست مستقیمی به `/MyCullinan/MyProfile.aspx` و `/UserControls/UserImage.ashx` پیاده‌سازی نشده است؛ مشخصات کامل پروتکل و الزامات حریم خصوصی آن در [سند پروفایل من](../02-reverse-engineering/my-profile-and-user-image.md) مستند شده است.
 
 ---
 

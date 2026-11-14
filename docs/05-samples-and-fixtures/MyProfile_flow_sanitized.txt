@@ -1,0 +1,29 @@
+# جریان درخواست‌ها (از ضبط PCAPdroid با رمزگشایی TLS، ۱۴۰۵/۰۸/۲۳) — بدون کوکی و بدون اطلاعات شخصی
+# کوکی‌ها در همه‌ی درخواست‌های بعد از ورود ارسال شده‌اند (مقادیر حذف شد). ریسورس‌های ثابت (css/js/تصویر/WebResource.axd/ScriptResource.axd) حذف شد.
+
+[1] GET /Login.aspx                         ← صفحه‌ی ورود (کپچا + فرم رمزنگاری‌شده با RSA)
+[2] GET /UserControls/Captcha.ashx          ← تصویر کپچا (Referer: /Login.aspx)
+[3] POST /Login.aspx                        ← ورود (بدنه: فیلدهای رمزنگاری‌شده + کپچا؛ این گزارش بدنه را پوشش نمی‌دهد)
+      ← 302 Found, Location: /Master/Default.aspx          (بدون پیام خوانده‌نشده)
+[4] GET /Master/Default.aspx                ← 200, text/html; charset=utf-8, cache-control: private,no-store (gzip)
+      Referer: https://jeton.bums.ac.ir/Login.aspx
+[5] GET /UserControls/UserImage.ashx        ← 200, content-type: image/jpg, content-length: 5660 (JPEG 150×206), cache-control: private,no-store
+      Referer: .../Master/Default.aspx, Accept: image/*
+[6] GET /MyCullinan/MyProfile.aspx          ← «پروفایل من»
+      Request headers (مهم‌ها):
+        Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+        Referer: https://jeton.bums.ac.ir/Master/Default.aspx
+        Cookie: <نشست>
+        (هیچ هدر Ajax و هیچ بدنه‌ای ندارد)
+      ← 200 OK
+        content-type: text/html; charset=utf-8
+        content-length: 25802   (بدون content-encoding)
+        cache-control: private,no-store
+        x-frame-options: SAMEORIGIN, strict-transport-security, content-security-policy (default-src 'self' ...)
+[7] GET /UserControls/UserImage.ashx        ← 200, image/jpg, 5660 بایت (Referer: .../MyCullinan/MyProfile.aspx)
+[8] POST /MyCullinan/MyProfile.aspx         ← خروج (ctl00$logout)
+      Content-Type: application/x-www-form-urlencoded   Content-Length: 1848
+      Origin: https://jeton.bums.ac.ir   Referer: .../MyCullinan/MyProfile.aspx
+      Body fields: __EVENTTARGET=ctl00$logout, __EVENTARGUMENT=, __VIEWSTATE=<1644 chars>, __VIEWSTATEGENERATOR=B57DACA3, __VIEWSTATEENCRYPTED=
+      ← 302 Found, Location: /Login.aspx
+[9] GET /Login.aspx ... (صفحه‌ی ورود دوباره)

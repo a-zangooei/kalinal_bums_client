@@ -1,0 +1,458 @@
+
+<!DOCTYPE html>
+<html lang="fa-ir">
+
+<head><title>
+	کالینان
+</title><link rel="stylesheet" href="../Styles/CSS/font-awesome.min.css" /><link rel="shortcut icon" type="image/x-icon" href="../images/Logo/CullinanLogo.png" /><link rel="icon" type="image/png" sizes="32x32" href="../images/Logo/CullinanLogo.png" /><link rel="icon" type="image/png" sizes="96x96" href="../images/Logo/CullinanLogo.png" /><meta charset="utf-8" /><meta http-equiv="Content-Type" name="viewport" content="width=device-width,initial-scale=1.0" /><meta name="keywords" content="سامانه تغذیه کالینان، ژتون، رزرو، رزرو غذا" /><meta name="description" content="سامانه تغذیه کالینان" /><meta name="company" content="شرکت پدیده عصر فناوری یزد - 1394-1402" /><meta name="robots" content="all" /><meta http-equiv="Page-Enter" content="blendTrans(Duration=0)" /><meta http-equiv="Page-Exit" content="blendTrans(Duration=0)" /><link href="../Styles/CSS/FoodSoft.css" rel="stylesheet" type="text/css" /><link href="../Styles/CSS/jquery-ui.css" rel="stylesheet" type="text/css" /><link href="../Styles/CSS/accordion.css" rel="stylesheet" type="text/css" /><link rel="stylesheet" href="../Styles/CSS/adminlte.min.css" /><link rel="stylesheet" href="../Styles/CSS/bootstrap-rtl.min.css" /><link rel="stylesheet" href="../Styles/CSS/custom-style.css" /><link href="../Content/css/select2.min.css" rel="stylesheet" /><link href="../Styles/CSS/toastr.min.css" rel="stylesheet" /><link href="../Scripts/MultiSelect/sumoselect.css" rel="stylesheet" />
+
+    <style>
+        * {
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+            margin: 0px;
+            padding: 0px;
+        }
+    </style>
+
+    
+    <script src="../Scripts/jquery.min.js" type="text/javascript"></script>
+    <script src="../Scripts/jquery-migrate-11.min.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        jQuery.browser = {};
+        (function () {
+            jQuery.browser.msie = false;
+            jQuery.browser.version = 0;
+            if (navigator.userAgent.match(/MSIE ([0-9]+)\./)) {
+                jQuery.browser.msie = true;
+                jQuery.browser.version = RegExp.$1;
+            }
+        })();
+    </script>
+    <script src="../Scripts/custom.js" type="text/javascript"></script>
+    <script src="../Scripts/scripts.js" type="text/javascript"></script>
+    <script src="../Scripts/toastr.min.js"></script>
+    <script src="../Scripts/scriptToast.js"></script>
+    
+
+
+
+    
+    <link href="../Styles/CSS/FoodSoft.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript">
+        function topcloseclick() {
+            jQuery(".topClose").click(function () {
+                if (jQuery(".alertBox").is(":visible")) {
+                    jQuery(".alertBox").hide();
+                }
+            });
+        }
+    </script>
+</head>
+<body style="overflow-y: scroll; overflow-x: auto;">
+    <form method="post" action="./MyProfile.aspx" id="MainForm">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="VIEWSTATE_PLACEHOLDER" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['MainForm'];
+if (!theForm) {
+    theForm = document.MainForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/WebResource.axd?d=pynGkmcFUV13He1Qd6_TZOQd1E9YfrU4W3OJN1pXkxO7-TyUXvIPzH5vpEVXUrFI80aPau6D7mMrfHUbd09vZw2&amp;t=637361968126915478" type="text/javascript"></script>
+
+
+<script src="/ScriptResource.axd?d=yeSNAJTOPtPimTGCAo3LlcPV1pYBggf9VTO3CBgHFodD5eorsZhRJAHBczEH1YueFiT_sbz3hiWBd2jPGnG-qNuezS8_XpV29yj5c3hzJ0vsWLo6frT72pTwHP2dc_P80&amp;t=51e37521" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+if (typeof(Sys) === 'undefined') throw new Error('ASP.NET Ajax client-side framework failed to load.');
+//]]>
+</script>
+
+<script src="/ScriptResource.axd?d=DT3YJR8QaqV61-teuz0hgt8NqXafnCZwB3ebWz7ChxTk1PzKI-pLrPzuYqnpjLfJzAjLBR73ockik4zbwkypKBRHHnPOwIIsa0ZxY38Yqywr0peFXtr2GevMcCGuhmlDNPk5X8xcEK3_O76aNBrOMg2&amp;t=51e37521" type="text/javascript"></script>
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="B57DACA3" />
+	<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+</div>
+        <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ctl00$ScriptManager', 'MainForm', ['tctl00$UpdatePanel1','UpdatePanel1'], [], [], 400, 'ctl00');
+//]]>
+</script>
+
+        <script type="text/javascript" lang="javascript">
+            var prm = Sys.WebForms.PageRequestManager.getInstance();
+
+        </script>
+        
+        <div class="ui-widget-overlay ui-front"></div>
+        <div class="hdrDiv">
+            <div class="topDiv">
+                <a id="menu" onclick="DisplayMenu();" formnovalidate="formnovalidate" style="float: right;">
+                    <img src="../images/Icon/menu_Gray.png" onmouseover="this.style.cursor='pointer';
+                        this.src='../images/Icon/menu_Yellow.png'"
+                        onmouseout="this.src='../images/Icon/menu_Gray.png'" />
+                    
+                </a>
+                <div class="logo">
+                    <img src="../Images/Style/logo.png" id="imgLogo" width="204" height="54" />
+                </div>
+                <div class="otherLogo">
+                    <img src="../Images/Style/Logo-Uni-2x.png" width="170" height="60" />
+                </div>
+                <div class="srcDiv-sc" style="text-align: left; vertical-align: text-top;">
+                    <a id="logout" formnovalidate="formnovalidate" style="float: left;" href="javascript:__doPostBack(&#39;ctl00$logout&#39;,&#39;&#39;)">
+                        <img src="../images/Style/logout.png" title="خروج" />
+                    </a>
+                    <label id="lblTodayDate" class="srcTitle" title="تاریخ امروز" style="height: 30px">شنبه 01 فروردین 1405</label>
+                </div>
+            </div>
+        </div>
+        <div class="content mainDiv">
+            <div class="rightDiv">
+                <div class="profile">
+                    <div class="profilePic">
+                        <img src="../UserControls/UserImage.ashx" id="imgpreview" onerror="this.src=&#39;../Images/Icon/Avatar3.png&#39;;" />
+                    </div>
+                    <div id="divUsername" class="profileTitle">نام و نام خانوادگی نمونه</div>
+                    <br style="display: block; margin-bottom: 3px;" />
+                    <div id="divIdNumber" class="profileTitle">
+                        <img src="../images/Icon/UserIdNumber.png" style="width: 16px; height: 16px; float: right; margin-left: 6px;" title="شماره شناسایی" />
+                        <label id="lblIdNumber">4000000000000000</label>
+                    </div>
+                    <br style="display: block; margin-bottom: 3px;" />
+                    <div id="divCredit" class="profileTitle">
+                        <img src="../images/Icon/CreditCoin.png" style="width: 16px; height: 16px; float: right; margin-left: 6px;" title="اعتبار سلف " />
+                        <label id="lblCredit">123,000- ريال </label>
+                    </div>
+                    <div id="div1" class="profileTitle">
+
+                        <img src="../images/Icon/CreditCoin.png" style="width: 16px; height: 16px; float: right; margin-left: 6px;" title="اعتبار رستوران " />
+                        <label id="lblCafeteriaCredit">0 ريال </label>
+                    </div>
+
+
+                </div>
+
+                <div id="accordion" class="menuEdit">
+
+                    <h3><div class="rightEdit" menuIdx=0 >کالینان من </div></h3><div><a href="../MyCullinan/MyProfile.aspx"><div class="subMenu subMenuSelect">پروفایل من</div></a><a href="../MyCullinan/MyTransaction.aspx"><div class="subMenu subMenuSelect">تراکنش های من</div></a><a href="../MyCullinan/MyePayList.aspx"><div class="subMenu subMenuSelect">پرداخت های اینترنتی من</div></a><a href="../MyCullinan/MyMessage.aspx"><div class="subMenu subMenuSelect">پیام های من</div></a><a href="../MyCullinan/ChangePassword.aspx"><div class="subMenu subMenuSelect">تغییر کلمه عبور</div></a></div><h3><div class="rightEdit" menuIdx=1 >رزرو و خرید غذا </div></h3><div><a href="../Reservation/Reservation.aspx"><div class="subMenu subMenuSelect">رزرو و خرید هفتگی غذا</div></a><a href="../Reservation/ForgotReceipt.aspx"><div class="subMenu subMenuSelect">فیش فراموشی</div></a><a href="../Reservation/DailyReservation.aspx"><div class="subMenu subMenuSelect">خرید روزفروش</div></a></div><h3><div class="rightEdit" menuIdx=2 >سبد غذایی </div></h3><div><a href="../FoodBasket/FoodBasketBuy.aspx"><div class="subMenu subMenuSelect">خرید از سبد غذایی</div></a><a href="../FoodBasket/FoodBasketSale.aspx"><div class="subMenu subMenuSelect">فروش به سبد غذایی</div></a></div><h3><div class="rightEdit" menuIdx=3 >امکانات سیستم </div></h3><div><a href="../Facility/CreditTransfer.aspx"><div class="subMenu subMenuSelect">انتقال اعتبار</div></a></div><h3><div class="rightEdit" menuIdx=4 >پرداخت اینترنتی </div></h3><div><a href="../ePay/ePay_Payment.aspx"><div class="subMenu subMenuSelect">افزایش اعتبار اینترنتی</div></a></div><h3><div class="rightEdit" menuIdx=5 >نظرسنجی </div></h3><div><a href="../Survey/Survey_Answer.aspx"><div class="subMenu subMenuSelect">پاسخ به نظرسنجی</div></a></div>
+                </div>
+            </div>
+            <div class="leftDiv">
+                <div id="PageUpdateProgress" style="display:none;">
+	
+                        <div class="loading-modal">
+                            <div class="loading-center">
+                                <img src="../Images/Icon/Loading64.gif" />
+                            </div>
+                        </div>
+                    
+</div>
+                <div id="UpdatePanel1">
+	
+                        
+    <div class="TelerikMainDiv overBox">
+        <div style="padding-bottom: 10px">
+            <div id="cphMain_pnlContents">
+		
+                <div class="boxMain" style="border: 0">
+                    <table border="0" width="100%" cellspacing="4" dir="rtl">
+                        <tr>
+                            <td align="center">
+                                <div class="profilePic" style="width: 100%;">
+                                    <img src="../UserControls/UserImage.ashx" id="cphMain_imgpreview" onerror="this.src=&#39;../Images/Icon/Avatar4.png&#39;;" />
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="center">
+                                <div class="profileTitle" style="width: 100%; height: 100%">
+                                    <label id="cphMain_lblName">نام و نام خانوادگی نمونه</label>
+                                    <br />
+                                    <label id="cphMain_lblUserType">دانشجو</label>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="boxMain" style="text-align: right;">
+                    <div id="cphMain_alertBox" class="alertBox" style="display:none;">
+                        <label id="cphMain_alertBoxValue">
+                        </label>
+                        <div class="topClose">
+                            <img src="../Images/Style/esc.png" onclick="topcloseclick()" />
+                        </div>
+                    </div>
+                    <fieldset>
+                        <legend>مشخصات فردی</legend>
+                        <table border="0" width="100%" cellspacing="2" cellpadding="0" dir="rtl">
+                            <tr>
+                                <td width="20%" align="left" style="color: #808080">شماره شناسایی:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblIdNumber" style="font-weight: 900">4000000000000000</label>
+                                </td>
+                                <td />
+                                <td align="left" style="color: #808080">کد ملی:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblNationalCode" style="font-weight: bolder">0000000000</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="color: #808080">گروه:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblGroup" style="font-weight: bolder">بومی</label>
+                                </td>
+                                <td />
+                                <td align="left" style="color: #808080">زیرگروه:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblSubGroup" style="font-weight: bolder">بومی</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="color: #808080">جنسیت:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblGender" style="font-weight: bolder">مرد</label>
+                                </td>
+                                <td />
+                                <td align="left" valign="top" style="color: #808080">توضیحات:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblDescription" style="font-weight: bolder">...</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td width="20%" align="left" style="color: #808080">دانشکده:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblCollege" style="font-weight: bolder">دانشکده نمونه</label>
+                                </td>
+                                <td />
+                                <td width="20%" align="left" style="color: #808080">رشته:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblField" style="font-weight: bolder">رشته نمونه</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td width="20%" align="left" style="color: #808080">خوابگاه:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblDorm" style="font-weight: bolder">مجوز شام دارد</label>
+                                </td>
+                                <td />
+                                <td width="20%" align="left" style="color: #808080">بلوک:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblBlockNumber" style="font-weight: bolder">...</label>
+                                </td>
+                                <td />
+
+
+                            </tr>
+                            <tr>
+                                <td align="left" style="color: #808080">اتاق:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblRoomNumber" style="font-weight: bolder">...</label>
+                                </td>
+                                <td />
+                                <td align="left" style="color: #808080">تلفن همراه:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblMobile" style="font-weight: bolder">09000000000</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="color: #808080">مقطع تحصیلی:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblGrade" style="font-weight: bolder">دکتری عمومی</label>
+                                </td>
+                                <td />
+                                <td width="20%" align="left" style="color: #808080">ایمیل:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblEmail" style="font-weight: bolder">user@example.com</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="color: #808080">کارت یا حساب بانکی:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblBankAccount" style="font-weight: bolder">...</label>
+                                </td>
+                                <td />
+                                <td align="left" style="color: #808080">آخرین ورود:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblLastLogin" style="font-weight: bolder">12:00:00 - 1405/01/01</label>
+                                </td>
+                            </tr>
+                        </table>
+                    </fieldset>
+                    <fieldset>
+                        <legend>مشخصات کارت و اعتبار</legend>
+                        <table border="0" width="100%" cellspacing="2" cellpadding="0" dir="rtl">
+                            <tr>
+                                <td width="20%" align="left" style="color: #808080">شماره کارت:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblCardNumber" style="font-weight: bolder">4000000000000000</label>
+                                </td>
+                                <td width="5%" />
+                                <td width="20%" align="left" style="color: #808080">شماره بارکد:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblBarcodeNumber" style="font-weight: bolder">00000</label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td width="20%" align="left" style="color: #808080">تاریخ تحویل:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblCardDeliveryDate" style="font-weight: bolder">1400/01/01</label>
+                                </td>
+                                <td width="5%" />
+                                <td width="20%" align="left" style="color: #808080">تاریخ اعتبار:&nbsp;
+                                </td>
+                                <td width="28%" align="right">
+                                    <label id="cphMain_lblCardExpirationDate" style="font-weight: bolder">1450/12/29</label>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td align="left" style="color: #808080">وضعیت کارت:&nbsp;
+                                </td>
+                                <td align="right">
+                                    <label id="cphMain_lblStatus" style="font-weight: bolder">فعال</label>
+                                </td>
+                                <td />
+
+                            </tr>
+                        </table>
+                    </fieldset>
+                </div>
+            
+	</div>
+        </div>
+    </div>
+
+                    
+</div>
+            </div>
+            <div class="ftrSCText">
+                Cullinan Feeding Automation
+            <br />
+                Powered by<a href="http://padide-af.com/" target="_blank" class="t3"><span> 7Diamonds
+                </span></a>
+                <br />
+                <span id="Label1">Last Update: 25/11/1402</span>
+                <br />
+                <span id="lblVersion">Version : 8.9.78.1</span>
+            </div>
+        </div>
+        <div class="ftrDiv">
+        </div>
+    
+
+<script type="text/javascript">
+//<![CDATA[
+Sys.Application.add_init(function() {
+    $create(Sys.UI._UpdateProgress, {"associatedUpdatePanelId":null,"displayAfter":500,"dynamicLayout":true}, null, null, $get("PageUpdateProgress"));
+});
+//]]>
+</script>
+</form>
+</body>
+
+
+
+<script src="../Scripts/MultiSelect/jquery.sumoselect.min.js"></script>
+
+
+
+
+<script src="../Scripts/select2.min.js"></script>
+
+<script src="../Scripts/treeViewScript.js"></script>
+
+
+
+
+
+
+
+<script src="../Scripts/jquery-migrate-1.js" type="text/javascript"></script>
+
+<script src="../Scripts/jquery-ui.min.js" type="text/javascript"></script>
+<script src="../Scripts/jquery.cookie.js" type="text/javascript"></script>
+<script src="../Scripts/jquery.fixer.js" type="text/javascript"></script>
+
+<script src="../Scripts/jquery.ui.datepicker-cc.js" type="text/javascript"></script>
+<script src="../Scripts/calendar.js" type="text/javascript"></script>
+<script src="../Scripts/jquery.ui.datepicker-cc-fa.js" type="text/javascript"></script>
+<script src="../Scripts/moment.min.js"></script>
+<script src="../Scripts/moment-jalaali.js"></script>
+<script type="text/javascript" lang="javascript">
+
+
+
+    function DisplayMenu() {
+        if (document.querySelector(".rightDiv").style.display == 'none')
+            document.querySelector(".rightDiv").style.display = 'block';
+        else
+            document.querySelector(".rightDiv").style.display = 'none';
+    }
+
+    window.onload = function () {
+        $('#txtIdNumber').focus();
+
+    }
+
+    $(document).ready(
+       
+    function ()
+        {
+            $("input").attr("autocomplete", "off");
+            $("input").attr("AutoCompleteType", "Disabled");
+        }
+    );
+
+
+    function ReloadPage(Value) {
+        if (Value)
+            window.location.reload();
+    }
+
+    function ReloadPageByDelay(Value,delay) {
+        if (Value) {
+            setTimeout(function () {
+
+                window.location.reload();
+            }, delay);
+        }
+    }
+</script>
+</html>

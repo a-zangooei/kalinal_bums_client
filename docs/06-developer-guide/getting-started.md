@@ -17,7 +17,7 @@
 
 ```bash
 # ۱. کلون کردن مخزن
-git clone https://github.com/a-zangooei/kalinan_bums_client.git
+git clone https://github.com/<OWNER>/kalinan_bums_client.git
 cd kalinan_bums_client
 
 # ۲. ایجاد فایل محیطی اولیه

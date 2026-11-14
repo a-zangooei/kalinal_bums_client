@@ -12,10 +12,10 @@
 | بخش | سرفصل | موضوع و محتوا |
 |:---:|---|---|
 | **۰۱** | [**معماری نرم‌افزار**](./01-architecture/overview.md) | الگوهای طراحی MVVM، معماری پاک (Clean Architecture)، جریان یک‌طرفه داده (UDF) و پشته فناوری |
-| **۰۲** | [**مهندسی معکوس ASP.NET**](./02-reverse-engineering/aspnet-protocol.md)، [**رزرو و ناوبری هفته**](./02-reverse-engineering/meal-reservation-api.md)، [**خروج سرور**](./02-reverse-engineering/server-logout-flow.md) و [**پیام‌های خوانده‌نشده و قفل منو**](./02-reverse-engineering/unread-messages-and-menu-lock.md) | تحلیل عمیق پروتکل وب‌فرم‌های کلاسیک مایکروسافت، احراز هویت، جابه‌جایی هفته‌ها، پیام‌های خوانده‌نشده و رفع قفل منو با زنجیره دلتا، ابطال نشست سرور، رمزنگاری RSA، فریم‌های UpdatePanel و فیلدهای ViewState |
+| **۰۲** | [**مهندسی معکوس ASP.NET**](./02-reverse-engineering/aspnet-protocol.md)، [**رزرو و ناوبری هفته**](./02-reverse-engineering/meal-reservation-api.md)، [**خروج سرور**](./02-reverse-engineering/server-logout-flow.md)، [**پیام‌های خوانده‌نشده و قفل منو**](./02-reverse-engineering/unread-messages-and-menu-lock.md) و [**پروفایل من و تصویر کاربر**](./02-reverse-engineering/my-profile-and-user-image.md) | تحلیل عمیق پروتکل وب‌فرم‌های کلاسیک مایکروسافت، احراز هویت، جابه‌جایی هفته‌ها، پیام‌های خوانده‌نشده و رفع قفل منو با زنجیره دلتا، ساختار و فیلدهای `MyProfile.aspx` و `UserImage.ashx`، ابطال نشست سرور، رمزنگاری RSA، فریم‌های UpdatePanel و فیلدهای ViewState |
 | **۰۳** | [**ممیزی SSL، زنجیره گواهی و وضعیت فعلی Fallback**](./03-security-and-ssl/ssl-certificate-chain.md) | داده‌های واقعی سرور `jeton.bums.ac.ir`، علت نبود ریشه Certum در برخی دستگاه‌ها، توضیح شفاف درباره وضعیت فعلی بدون اعتبارسنجی گواهی (ریسک MITM) و طرح اصلاح آتی |
 | **۰۴** | [**خط لوله CI/CD و انتشار**](./04-ci-cd-and-release/github-actions.md) | پایپ‌لاین‌های GitHub Actions، تفکیک کامل جاب‌های تست و بیلد، نسخه پویا و توزیع فایل‌های نصبی پایدار |
-| **۰۵** | [**نمونه‌های ترافیک شبکه (Fixtures)**](./05-samples-and-fixtures/README.md) | نمونه‌های ترافیک خام سرور دانشگاه (HAR Responses) و راهنمای ساختار پاسخ‌های دلتا برای تست‌های واحد |
+| **۰۵** | [**نمونه‌های ترافیک شبکه (Fixtures)**](./05-samples-and-fixtures/README.md) | نمونه‌های پاک‌سازی‌شده ترافیک سرور دانشگاه (`har_entry*.txt` و `MyProfile_*_sanitized`) و راهنمای تست‌های واحد |
 | **۰۶** | [**راهنمای توسعه و آزمون‌ها**](./06-developer-guide/getting-started.md) | راهنمای راه‌اندازی سریع در محیط‌های محلی، قوانین کامپایل، فهرست تست‌های واحد (`testing-guide.md`) و استانداردهای مشارکت |
 
 ---
@@ -55,11 +55,11 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                 سرور سامانه تغذیه کالینان (jeton.bums.ac.ir)                │
 │                                                                             │
-│  ┌───────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐  │
-│  │    Login.aspx     │  │   MyMessage.aspx │  │    Reservation.aspx      │  │
-│  │  - RSA Public Key │  │  - Msg Table     │  │  - UpdatePanel1 / Weeks  │  │
-│  │  - __VIEWSTATE    │  │  - Delta Open    │  │  - Delta Frames          │  │
-│  └───────────────────┘  └──────────────────┘  └──────────────────────────┘  │
+│  ┌─────────────────┐ ┌────────────────┐ ┌─────────────────┐ ┌─────────────┐ │
+│  │   Login.aspx    │ │ MyMessage.aspx │ │Reservation.aspx │ │MyProfile.aspx│ │
+│  │ - RSA PublicKey │ │ - Msg Table    │ │- UpdatePanel1   │ │& UserImage  │ │
+│  │ - __VIEWSTATE   │ │ - Delta Open   │ │- Delta Frames   │ │- GET Only   │ │
+│  └─────────────────┘ └────────────────┘ └─────────────────┘ └─────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

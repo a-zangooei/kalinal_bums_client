@@ -53,6 +53,21 @@ Cookie: ASP.NET_SessionId=...; keyId=...; __AntiXsrfToken=...
 | `css3-tabstrip-0` | `on` | استایل تب‌بار |
 | فیلدهای ردیف‌های ناهار | وضعیت چک‌باکس‌ها و منوها | ارسال ساختار کامل فرم مطابق مرورگر |
 
+### ۳.۱ خروج با بدنه‌ی کوچک از صفحاتی بدون ردیف فرم (`MyProfile.aspx`)
+بررسی ضبط جدید TLS-decrypted روی صفحه‌ی [`MyProfile.aspx`](./my-profile-and-user-image.md) تایید کرد که در صفحات فاقد ردیف‌های جدول رزرو، ارسال بدنه‌ی کوچک شامل **تنها ۵ فیلد** نیز منجر به خروج کامل و پاسخ `302 Found` به `/Login.aspx` می‌شود:
+
+```http
+POST https://jeton.bums.ac.ir/MyCullinan/MyProfile.aspx
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 1848
+Origin: https://jeton.bums.ac.ir
+Referer: https://jeton.bums.ac.ir/MyCullinan/MyProfile.aspx
+
+__EVENTTARGET=ctl00%24logout&__EVENTARGUMENT=&__VIEWSTATE=<...>&__VIEWSTATEGENERATOR=B57DACA3&__VIEWSTATEENCRYPTED=
+```
+
+> 📌 **وابستگی صفحه‌ای `__VIEWSTATEGENERATOR`:** مقدار این فیلد برای هر صفحه منحصربه‌فرد است (`Login.aspx`=`C2EE9ABB`، `MyMessage.aspx`=`87AF9C2D`، `Reservation.aspx`=`3ED98A75`، `MyProfile.aspx`=`B57DACA3`) و باید همواره به صورت پویا از HTML همان صفحه استخراج گردد.
+
 ---
 
 ## ۴. پاسخ موفق سرور دانشگاه به خروج

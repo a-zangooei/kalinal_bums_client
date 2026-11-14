@@ -3,23 +3,14 @@
 # 🍱 کالینان (Kalinan)
 ### کلاینت اندرویدی مدرن و متن‌باز سامانه تغذیه دانشگاه علوم پزشکی بیرجند
 
-[![Latest Release](https://img.shields.io/github/v/release/a-zangooei/kalinan_bums_client?color=blue&logo=github&label=Release)](https://github.com/a-zangooei/kalinan_bums_client/releases/latest)
-[![Total Downloads](https://img.shields.io/github/downloads/a-zangooei/kalinan_bums_client/total?color=success&logo=android&label=Downloads)](https://github.com/a-zangooei/kalinan_bums_client/releases)
-[![Android CI](https://img.shields.io/github/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/a-zangooei/kalinan_bums_client/actions/workflows/ci.yml)
 [![Direct University Connection](https://img.shields.io/badge/Server-Direct%20to%20jeton.bums.ac.ir-success.svg)](#-وضعیت-امنیتی-و-شفافیت-معماری)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-
-<br/>
-
-<a href="https://github.com/a-zangooei/kalinan_bums_client/releases/latest">
-  <img src="https://img.shields.io/badge/📥_دانلود_مستقیم_آخرین_نسخه_رسمی_(APK)-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download Latest APK" height="42" />
-</a>
 
 <br/><br/>
 
 | 🌟 نسخه رسمی و پایدار (پیشنهادی همه دانشجویان) | 🛠️ بیلد آزمایشی آخرین کامیت (توسعه‌دهندگان) |
 |:---:|:---:|
-| [**دانلود آخرین نسخه پایدار از Releases**](https://github.com/a-zangooei/kalinan_bums_client/releases/latest) | [**دریافت فایل نصبی کامیت‌ها از Actions**](https://github.com/a-zangooei/kalinan_bums_client/actions/workflows/ci.yml) |
+| **بخش Releases در صفحه مخزن گیت‌هاب** | **بخش Actions (ورک‌فلو CI) در صفحه مخزن گیت‌هاب** |
 
 </div>
 
@@ -77,7 +68,7 @@
 ## 📥 دانلود و راهنمای نصب
 
 ### دریافت فایل نصبی:
-به بخش **[Releases (جدیدترین نسخه)](https://github.com/a-zangooei/kalinan_bums_client/releases/latest)** مراجعه کرده و فایل نصبی را دانلود کنید:
+به زبانه **Releases (جدیدترین نسخه)** در مخزن گیت‌هاب مراجعه کرده و فایل نصبی را دانلود کنید:
 
 | نام فایل | فرمت | مناسب برای |
 |---|:---:|---|
@@ -94,10 +85,10 @@
 مستندات کامل، ساختاریافته و ماژولار پروژه در پوشه استاندارد [**`/docs`**](./docs/README.md) قرار داده شده است:
 
 - 🏛️ [**معماری کلان و پشته نرم‌افزار**](./docs/01-architecture/overview.md): تحلیل لایه‌ها، مدیریت وضعیت و کتابخانه‌ها.
-- 🌐 [**مهندسی معکوس سامانه وب‌فرم**](./docs/02-reverse-engineering/aspnet-protocol.md): کالبدشکافی احراز هویت، رمزنگاری RSA، فریم‌های دلتا، جابه‌جایی هفته، پیام‌ها و پروتکل رزرو/لغو.
+- 🌐 [**مهندسی معکوس سامانه وب‌فرم**](./docs/02-reverse-engineering/aspnet-protocol.md): کالبدشکافی احراز هویت، رمزنگاری RSA، فریم‌های دلتا، جابه‌جایی هفته، پیام‌ها، پروتکل رزرو/لغو و [**پروفایل من (`MyProfile.aspx` و `UserImage.ashx`)**](./docs/02-reverse-engineering/my-profile-and-user-image.md).
 - ⚠️ [**ممیزی SSL، زنجیره گواهی و وضعیت فعلی Fallback**](./docs/03-security-and-ssl/ssl-certificate-chain.md): داده‌های اندازه‌گیری‌شده روی `jeton.bums.ac.ir`، علت واقعی خطای Android، شفاف‌سازی ریسک فعلی بدون اعتبارسنجی گواهی و طرح اصلاح آتی.
 - ⚙️ [**راهنمای خط لوله‌های CI/CD**](./docs/04-ci-cd-and-release/github-actions.md): اتوماسیون تست و بیلد، متغیرهای محیطی و امضای پایدار.
-- 📦 [**نمونه‌های واقعی ترافیک شبکه (Fixtures)**](./docs/05-samples-and-fixtures/README.md): فایل‌های نمونه HAR برای تست‌های واحد.
+- 📦 [**نمونه‌های واقعی ترافیک شبکه (Fixtures)**](./docs/05-samples-and-fixtures/README.md): فایل‌های نمونه HAR و فیکسچر پاک‌سازی‌شده «پروفایل من» برای تست‌های واحد.
 - 🚀 [**راهنمای شروع سریع و آزمون‌ها**](./docs/06-developer-guide/getting-started.md): راه‌اندازی در Android Studio و افزودن تست‌های جدید.
 
 ---
@@ -117,7 +108,7 @@
 
 ```bash
 # ۱. کلون مخزن
-git clone https://github.com/a-zangooei/kalinan_bums_client.git
+git clone https://github.com/<OWNER>/kalinan_bums_client.git
 cd kalinan_bums_client
 
 # ۲. اجرای تست‌های واحد
@@ -132,8 +123,8 @@ cd kalinan_bums_client
 
 ## 🤝 مشارکت و گزارش مشکلات
 
-- برای گزارش مشکل در ورود، پیام‌ها یا رزرو، لطفاً از بخش **[Issues / گزارش باگ](https://github.com/a-zangooei/kalinan_bums_client/issues/new?template=bug_report.yml)** فرم مربوطه را پر کنید.
-- برای مطرح کردن ایده‌های جدید، از فرم **[پیشنهاد قابلیت جدید](https://github.com/a-zangooei/kalinan_bums_client/issues/new?template=feature_request.yml)** استفاده فرمایید.
+- برای گزارش مشکل در ورود، پیام‌ها یا رزرو، لطفاً از بخش **Issues** مخزن گیت‌هاب فرم [**گزارش باگ**](./.github/ISSUE_TEMPLATE/bug_report.yml) را پر کنید.
+- برای مطرح کردن ایده‌های جدید، از فرم [**پیشنهاد قابلیت جدید**](./.github/ISSUE_TEMPLATE/feature_request.yml) استفاده فرمایید.
 - جهت مشارکت در توسعه کد، ارسال **Pull Request** همواره مورد استقبال است.
 
 ---

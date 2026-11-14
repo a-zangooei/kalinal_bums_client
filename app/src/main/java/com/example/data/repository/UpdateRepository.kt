@@ -18,7 +18,7 @@ class UpdateRepository(
 ) {
 
     companion object {
-        const val GITHUB_OWNER = "a-zangooei"
+        const val GITHUB_OWNER = ""
         const val GITHUB_REPO = "kalinan_bums_client"
         const val RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
         const val FALLBACK_RELEASE_WEB_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
@@ -28,6 +28,10 @@ class UpdateRepository(
         currentVersionName: String = BuildConfig.VERSION_NAME
     ): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {
         val flowId = AppLogger.generateFlowId("upd")
+        if (GITHUB_OWNER.isBlank() || GITHUB_REPO.isBlank()) {
+            AppLogger.logDebug("UpdateRepository", "CheckForUpdateSkipped", "GitHub repository owner is not configured", flowId)
+            return@withContext Result.failure(Exception("نشانی مخزن به‌روزرسانی تنظیم نشده است"))
+        }
         AppLogger.logInfo("UpdateRepository", "CheckForUpdate", "Checking latest GitHub release (current=$currentVersionName)", flowId)
         try {
             val request = Request.Builder()
