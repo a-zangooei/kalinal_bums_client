@@ -1,6 +1,9 @@
 package com.example.ui.screens.menu
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,9 +23,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,12 +42,62 @@ import com.example.ui.theme.CullinanTheme
 import com.example.ui.theme.TealPrimary
 import com.example.ui.theme.TealPrimaryDark
 
+@Composable
+internal fun rememberDecodedAvatar(avatarBytes: ByteArray?): ImageBitmap? {
+    return remember(avatarBytes) {
+        if (avatarBytes == null || avatarBytes.isEmpty()) {
+            null
+        } else {
+            runCatching {
+                BitmapFactory.decodeByteArray(avatarBytes, 0, avatarBytes.size)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+}
+
+@Composable
+internal fun ProfileAvatarActionButton(
+    avatarBytes: ByteArray?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color.White,
+    testTagName: String = "profile_button"
+) {
+    val avatarBitmap = rememberDecodedAvatar(avatarBytes)
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .testTag(testTagName)
+    ) {
+        if (avatarBitmap != null) {
+            Image(
+                bitmap = avatarBitmap,
+                contentDescription = "پروفایل من",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .border(1.5.dp, AccentGold, CircleShape)
+                    .testTag("top_bar_avatar_image")
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "پروفایل من",
+                tint = iconTint
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MenuTopBar(
     onOpenProfile: () -> Unit,
     onLogout: () -> Unit,
-    isLoggingOut: Boolean
+    isLoggingOut: Boolean,
+    avatarBytes: ByteArray? = null
 ) {
     TopAppBar(
         title = {
@@ -67,18 +125,12 @@ internal fun MenuTopBar(
             }
         },
         actions = {
-            IconButton(
+            ProfileAvatarActionButton(
+                avatarBytes = avatarBytes,
                 onClick = onOpenProfile,
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .testTag("profile_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "اطلاعات حساب کاربری",
-                    tint = Color.White
-                )
-            }
+                iconTint = Color.White,
+                testTagName = "profile_button"
+            )
             IconButton(
                 onClick = onLogout,
                 enabled = !isLoggingOut,

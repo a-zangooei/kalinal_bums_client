@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.MessageItem
 import com.example.ui.components.PersianRtlLayout
+import com.example.ui.screens.menu.ProfileAvatarActionButton
 import com.example.ui.theme.TealPrimary
 import com.example.ui.viewmodel.MessagesViewModel
 
@@ -82,6 +83,8 @@ fun MessagesScreen(
     isBlockingMode: Boolean = false,
     onNavigateBack: (() -> Unit)? = null,
     onUnlockedSuccess: () -> Unit,
+    avatarBytes: ByteArray? = null,
+    onOpenProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val pageState by viewModel.pageState.collectAsStateWithLifecycle()
@@ -125,6 +128,14 @@ fun MessagesScreen(
                     }
                 },
                 actions = {
+                    if (onOpenProfile != null) {
+                        ProfileAvatarActionButton(
+                            avatarBytes = avatarBytes,
+                            onClick = onOpenProfile,
+                            iconTint = MaterialTheme.colorScheme.onSurface,
+                            testTagName = "messages_profile_button"
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.loadMessages() },
                         enabled = !isReadingSerialized && !pageState.isLoading,

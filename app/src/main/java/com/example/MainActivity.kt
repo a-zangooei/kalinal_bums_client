@@ -57,7 +57,9 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.ui.graphics.Color
 import com.example.ui.screens.MessagesScreen
+import com.example.ui.screens.profile.ProfileModalSheet
 import com.example.ui.viewmodel.MessagesViewModel
+import com.example.ui.viewmodel.ProfileViewModel
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,17 +99,21 @@ fun KalinanApp(
     val authViewModel: AuthViewModel = viewModel()
     val menuViewModel: MenuViewModel = viewModel()
     val messagesViewModel: MessagesViewModel = viewModel()
+    val profileViewModel: ProfileViewModel = viewModel()
     val updateViewModel: UpdateViewModel = viewModel()
 
     val updateInfo by updateViewModel.updateInfo.collectAsStateWithLifecycle()
     val userMessage by updateViewModel.userMessage.collectAsStateWithLifecycle()
     val messagesState by messagesViewModel.pageState.collectAsStateWithLifecycle()
     val menuBlockedByUnread by menuViewModel.hasUnreadMessagesBlocked.collectAsStateWithLifecycle()
+    val profileAvatarBytes by profileViewModel.avatarBytes.collectAsStateWithLifecycle()
+    val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
+    val isProfileSheetOpen by profileViewModel.isProfileSheetOpen.collectAsStateWithLifecycle()
 
     val isMandatoryBlocking = (activeSession?.hasUnreadMessages == true || menuBlockedByUnread || messagesState.hasUnreadMessages) && !messagesState.isReservationUnlocked
 
     val context = LocalContext.current
-    val shouldProtectWindow = activeSession == null || selectedBottomTab == 2
+    val shouldProtectWindow = activeSession == null || selectedBottomTab == 2 || isProfileSheetOpen
     LaunchedEffect(shouldProtectWindow) {
         val window = (context as? android.app.Activity)?.window
         if (shouldProtectWindow) {
@@ -146,6 +152,7 @@ fun KalinanApp(
                 onLoginSuccess = { userSession ->
                     activeSession = userSession
                     messagesViewModel.loadMessages()
+                    profileViewModel.ensureAvatarLoaded()
                     if (userSession.hasUnreadMessages) {
                         selectedBottomTab = 1
                     } else {
@@ -166,7 +173,11 @@ fun KalinanApp(
         val context = LocalContext.current
         val authRepo = remember { AuthRepository() }
 
-        val handleLogout: () -> Unit = remember(authViewModel, menuViewModel, authRepo, context) {
+        LaunchedEffect(session) {
+            profileViewModel.ensureAvatarLoaded()
+        }
+
+        val handleLogout: () -> Unit = remember(authViewModel, menuViewModel, profileViewModel, authRepo, context) {
             {
                 if (!isLoggingOut) {
                     isLoggingOut = true
@@ -185,7 +196,8 @@ fun KalinanApp(
                             AppLogger.logError("Logout", "Logout request failed", e)
                             Toast.makeText(context, "خروج در سمت سرور با خطا مواجه شد؛ نشست محلی پاک‌سازی گردید.", Toast.LENGTH_LONG).show()
                         } finally {
-                            // 1. Purge active local session state
+                            // 1. Purge active local session state & in-memory PII
+                            profileViewModel.clearSession()
                             activeSession = null
                             selectedBottomTab = 0
                             menuViewModel.clearUnreadBlocked()
@@ -336,6 +348,10 @@ fun KalinanApp(
                                     menuViewModel.loadInitialMenu()
                                     selectedBottomTab = 0
                                 },
+                                avatarBytes = profileAvatarBytes,
+                                onOpenProfile = {
+                                    profileViewModel.openProfile(session, menuViewModel.weeklyMenu.value)
+                                },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(paddingValues)
@@ -346,6 +362,10 @@ fun KalinanApp(
                                 viewModel = menuViewModel,
                                 onLogout = handleLogout,
                                 isLoggingOut = isLoggingOut,
+                                profileAvatarBytes = profileAvatarBytes,
+                                onOpenProfile = {
+                                    profileViewModel.openProfile(session, menuViewModel.weeklyMenu.value)
+                                },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(paddingValues)
@@ -362,6 +382,10 @@ fun KalinanApp(
                             menuViewModel.clearUnreadBlocked()
                             menuViewModel.loadInitialMenu()
                             selectedBottomTab = 0
+                        },
+                        avatarBytes = profileAvatarBytes,
+                        onOpenProfile = {
+                            profileViewModel.openProfile(session, menuViewModel.weeklyMenu.value)
                         },
                         modifier = Modifier
                             .fillMaxSize()
@@ -381,6 +405,30 @@ fun KalinanApp(
                     )
                 }
             }
+        }
+
+        if (isProfileSheetOpen) {
+            ProfileModalSheet(
+                profileState = profileState,
+                avatarBytes = profileAvatarBytes,
+                onDismiss = { profileViewModel.closeProfile() },
+                onRefresh = {
+                    profileViewModel.refreshProfile(session, menuViewModel.weeklyMenu.value)
+                },
+                onRelogin = {
+                    profileViewModel.clearSession()
+                    activeSession = null
+                    selectedBottomTab = 0
+                    menuViewModel.clearUnreadBlocked()
+                    com.example.data.network.CullinanHttpClient.cookieJar.clear()
+                    authViewModel.onLogout()
+                },
+                onOpenUnreadMessages = {
+                    profileViewModel.closeProfile()
+                    selectedBottomTab = 1
+                    messagesViewModel.loadMessages()
+                }
+            )
         }
     }
 

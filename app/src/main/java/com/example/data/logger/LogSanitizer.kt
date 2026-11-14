@@ -35,9 +35,14 @@ object LogSanitizer {
             // Mask Passwords (=, %3D, :, JSON key-value)
             .replace(Regex("(txtPassword|txtPasswordPlain|savedPassword|password|pass)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
             .replace(Regex("\"(txtPassword|txtPasswordPlain|savedPassword|password|pass)\"\\s*:\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE), "\"$1\":\"[REDACTED]\"")
-            // Mask Usernames (National ID / Student ID) across =, %3D, :, and JSON formats
-            .replace(Regex("(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED_USER]")
-            .replace(Regex("\"(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId)\"\\s*:\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE), "\"$1\":\"[REDACTED_USER]\"")
+            // Mask Usernames & Profile PII keys (National ID / Student ID / Mobile / Email / Card / Bank) across =, %3D, :, and JSON formats
+            .replace(Regex("(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId|nationalCode|idNumber|mobile|email|bankAccount|cardNumber|barcodeNumber|fullName|studentName)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED_USER]")
+            .replace(Regex("\"(txtUsername|txtUsernamePlain|savedUsername|username|studentNumber|studentId|nationalId|nationalCode|idNumber|mobile|email|bankAccount|cardNumber|barcodeNumber|fullName|studentName)\"\\s*:\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE), "\"$1\":\"[REDACTED_USER]\"")
+            // Mask free-text user login lines like "User logged in: 4000..." or "User 9912345"
+            .replace(Regex("(User\\s+logged\\s+in:\\s*)(\\S+)", RegexOption.IGNORE_CASE), "$1[REDACTED_USER]")
+            // Mask raw Iranian mobile numbers (09xxxxxxxxx) and email addresses
+            .replace(Regex("\\b09\\d{9}\\b"), "[REDACTED_MOBILE]")
+            .replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "[REDACTED_EMAIL]")
             // Mask Captcha values
             .replace(Regex("(txtCaptcha|captcha|captchaInput)(?:=|%3D|:\\s*)\"?([^&\\s\",}]+)\"?", RegexOption.IGNORE_CASE), "$1=[REDACTED_CAPTCHA]")
             // Mask ASP.NET Session Cookie

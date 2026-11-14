@@ -79,10 +79,10 @@ object ReservationHtmlParser {
         }
 
         if (studentName.isEmpty()) {
-            studentName = doc.select("#lblIdNumber").text().trim()
+            studentName = doc.select("#divUsername, .divUsername").text().trim()
         }
         if (studentNumber.isEmpty()) {
-            studentNumber = doc.select(".divUsername, #divUsername").text().trim()
+            studentNumber = doc.select("#lblIdNumber").text().trim()
         }
 
         // 4. Hidden fields for ASP.NET state
@@ -453,8 +453,16 @@ object ReservationHtmlParser {
     }
 
     private fun parseCreditRials(rawText: String): Long {
-        val digits = rawText.filter { it.isDigit() }
-        val value = digits.toLongOrNull() ?: 0L
+        val latinDigits = buildString {
+            for (ch in rawText) {
+                when (ch) {
+                    in '0'..'9' -> append(ch)
+                    in '۰'..'۹' -> append(('0'.code + (ch.code - '۰'.code)).toChar())
+                    in '٠'..'٩' -> append(('0'.code + (ch.code - '٠'.code)).toChar())
+                }
+            }
+        }
+        val value = latinDigits.toLongOrNull() ?: 0L
         return if (rawText.contains("-")) -value else value
     }
 

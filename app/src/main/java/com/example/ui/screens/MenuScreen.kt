@@ -66,6 +66,8 @@ fun MenuScreen(
     viewModel: MenuViewModel,
     onLogout: () -> Unit,
     isLoggingOut: Boolean = false,
+    profileAvatarBytes: ByteArray? = null,
+    onOpenProfile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val weeklyMenu by viewModel.weeklyMenu.collectAsStateWithLifecycle()
@@ -142,7 +144,14 @@ fun MenuScreen(
         isLoggingOut = isLoggingOut,
         snackbarHostState = snackbarHostState,
         listState = listState,
-        onOpenProfile = { showProfileDialog = true },
+        avatarBytes = profileAvatarBytes,
+        onOpenProfile = {
+            if (onOpenProfile != null) {
+                onOpenProfile()
+            } else {
+                showProfileDialog = true
+            }
+        },
         onLogout = onLogout,
         onRefresh = onRefreshCallback,
         onNavigateWeek = onNavigateWeek,
@@ -235,6 +244,7 @@ internal fun MenuScreenContent(
     onSwipeGesture: (WeekNavigationDirection) -> Unit,
     hasMenuForSwipe: () -> Boolean,
     swipeKey: Any,
+    avatarBytes: ByteArray? = null,
     modifier: Modifier = Modifier
 ) {
     PersianRtlLayout {
@@ -246,7 +256,8 @@ internal fun MenuScreenContent(
                 MenuTopBar(
                     onOpenProfile = onOpenProfile,
                     onLogout = onLogout,
-                    isLoggingOut = isLoggingOut
+                    isLoggingOut = isLoggingOut,
+                    avatarBytes = avatarBytes
                 )
             }
         ) { paddingValues ->

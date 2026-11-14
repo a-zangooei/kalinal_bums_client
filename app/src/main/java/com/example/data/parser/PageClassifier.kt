@@ -14,6 +14,7 @@ object PageClassifier {
     const val TYPE_LOGIN = "LOGIN"
     const val TYPE_NOTICE = "NOTICE"
     const val TYPE_MESSAGES = "MESSAGES"
+    const val TYPE_PROFILE = "PROFILE"
     const val TYPE_ERROR = "ERROR"
     const val TYPE_UNKNOWN = "UNKNOWN"
 
@@ -156,6 +157,26 @@ object PageClassifier {
                 hasUnreadMessages = unreadCount > 0,
                 unreadMessageCount = unreadCount,
                 hasPaginationControls = hasPager
+            )
+        }
+
+        // 7. Check for Profile Page (MyCullinan/MyProfile.aspx)
+        val hasProfileForm = doc.select("form#MainForm[action*='MyProfile.aspx']").isNotEmpty()
+        val hasProfileContents = doc.select("#cphMain_pnlContents").isNotEmpty()
+        val hasNationalCodeLabel = doc.select("#cphMain_lblNationalCode").isNotEmpty()
+        val hasProfileNameLabel = doc.select("#cphMain_lblName").isNotEmpty()
+        val isProfileUrl = finalUrl?.contains("MyProfile.aspx", ignoreCase = true) == true
+        if ((hasProfileContents && (hasNationalCodeLabel || hasProfileNameLabel)) ||
+            (hasProfileForm && hasProfileContents) ||
+            (isProfileUrl && hasProfileContents)
+        ) {
+            if (hasProfileForm) evidence.add("FORM_ACTION_MYPROFILE")
+            if (hasNationalCodeLabel) evidence.add("HAS_NATIONAL_CODE_LABEL")
+            if (hasProfileNameLabel) evidence.add("HAS_PROFILE_NAME_LABEL")
+            if (isProfileUrl) evidence.add("URL_CONTAINS_MYPROFILE")
+            return ClassificationResult(
+                pageType = TYPE_PROFILE,
+                evidence = evidence
             )
         }
 

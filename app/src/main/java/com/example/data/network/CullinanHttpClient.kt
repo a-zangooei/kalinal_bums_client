@@ -40,6 +40,8 @@ object CullinanHttpClient {
     val LOGIN_URL: String get() = "$BASE_URL/Login.aspx"
     val RESERVATION_URL: String get() = "$BASE_URL/Reservation/Reservation.aspx"
     val MESSAGES_URL: String get() = "$BASE_URL/MyCullinan/MyMessage.aspx"
+    val PROFILE_URL: String get() = "$BASE_URL/MyCullinan/MyProfile.aspx"
+    val USER_IMAGE_URL: String get() = "$BASE_URL/UserControls/UserImage.ashx"
     val CAPTCHA_URL: String get() = "$BASE_URL/UserControls/Captcha.ashx"
 
     fun setCustomBaseUrl(url: String) {
@@ -200,7 +202,10 @@ object CullinanHttpClient {
 
             val respContentType = response.body?.contentType()?.toString()
             val isBinaryAsset = respContentType?.startsWith("image/", ignoreCase = true) == true && response.isSuccessful
-            val snapshotRecord = if (!isBinaryAsset && response.body != null) {
+            val finalUrlStr = response.request.url.toString()
+            val isSensitiveProfilePage = finalUrlStr.contains("MyProfile.aspx", ignoreCase = true) ||
+                url.contains("MyProfile.aspx", ignoreCase = true)
+            val snapshotRecord = if (!isBinaryAsset && !isSensitiveProfilePage && response.body != null) {
                 try {
                     val peeked = response.peekBody(2 * 1024 * 1024L)
                     val rawText = peeked.string()
